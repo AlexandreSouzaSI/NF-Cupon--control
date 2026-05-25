@@ -1,0 +1,22 @@
+{
+    "name": "Controle de Compras",
+    "short_name": "Compras",
+    "description": "Sistema de controle de compras, aprovações, cupons e notas fiscais",
+    "start_url": "/dashboard",
+    "display": "standalone",
+    "background_color": "#09090b",
+    "theme_color": "#22c55e",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

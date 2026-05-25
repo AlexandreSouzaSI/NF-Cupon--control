@@ -1,0 +1,303 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  APPROVER
+  BUYER
+  FINANCE
+}
+
+enum PurchaseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PURCHASED
+  WAITING_INVOICE
+  INVOICE_LINKED
+  CHECKED
+  CLOSED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  CASH
+  PIX
+  COMPANY_ACCOUNT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum FiscalDocumentType {
+  COUPON
+  INVOICE
+}
+
+enum PurchaseHistoryAction {
+  CREATED
+  APPROVED
+  REJECTED
+  COUPON_UPLOADED
+  INVOICE_UPLOADED
+  CHECKED
+  CLOSED
+}
+
+enum ApprovalLevel {
+  AUTO
+  MANAGER
+  OWNER
+}
+
+enum PurchaseAlertType {
+  HIGH_VALUE
+  MISSING_SUPPLIER
+  WAITING_INVOICE
+  REPEATED_SUPPLIER
+  SUSPICIOUS_DESCRIPTION
+  CARD_USAGE
+}
+
+enum PurchaseAlertLevel {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum NotificationType {
+  PURCHASE_CREATED
+  PURCHASE_APPROVED
+  PURCHASE_REJECTED
+  WAITING_APPROVAL
+  WAITING_INVOICE
+  CRITICAL_ALERT
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(BUYER)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checkedPurchases Purchase[]  @relation("PurchaseCheckedBy")
+  closedPurchases  Purchase[]  @relation("PurchaseClosedBy")
+  purchasesCreated Purchase[]  @relation("PurchaseCreatedBy")
+  approvals        Approval[]
+  userStores       UserStore[]
+  purchases        Purchase[]
+
+  purchaseHistories PurchaseHistory[]
+  notifications     Notification[]
+}
+
+model Store {
+  id        String   @id @default(uuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases     Purchase[]
+  userStores    UserStore[]
+  cards         Card[]
+  approvalRules ApprovalRule[]
+}
+
+model UserStore {
+  id      String @id @default(uuid())
+  userId  String
+  storeId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  cnpj      String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases Purchase[]
+}
+
+model Card {
+  id         String   @id @default(uuid())
+  name       String
+  lastDigits String?
+  holderName String?
+  active     Boolean  @default(true)
+  storeId    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  store     Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  purchases Purchase[]
+}
+
+model Purchase {
+  id          String         @id @default(uuid())
+  description String
+  value       Decimal        @db.Decimal(10, 2)
+  status      PurchaseStatus @default(PENDING_APPROVAL)
+  method      PaymentMethod
+  purchasedAt DateTime?
+  dueDate     DateTime?
+  notes       String?
+
+  storeId     String
+  supplierId  String?
+  cardId      String?
+  createdById String
+
+  checkedById String?
+  checkedBy   User?   @relation("PurchaseCheckedBy", fields: [checkedById], references: [id])
+
+  checkedAt DateTime?
+
+  closedById String?
+  closedBy   User?   @relation("PurchaseClosedBy", fields: [closedById], references: [id])
+
+  closedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store     @relation(fields: [storeId], references: [id])
+  supplier  Supplier? @relation(fields: [supplierId], references: [id])
+  card      Card?     @relation(fields: [cardId], references: [id])
+  createdBy User      @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+
+  approvals       Approval[]
+  fiscalDocuments FiscalDocument[]
+  attachments     Attachment[]
+  histories       PurchaseHistory[]
+
+  user           User?           @relation(fields: [userId], references: [id])
+  userId         String?
+  purchaseAlerts PurchaseAlert[]
+}
+
+model Approval {
+  id         String         @id @default(uuid())
+  status     ApprovalStatus @default(PENDING)
+  comment    String?
+  purchaseId String
+  approverId String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  approver User     @relation(fields: [approverId], references: [id])
+}
+
+model FiscalDocument {
+  id         String             @id @default(uuid())
+  type       FiscalDocumentType
+  number     String?
+  accessKey  String?
+  fileUrl    String?
+  issueDate  DateTime?
+  value      Decimal?           @db.Decimal(10, 2)
+  purchaseId String
+  linkedToId String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  linkedTo FiscalDocument?  @relation("DocumentLink", fields: [linkedToId], references: [id])
+  linkedBy FiscalDocument[] @relation("DocumentLink")
+}
+
+model Attachment {
+  id         String   @id @default(uuid())
+  name       String
+  fileUrl    String
+  mimeType   String?
+  purchaseId String
+  createdAt  DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+}
+
+model PurchaseHistory {
+  id      String                @id @default(uuid())
+  action  PurchaseHistoryAction
+  comment String?
+
+  purchaseId String
+  userId     String?
+
+  createdAt DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id])
+}
+
+model ApprovalRule {
+  id        String        @id @default(uuid())
+  name      String
+  minValue  Decimal       @db.Decimal(10, 2)
+  maxValue  Decimal?      @db.Decimal(10, 2)
+  level     ApprovalLevel
+  active    Boolean       @default(true)
+  storeId   String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model PurchaseAlert {
+  id          String             @id @default(uuid())
+  type        PurchaseAlertType
+  level       PurchaseAlertLevel
+  title       String
+  description String
+  resolved    Boolean            @default(false)
+
+  purchaseId String?
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id      String           @id @default(uuid())
+  title   String
+  message String
+  type    NotificationType
+  read    Boolean          @default(false)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
