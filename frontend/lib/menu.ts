@@ -13,6 +13,7 @@ import {
     UserCog,
     UserPlus,
     TrendingUp,
+    ListChecks,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -115,6 +116,17 @@ export const menu: MenuGroup[] = [
                 label: 'Contas a Pagar',
                 href: '/bills',
                 icon: Wallet,
+                roles: ALL_ROLES,
+            },
+        ],
+    },
+    {
+        group: 'Tarefas',
+        items: [
+            {
+                label: 'Tarefas',
+                href: '/tasks',
+                icon: ListChecks,
                 roles: ALL_ROLES,
             },
         ],

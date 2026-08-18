@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { AppLayout } from '../../src/components/app-layout';
 import { api } from '@/lib/api';
 import {
+    AlertTriangle,
     Bell,
     CheckCircle2,
     Clock,
+    ListChecks,
     ReceiptText,
     ShieldCheck,
 } from 'lucide-react';
@@ -28,6 +30,9 @@ const typeIcon: Record<string, React.ElementType> = {
     WAITING_APPROVAL: Clock,
     WAITING_INVOICE: ReceiptText,
     CRITICAL_ALERT: Bell,
+    TASK_ASSIGNED: ListChecks,
+    TASK_OVERDUE: AlertTriangle,
+    TASK_CONFIRMED: CheckCircle2,
 };
 
 export default function NotificationsPage() {
