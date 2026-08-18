@@ -103,18 +103,18 @@ export default function ApprovalsPage() {
         <AppLayout title="Aprovações">
             <div className="space-y-4">
                 {loading ? (
-                    <p className="text-zinc-400">
+                    <p className="text-zinc-600 dark:text-zinc-400">
                         Carregando...
                     </p>
                 ) : purchases.length === 0 ? (
-                    <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center">
+                    <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center">
                         <Clock3 className="mx-auto mb-3 text-zinc-500" />
 
                         <h2 className="text-xl font-bold">
                             Nenhuma aprovação pendente
                         </h2>
 
-                        <p className="mt-2 text-zinc-400">
+                        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
                             Tudo sob controle no momento.
                         </p>
                     </div>
@@ -122,7 +122,7 @@ export default function ApprovalsPage() {
                     purchases.map((purchase) => (
                         <div
                             key={purchase.id}
-                            className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                            className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
                         >
                             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                                 <div>
@@ -130,7 +130,7 @@ export default function ApprovalsPage() {
                                         {purchase.description}
                                     </h2>
 
-                                    <div className="mt-3 space-y-1 text-sm text-zinc-400">
+                                    <div className="mt-3 space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                                         <p>
                                             Loja:{' '}
                                             {purchase.store.name}
@@ -146,8 +146,8 @@ export default function ApprovalsPage() {
                                             {purchase.method}
                                         </p>
                                         {purchase.notes && (
-                                            <p className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-300">
-                                                <strong className="text-zinc-100">Motivo:</strong> {purchase.notes}
+                                            <p className="mt-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm text-zinc-700 dark:text-zinc-300">
+                                                <strong className="text-zinc-800 dark:text-zinc-100">Motivo:</strong> {purchase.notes}
                                             </p>
                                         )}
                                     </div>
@@ -165,7 +165,7 @@ export default function ApprovalsPage() {
                                             onClick={() =>
                                                 approve(purchase.id)
                                             }
-                                            className="flex h-11 items-center gap-2 rounded-2xl bg-green-500 px-5 font-medium text-white hover:bg-green-600"
+                                            className="flex h-11 items-center gap-2 rounded-2xl bg-green-500 px-5 font-medium text-zinc-900 dark:text-white hover:bg-green-600"
                                         >
                                             <Check size={18} />
                                             Aprovar
@@ -175,7 +175,7 @@ export default function ApprovalsPage() {
                                             onClick={() =>
                                                 reject(purchase.id)
                                             }
-                                            className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-white hover:bg-red-600"
+                                            className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-zinc-900 dark:text-white hover:bg-red-600"
                                         >
                                             <X size={18} />
                                             Reprovar

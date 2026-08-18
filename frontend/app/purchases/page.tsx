@@ -1,16 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { api, API_URL } from '@/lib/api';
-import { CreditCard, FileText, Plus, ReceiptText } from 'lucide-react';
+import { getActiveStore } from '@/lib/active-store';
+import {
+    AlertTriangle,
+    CheckCircle2,
+    Clock,
+    CreditCard,
+    FileText,
+    LayoutGrid,
+    PackageCheck,
+    Plus,
+    ReceiptText,
+    Truck,
+    XCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
 
-type FiscalDocument = {
+type Store = {
     id: string;
-    type: 'COUPON' | 'INVOICE';
-    fileUrl?: string | null;
+    name: string;
 };
 
 type Supplier = {
@@ -18,14 +30,15 @@ type Supplier = {
     name: string;
 };
 
-type Card = {
+type FiscalDocument = {
     id: string;
-    name: string;
-    lastDigits?: string | null;
-    store: {
-        id: string;
-        name: string;
-    };
+    type: 'COUPON' | 'INVOICE';
+    fileUrl?: string | null;
+};
+
+type Receipt = {
+    id: string;
+    status: 'OK' | 'MISSING_ITEMS' | 'EXTRA_ITEMS' | 'PARTIAL';
 };
 
 type Purchase = {
@@ -34,48 +47,128 @@ type Purchase = {
     value: string;
     method: string;
     status: string;
+    category: string;
     createdAt: string;
-    store: {
-        id: string;
-        name: string;
-    };
-    supplier?: {
-        id: string;
-        name: string;
-    } | null;
+    store: Store;
+    supplier?: Supplier | null;
     card?: {
         id: string;
         name: string;
+        lastDigits?: string | null;
     } | null;
     createdBy: {
         id: string;
         name: string;
     };
     fiscalDocuments?: FiscalDocument[];
+    receipts?: Receipt[];
 };
+
+// A compra passa por vários status (aprovação, recebimento, fiscal...) e o
+// mesmo campo `status` é reaproveitado nas etapas seguintes — por isso, pra
+// separar visualmente "vai chegar" x "chegou" x "chegou com diferença", a
+// gente olha o recebimento real (receipts) e não só o status atual.
+type FlowStage = 'ARRIVING' | 'OK' | 'DIFFERENCE' | 'OTHER';
+
+const RECEIVED_STATUSES = [
+    'RECEIVED_OK',
+    'WAITING_INVOICE',
+    'HAS_COUPON_ONLY',
+    'HAS_INVOICE',
+    'WAITING_PAYMENT_REGISTER',
+    'CLOSED',
+];
+
+function getFlowStage(purchase: Purchase): FlowStage {
+    if (['REJECTED', 'CANCELED', 'DRAFT'].includes(purchase.status)) {
+        return 'OTHER';
+    }
+
+    const hasDivergentReceipt = purchase.receipts?.some(
+        (receipt) => receipt.status !== 'OK',
+    );
+
+    if (hasDivergentReceipt || purchase.status === 'RECEIVED_WITH_DIFFERENCE') {
+        return 'DIFFERENCE';
+    }
+
+    const hasAnyReceipt = (purchase.receipts?.length || 0) > 0;
+
+    if (hasAnyReceipt || RECEIVED_STATUSES.includes(purchase.status)) {
+        return 'OK';
+    }
+
+    return 'ARRIVING';
+}
+
+const flowTabs: {
+    key: FlowStage | 'ALL';
+    label: string;
+    icon: typeof Truck;
+    activeClass: string;
+}[] = [
+    {
+        key: 'ARRIVING',
+        label: 'A chegar',
+        icon: Truck,
+        activeClass: 'border-amber-500 bg-amber-500/10 text-amber-500',
+    },
+    {
+        key: 'OK',
+        label: 'Chegou',
+        icon: CheckCircle2,
+        activeClass: 'border-emerald-500 bg-emerald-500/10 text-emerald-500',
+    },
+    {
+        key: 'DIFFERENCE',
+        label: 'Chegou com diferença',
+        icon: AlertTriangle,
+        activeClass: 'border-red-500 bg-red-500/10 text-red-500',
+    },
+    {
+        key: 'ALL',
+        label: 'Todas',
+        icon: LayoutGrid,
+        activeClass: 'border-zinc-500 bg-zinc-500/10 text-zinc-500',
+    },
+];
 
 const statusLabel: Record<string, string> = {
     DRAFT: 'Rascunho',
-    PENDING_APPROVAL: 'Aguardando aprovação',
+    WAITING_APPROVAL: 'Aguardando aprovação',
     APPROVED: 'Aprovada',
     REJECTED: 'Reprovada',
-    PURCHASED: 'Comprada',
+    WAITING_RECEIPT: 'Aguardando recebimento',
+    RECEIVED_OK: 'Recebida OK',
+    RECEIVED_WITH_DIFFERENCE: 'Recebida com diferença',
     WAITING_INVOICE: 'Aguardando NF',
-    INVOICE_LINKED: 'NF vinculada',
-    CHECKED: 'Conferida',
+    HAS_COUPON_ONLY: 'Apenas com cupom',
+    HAS_INVOICE: 'Com NF',
+    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar',
     CLOSED: 'Fechada',
+    CANCELED: 'Cancelada',
 };
 
 const statusColor: Record<string, string> = {
-    DRAFT: 'bg-zinc-800 text-zinc-300',
-    PENDING_APPROVAL: 'bg-yellow-500/10 text-yellow-400',
-    APPROVED: 'bg-green-500/10 text-green-400',
+    DRAFT: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
+    WAITING_APPROVAL: 'bg-yellow-500/10 text-yellow-400',
+    APPROVED: 'bg-blue-500/10 text-blue-400',
     REJECTED: 'bg-red-500/10 text-red-400',
-    PURCHASED: 'bg-blue-500/10 text-blue-400',
+    WAITING_RECEIPT: 'bg-orange-500/10 text-orange-400',
+    RECEIVED_OK: 'bg-green-500/10 text-green-400',
+    RECEIVED_WITH_DIFFERENCE: 'bg-red-500/10 text-red-400',
     WAITING_INVOICE: 'bg-orange-500/10 text-orange-400',
-    INVOICE_LINKED: 'bg-purple-500/10 text-purple-400',
-    CHECKED: 'bg-cyan-500/10 text-cyan-400',
-    CLOSED: 'bg-zinc-700 text-zinc-200',
+    HAS_COUPON_ONLY: 'bg-yellow-500/10 text-yellow-400',
+    HAS_INVOICE: 'bg-purple-500/10 text-purple-400',
+    WAITING_PAYMENT_REGISTER: 'bg-cyan-500/10 text-cyan-400',
+    CLOSED: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200',
+    CANCELED: 'bg-red-500/10 text-red-400',
+};
+
+const categoryLabel: Record<string, string> = {
+    SUPPLIER_ORDER: 'Pedido com fornecedor',
+    AVULSA_CARD: 'Compra avulsa',
+    ONLINE_MARKETPLACE: 'Compra online',
 };
 
 function formatCurrency(value: string) {
@@ -87,44 +180,73 @@ function formatCurrency(value: string) {
 
 export default function PurchasesPage() {
     const router = useRouter();
+
     const [purchases, setPurchases] = useState<Purchase[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [creating, setCreating] = useState(false);
-
-    const [description, setDescription] = useState('');
-    const [value, setValue] = useState('');
-    const [method, setMethod] = useState('CREDIT_CARD');
-    const [storeId, setStoreId] = useState('loja-anchieta');
-    const [notes, setNotes] = useState('');
-
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-    const [supplierId, setSupplierId] = useState('');
 
-    const [statusFilter, setStatusFilter] = useState('');
-    const [storeFilter, setStoreFilter] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<FlowStage | 'ALL'>('ARRIVING');
     const [supplierFilter, setSupplierFilter] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
 
-    const [cards, setCards] = useState<Card[]>([]);
-    const [cardId, setCardId] = useState('');
-
-    async function loadCards() {
+    async function loadPurchases() {
         try {
-            const response = await api.get('/cards');
-            setCards(response.data);
+            setLoading(true);
+
+            // A loja é a que está ativa lá em cima — cada loja só vê as
+            // próprias compras aqui.
+            const response = await api.get('/purchases', {
+                params: {
+                    storeId: getActiveStore()?.id || undefined,
+                    supplierId: supplierFilter || undefined,
+                    category: categoryFilter || undefined,
+                },
+            });
+
+            setPurchases(response.data);
         } catch {
-            toast.error('Erro ao carregar cartões');
+            toast.error('Erro ao carregar compras.');
+        } finally {
+            setLoading(false);
         }
     }
 
-    async function checkPurchase(id: string) {
+    async function loadBaseData() {
         try {
-            await api.post(`/purchases/${id}/check`);
+            const response = await api.get('/suppliers');
+            setSuppliers(response.data);
+        } catch {
+            toast.error('Erro ao carregar filtros.');
+        }
+    }
 
-            toast.success('Compra conferida');
+    async function approvePurchase(id: string) {
+        try {
+            await api.post(`/purchases/${id}/approve`, {
+                comment: 'Aprovada pela tela de compras.',
+            });
 
+            toast.success('Compra aprovada.');
             await loadPurchases();
         } catch {
-            toast.error('Erro ao conferir compra');
+            toast.error('Erro ao aprovar compra.');
+        }
+    }
+
+    async function rejectPurchase(id: string) {
+        const comment = prompt('Informe o motivo da reprovação:');
+
+        if (!comment) return;
+
+        try {
+            await api.post(`/purchases/${id}/reject`, {
+                comment,
+            });
+
+            toast.success('Compra reprovada.');
+            await loadPurchases();
+        } catch {
+            toast.error('Erro ao reprovar compra.');
         }
     }
 
@@ -132,83 +254,22 @@ export default function PurchasesPage() {
         try {
             await api.post(`/purchases/${id}/close`);
 
-            toast.success('Requisição de compra fechada');
-
+            toast.success('Compra fechada.');
             await loadPurchases();
         } catch {
-            toast.error('Erro ao fechar requisição de compra');
+            toast.error('Erro ao fechar compra.');
         }
     }
 
-    async function loadPurchases() {
-        try {
-            setLoading(true);
-            const response = await api.get('/purchases', {
-                params: {
-                    status: statusFilter || undefined,
-                    storeId: storeFilter || undefined,
-                    supplierId: supplierFilter || undefined,
-                }
-            });
-            setPurchases(response.data);
-        } catch {
-            toast.error('Erro ao carregar requisições de compra');
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function loadSuppliers() {
-        try {
-            const response = await api.get('/suppliers');
-            setSuppliers(response.data);
-        } catch {
-            toast.error('Erro ao carregar fornecedores');
-        }
-    }
-
-    async function handleCreatePurchase(e: React.FormEvent) {
-        e.preventDefault();
-
-        if (!description || !storeId || !notes) {
-            toast.error('Preencha descrição, loja e motivo');
-            return;
-        }
-
-        try {
-            setCreating(true);
-
-            await api.post('/purchases', {
-                description,
-                value: value ? Number(value.replace(',', '.')) : 0,
-                method,
-                storeId,
-                notes,
-                supplierId: supplierId || undefined,
-                cardId: method === 'CREDIT_CARD' ? cardId || undefined : undefined,
-            });
-
-            toast.success('Requisição de compra cadastrada');
-
-            setDescription('');
-            setValue('');
-            setNotes('');
-            setSupplierId('');
-            setCardId('');
-
-            await loadPurchases();
-        } catch {
-            toast.error('Erro ao cadastrar requisição de compra');
-        } finally {
-            setCreating(false);
-        }
-    }
-
-    async function addCoupon(purchaseId: string, file: File) {
+    async function uploadFiscalDocument(
+        purchaseId: string,
+        file: File,
+        type: 'COUPON' | 'INVOICE',
+    ) {
         const formData = new FormData();
 
         formData.append('file', file);
-        formData.append('type', 'COUPON');
+        formData.append('type', type);
 
         try {
             await api.post(
@@ -221,206 +282,101 @@ export default function PurchasesPage() {
                 },
             );
 
-            toast.success('Cupom enviado. Compra aguardando NF.');
+            toast.success(type === 'COUPON' ? 'Cupom enviado.' : 'NF enviada.');
             await loadPurchases();
         } catch {
-            toast.error('Erro ao enviar cupom');
+            toast.error('Erro ao enviar arquivo fiscal.');
         }
     }
 
     useEffect(() => {
-        loadPurchases();
-        loadSuppliers();
-        loadCards();
+        loadBaseData();
     }, []);
 
     useEffect(() => {
         loadPurchases();
-    }, [statusFilter, storeFilter, supplierFilter]);
+    }, [supplierFilter, categoryFilter]);
+
+    const stageCounts = purchases.reduce<Record<string, number>>(
+        (acc, purchase) => {
+            const stage = getFlowStage(purchase);
+            acc[stage] = (acc[stage] || 0) + 1;
+            return acc;
+        },
+        {},
+    );
+
+    const visiblePurchases =
+        activeTab === 'ALL'
+            ? purchases
+            : purchases.filter((purchase) => getFlowStage(purchase) === activeTab);
 
     return (
-        <AppLayout title="Requisição de Compra">
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[420px_1fr]">
-                <form
-                    onSubmit={handleCreatePurchase}
-                    className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
-                >
-                    <div className="mb-5 flex items-center gap-3">
-                        <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
-                            <Plus size={22} />
-                        </div>
-
-                        <div>
-                            <h2 className="text-lg font-bold">Nova requisição</h2>
-                            <p className="text-sm text-zinc-400">
-                                Solicite ou registre uma compra para aprovação
-                            </p>
-                        </div>
+        <AppLayout title="Compras">
+            <div className="space-y-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h2 className="text-2xl font-bold">Compras</h2>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                            Acompanhe aprovação, recebimento, cupom, NF e fechamento.
+                        </p>
                     </div>
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
-                                Descrição
-                            </label>
-                            <input
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Ex: Compra de bebidas"
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
-                            />
-                        </div>
+                    <button
+                        onClick={() => router.push('/purchases/new')}
+                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 font-medium text-zinc-900 dark:text-white hover:bg-emerald-700"
+                    >
+                        <Plus size={18} />
+                        Nova compra
+                    </button>
+                </div>
 
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
-                                Valor estimado
-                            </label>
-                            <input
-                                value={value}
-                                onChange={(e) => setValue(e.target.value)}
-                                placeholder="Ex: 450,00"
-                                inputMode="decimal"
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
-                            />
-                        </div>
+                <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    {flowTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        const count =
+                            tab.key === 'ALL'
+                                ? purchases.length
+                                : stageCounts[tab.key] || 0;
+                        const isActive = activeTab === tab.key;
 
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
-                                Forma de pagamento
-                            </label>
-                            <select
-                                value={method}
-                                onChange={(e) => setMethod(e.target.value)}
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
+                        return (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key)}
+                                className={`flex items-center justify-between gap-3 rounded-3xl border p-4 text-left transition ${isActive
+                                    ? tab.activeClass
+                                    : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700'
+                                    }`}
                             >
-                                <option value="CREDIT_CARD">Cartão de crédito</option>
-                                <option value="CASH">Dinheiro</option>
-                                <option value="PIX">PIX</option>
-                                <option value="COMPANY_ACCOUNT">Conta empresa</option>
-                            </select>
-                        </div>
+                                <div>
+                                    <p className="text-2xl font-bold">{count}</p>
+                                    <p className="text-sm">{tab.label}</p>
+                                </div>
 
-                        {method === 'CREDIT_CARD' && (
-                            <div>
-                                <label className="mb-2 block text-sm text-zinc-300">
-                                    Cartão
-                                </label>
+                                <Icon size={22} />
+                            </button>
+                        );
+                    })}
+                </section>
 
-                                <select
-                                    value={cardId}
-                                    onChange={(e) => setCardId(e.target.value)}
-                                    className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
-                                >
-                                    <option value="">Selecione o cartão</option>
-
-                                    {cards.map((card) => (
-                                        <option key={card.id} value={card.id}>
-                                            {card.name}
-                                            {card.lastDigits ? ` • final ${card.lastDigits}` : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
-                                Loja
-                            </label>
-                            <select
-                                value={storeId}
-                                onChange={(e) => setStoreId(e.target.value)}
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
-                            >
-                                <option value="loja-anchieta">Loja Anchieta</option>
-                                <option value="loja-eldorado">Loja Eldorado</option>
-                                <option value="loja-contagem">Loja Contagem</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
-                                Fornecedor
-                            </label>
-
-                            <select
-                                value={supplierId}
-                                onChange={(e) => setSupplierId(e.target.value)}
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
-                            >
-                                <option value="">Sem fornecedor</option>
-
-                                {suppliers.map((supplier) => (
-                                    <option key={supplier.id} value={supplier.id}>
-                                        {supplier.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
-                                Motivo da compra
-                            </label>
-                            <textarea
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Detalhes da compra, motivo ou urgência"
-                                className="min-h-24 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-green-500"
-                            />
-                        </div>
-
-                        <button
-                            disabled={creating}
-                            className="h-12 w-full rounded-xl bg-green-500 font-semibold text-white hover:bg-green-600 disabled:opacity-50"
-                        >
-                            {creating ? 'Salvando...' : 'Enviar requisição'}
-                        </button>
-                    </div>
-                </form>
-
-                <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5">
-                    <div className="mb-5 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-lg font-bold">Requisição enviada</h2>
-                            <p className="text-sm text-zinc-400">
-                                Acompanhe status, loja e responsável
-                            </p>
-                        </div>
-
-                        <ReceiptText className="text-zinc-500" />
-                    </div>
-
-                    <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="h-11 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            value={categoryFilter}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                            className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
                         >
-                            <option value="">Todos os status</option>
-                            <option value="PENDING_APPROVAL">Aguardando aprovação</option>
-                            <option value="APPROVED">Aprovada</option>
-                            <option value="WAITING_INVOICE">Aguardando NF</option>
-                            <option value="INVOICE_LINKED">NF vinculada</option>
-                            <option value="REJECTED">Reprovada</option>
-                            <option value="CLOSED">Fechada</option>
-                        </select>
-
-                        <select
-                            value={storeFilter}
-                            onChange={(e) => setStoreFilter(e.target.value)}
-                            className="h-11 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
-                        >
-                            <option value="">Todas as lojas</option>
-                            <option value="loja-anchieta">Loja Anchieta</option>
-                            <option value="loja-eldorado">Loja Eldorado</option>
-                            <option value="loja-contagem">Loja Contagem</option>
+                            <option value="">Todas categorias</option>
+                            <option value="SUPPLIER_ORDER">Pedido com fornecedor</option>
+                            <option value="AVULSA_CARD">Compra avulsa</option>
+                            <option value="ONLINE_MARKETPLACE">Compra online</option>
                         </select>
 
                         <select
                             value={supplierFilter}
                             onChange={(e) => setSupplierFilter(e.target.value)}
-                            className="h-11 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
                         >
                             <option value="">Todos fornecedores</option>
 
@@ -430,92 +386,167 @@ export default function PurchasesPage() {
                                 </option>
                             ))}
                         </select>
+                    </div>
 
-                        <button
-                            onClick={() => {
-                                setStatusFilter('');
-                                setStoreFilter('');
-                                setSupplierFilter('');
-                            }}
-                            className="mb-5 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-                        >
-                            Limpar filtros
-                        </button>
+                    <button
+                        onClick={() => {
+                            setSupplierFilter('');
+                            setCategoryFilter('');
+                        }}
+                        className="mt-3 rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                        Limpar filtros
+                    </button>
+                </section>
+
+                <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                    <div className="mb-5 flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold">
+                                {flowTabs.find((tab) => tab.key === activeTab)?.label ||
+                                    'Lista de compras'}
+                            </h3>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                {visiblePurchases.length} compra(s) encontrada(s)
+                            </p>
+                        </div>
+
+                        <ReceiptText className="text-zinc-500" />
                     </div>
 
                     {loading ? (
-                        <p className="text-sm text-zinc-400">Carregando...</p>
-                    ) : purchases.length === 0 ? (
-                        <p className="text-sm text-zinc-400">
-                            Nenhuma requisição de compra cadastrada ainda.
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">Carregando...</p>
+                    ) : visiblePurchases.length === 0 ? (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                            Nenhuma compra encontrada.
                         </p>
                     ) : (
                         <div className="space-y-3">
-                            {purchases.map((purchase) => (
+                            {visiblePurchases.map((purchase) => (
                                 <div
                                     key={purchase.id}
-                                    className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                                    className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4"
                                 >
-                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                        <div>
-                                            <div className="mb-2 flex items-center gap-2">
-                                                <CreditCard size={18} className="text-green-400" />
+                                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <CreditCard
+                                                    size={18}
+                                                    className="text-emerald-400"
+                                                />
                                                 <h3 className="font-semibold">
                                                     {purchase.description}
                                                 </h3>
                                             </div>
 
-                                            <p className="text-sm text-zinc-400">
+                                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                                 {purchase.store.name} • {purchase.createdBy.name}
-                                                {purchase.supplier?.name && ` • ${purchase.supplier.name}`}
+                                                {purchase.supplier?.name &&
+                                                    ` • ${purchase.supplier.name}`}
                                             </p>
 
-                                            <p className="mt-1 text-sm text-zinc-500">
-                                                {new Date(purchase.createdAt).toLocaleDateString(
-                                                    'pt-BR',
-                                                )}
+                                            <p className="text-sm text-zinc-500">
+                                                {categoryLabel[purchase.category] ||
+                                                    purchase.category}{' '}
+                                                •{' '}
+                                                {new Date(
+                                                    purchase.createdAt,
+                                                ).toLocaleDateString('pt-BR')}
                                             </p>
 
-                                            {purchase.fiscalDocuments &&
-                                                purchase.fiscalDocuments.length > 0 && (
-                                                    <div className="mt-3 space-y-2">
-                                                        {purchase.fiscalDocuments.map((doc) => {
-                                                            if (!doc.fileUrl) return null;
+                                            <div className="flex flex-wrap gap-2">
+                                                {purchase.fiscalDocuments?.map((doc) => {
+                                                    if (!doc.fileUrl) return null;
 
-                                                            return (
-                                                                <a
-                                                                    key={doc.id}
-                                                                    href={`${API_URL}${doc.fileUrl}`}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className="inline-flex items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20"
-                                                                >
-                                                                    <FileText size={16} />
-                                                                    Abrir{' '}
-                                                                    {doc.type === 'COUPON' ? 'cupom' : 'NF'}
-                                                                </a>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
+                                                    return (
+                                                        <a
+                                                            key={doc.id}
+                                                            href={`${API_URL}${doc.fileUrl}`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20"
+                                                        >
+                                                            <FileText size={16} />
+                                                            Abrir{' '}
+                                                            {doc.type === 'COUPON'
+                                                                ? 'cupom'
+                                                                : 'NF'}
+                                                        </a>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
 
-                                        <div className="text-left md:text-right">
+                                        <div className="min-w-[260px] text-left xl:text-right">
                                             <strong className="block text-xl">
                                                 {formatCurrency(purchase.value)}
                                             </strong>
 
-                                            <span
-                                                className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColor[purchase.status]
-                                                    }`}
-                                            >
-                                                {statusLabel[purchase.status]}
-                                            </span>
+                                            <div className="mt-2 flex flex-wrap gap-2 xl:justify-end">
+                                                <span
+                                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColor[purchase.status] ||
+                                                        'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                                                        }`}
+                                                >
+                                                    {statusLabel[purchase.status] ||
+                                                        purchase.status}
+                                                </span>
 
-                                            {purchase.status === 'APPROVED' && (
-                                                <label className="mt-3 inline-flex w-full cursor-pointer justify-center rounded-xl border border-orange-500/30 bg-orange-500/10 px-4 py-2 text-sm font-medium text-orange-400 hover:bg-orange-500/20 md:w-auto">
-                                                    Enviar cupom
+                                                {getFlowStage(purchase) === 'DIFFERENCE' &&
+                                                    purchase.status !==
+                                                    'RECEIVED_WITH_DIFFERENCE' && (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400">
+                                                            <AlertTriangle size={12} />
+                                                            Recebida com diferença
+                                                        </span>
+                                                    )}
+                                            </div>
 
+                                            <div className="mt-3 flex flex-wrap gap-2 xl:justify-end">
+                                                {purchase.status ===
+                                                    'WAITING_APPROVAL' && (
+                                                        <>
+                                                            <button
+                                                                onClick={() =>
+                                                                    approvePurchase(purchase.id)
+                                                                }
+                                                                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20"
+                                                            >
+                                                                <CheckCircle2 size={16} />
+                                                                Aprovar
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() =>
+                                                                    rejectPurchase(purchase.id)
+                                                                }
+                                                                className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20"
+                                                            >
+                                                                <XCircle size={16} />
+                                                                Reprovar
+                                                            </button>
+                                                        </>
+                                                    )}
+
+                                                {['WAITING_RECEIPT', 'APPROVED'].includes(
+                                                    purchase.status,
+                                                ) && (
+                                                        <button
+                                                            onClick={() =>
+                                                                router.push(
+                                                                    `/purchases/${purchase.id}?receive=1`,
+                                                                )
+                                                            }
+                                                            className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20"
+                                                        >
+                                                            <PackageCheck size={16} />
+                                                            Receber
+                                                        </button>
+                                                    )}
+
+                                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm font-medium text-yellow-400 hover:bg-yellow-500/20">
+                                                    <FileText size={16} />
+                                                    Cupom
                                                     <input
                                                         type="file"
                                                         accept="image/*,.pdf,.xml"
@@ -524,34 +555,61 @@ export default function PurchasesPage() {
                                                             const file = e.target.files?.[0];
 
                                                             if (file) {
-                                                                addCoupon(purchase.id, file);
+                                                                uploadFiscalDocument(
+                                                                    purchase.id,
+                                                                    file,
+                                                                    'COUPON',
+                                                                );
                                                             }
                                                         }}
                                                     />
                                                 </label>
-                                            )}
-                                            {purchase.status === 'INVOICE_LINKED' && (
+
+                                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-sm font-medium text-purple-400 hover:bg-purple-500/20">
+                                                    <FileText size={16} />
+                                                    NF
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*,.pdf,.xml"
+                                                        className="hidden"
+                                                        onChange={(e) => {
+                                                            const file = e.target.files?.[0];
+
+                                                            if (file) {
+                                                                uploadFiscalDocument(
+                                                                    purchase.id,
+                                                                    file,
+                                                                    'INVOICE',
+                                                                );
+                                                            }
+                                                        }}
+                                                    />
+                                                </label>
+
+                                                {purchase.status === 'RECEIVED_OK' && (
+                                                    <button
+                                                        onClick={() =>
+                                                            closePurchase(purchase.id)
+                                                        }
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20"
+                                                    >
+                                                        <CheckCircle2 size={16} />
+                                                        Fechar
+                                                    </button>
+                                                )}
+
                                                 <button
-                                                    onClick={() => checkPurchase(purchase.id)}
-                                                    className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 md:w-auto"
+                                                    onClick={() =>
+                                                        router.push(
+                                                            `/purchases/${purchase.id}`,
+                                                        )
+                                                    }
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                                                 >
-                                                    Conferir compra
+                                                    <Clock size={16} />
+                                                    Detalhes
                                                 </button>
-                                            )}
-                                            {purchase.status === 'CHECKED' && (
-                                                <button
-                                                    onClick={() => closePurchase(purchase.id)}
-                                                    className="mt-3 w-full rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20 md:w-auto"
-                                                >
-                                                    Fechar compra
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={() => router.push(`/purchases/${purchase.id}`)}
-                                                className="mt-3 w-full rounded-xl border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 md:w-auto"
-                                            >
-                                                Ver detalhes
-                                            </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

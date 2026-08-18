@@ -3,12 +3,12 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-// Fornecedores virou uma aba dentro de Cadastros.
-export default function SuppliersRedirect() {
+// Usuários virou uma aba dentro de Cadastros.
+export default function UsersRedirect() {
     const router = useRouter();
 
     useEffect(() => {
-        router.replace('/cadastros?tab=fornecedores');
+        router.replace('/cadastros?tab=usuarios');
     }, [router]);
 
     return null;

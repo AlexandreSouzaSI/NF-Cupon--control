@@ -1,12 +1,12 @@
 export const purchaseStatusLabel: Record<string, string> = {
     DRAFT: 'Rascunho',
-    PENDING_APPROVAL: 'Aguardando aprovação',
-    APPROVED: 'Aprovada',
-    REJECTED: 'Reprovada',
+    PURCHASED: 'Aguardando aprovação',
+    PURCHASED: 'Aprovada',
+    CANCELED: 'Reprovada',
     PURCHASED: 'Compra realizada',
     WAITING_INVOICE: 'Aguardando nota fiscal',
-    INVOICE_LINKED: 'Nota fiscal vinculada',
-    CHECKED: 'Conferida',
+    HAS_INVOICE: 'Nota fiscal vinculada',
+    RECEIVED_OK: 'Conferida',
     CLOSED: 'Fechada',
 };
 

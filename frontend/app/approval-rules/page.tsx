@@ -134,7 +134,7 @@ export default function ApprovalRulesPage() {
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[420px_1fr]">
                 <form
                     onSubmit={createRule}
-                    className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                    className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
                 >
                     <div className="mb-5 flex items-center gap-3">
                         <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
@@ -146,7 +146,7 @@ export default function ApprovalRulesPage() {
                                 Nova regra
                             </h2>
 
-                            <p className="text-sm text-zinc-400">
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                 Controle automático de aprovação
                             </p>
                         </div>
@@ -154,7 +154,7 @@ export default function ApprovalRulesPage() {
 
                     <div className="space-y-4">
                         <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                                 Nome da regra
                             </label>
 
@@ -164,12 +164,12 @@ export default function ApprovalRulesPage() {
                                     setName(e.target.value)
                                 }
                                 placeholder="Ex: Compras pequenas"
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
                             />
                         </div>
 
                         <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                                 Valor mínimo
                             </label>
 
@@ -179,12 +179,12 @@ export default function ApprovalRulesPage() {
                                     setMinValue(e.target.value)
                                 }
                                 placeholder="0,00"
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
                             />
                         </div>
 
                         <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                                 Valor máximo
                             </label>
 
@@ -194,12 +194,12 @@ export default function ApprovalRulesPage() {
                                     setMaxValue(e.target.value)
                                 }
                                 placeholder="500,00"
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
                             />
                         </div>
 
                         <div>
-                            <label className="mb-2 block text-sm text-zinc-300">
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                                 Tipo de aprovação
                             </label>
 
@@ -210,7 +210,7 @@ export default function ApprovalRulesPage() {
                                         e.target.value as any,
                                     )
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
                             >
                                 <option value="AUTO">
                                     Aprovação automática
@@ -228,7 +228,7 @@ export default function ApprovalRulesPage() {
 
                         <button
                             disabled={creating}
-                            className="h-12 w-full rounded-xl bg-green-500 font-semibold text-white hover:bg-green-600 disabled:opacity-50"
+                            className="h-12 w-full rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
                         >
                             {creating
                                 ? 'Salvando...'
@@ -237,14 +237,14 @@ export default function ApprovalRulesPage() {
                     </div>
                 </form>
 
-                <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5">
+                <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                     <div className="mb-5 flex items-center justify-between">
                         <div>
                             <h2 className="text-lg font-bold">
                                 Regras cadastradas
                             </h2>
 
-                            <p className="text-sm text-zinc-400">
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                 Fluxos automáticos de aprovação
                             </p>
                         </div>
@@ -253,11 +253,11 @@ export default function ApprovalRulesPage() {
                     </div>
 
                     {loading ? (
-                        <p className="text-sm text-zinc-400">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
                             Carregando...
                         </p>
                     ) : rules.length === 0 ? (
-                        <p className="text-sm text-zinc-400">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
                             Nenhuma regra cadastrada.
                         </p>
                     ) : (
@@ -265,7 +265,7 @@ export default function ApprovalRulesPage() {
                             {rules.map((rule) => (
                                 <div
                                     key={rule.id}
-                                    className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                                    className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4"
                                 >
                                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                         <div>
@@ -273,7 +273,7 @@ export default function ApprovalRulesPage() {
                                                 {rule.name}
                                             </h3>
 
-                                            <p className="mt-1 text-sm text-zinc-400">
+                                            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                                                 {formatCurrency(
                                                     Number(rule.minValue),
                                                 )}

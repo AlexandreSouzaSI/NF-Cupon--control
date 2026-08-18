@@ -23,8 +23,8 @@ type Notification = {
 
 const typeIcon: Record<string, React.ElementType> = {
     PURCHASE_CREATED: ReceiptText,
-    PURCHASE_APPROVED: CheckCircle2,
-    PURCHASE_REJECTED: ShieldCheck,
+    PURCHASE_PURCHASED: CheckCircle2,
+    PURCHASE_CANCELED: ShieldCheck,
     WAITING_APPROVAL: Clock,
     WAITING_INVOICE: ReceiptText,
     CRITICAL_ALERT: Bell,
@@ -70,7 +70,7 @@ export default function NotificationsPage() {
 
     return (
         <AppLayout title="Notificações">
-            <div className="mb-6 rounded-3xl border border-zinc-800 bg-zinc-900 p-5">
+            <div className="mb-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                 <div className="flex items-center gap-3">
                     <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
                         <Bell size={24} />
@@ -81,7 +81,7 @@ export default function NotificationsPage() {
                             Central de notificações
                         </h2>
 
-                        <p className="text-sm text-zinc-400">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
                             {unreadCount} notificação(ões) não lida(s)
                         </p>
                     </div>
@@ -89,16 +89,16 @@ export default function NotificationsPage() {
             </div>
 
             {loading ? (
-                <p className="text-zinc-400">Carregando notificações...</p>
+                <p className="text-zinc-600 dark:text-zinc-400">Carregando notificações...</p>
             ) : notifications.length === 0 ? (
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center">
+                <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center">
                     <CheckCircle2 className="mx-auto mb-3 text-green-400" />
 
                     <h2 className="text-xl font-bold">
                         Nenhuma notificação
                     </h2>
 
-                    <p className="mt-2 text-zinc-400">
+                    <p className="mt-2 text-zinc-600 dark:text-zinc-400">
                         Quando algo importante acontecer, aparecerá aqui.
                     </p>
                 </div>
@@ -111,13 +111,13 @@ export default function NotificationsPage() {
                             <div
                                 key={notification.id}
                                 className={`rounded-3xl border p-5 ${notification.read
-                                        ? 'border-zinc-800 bg-zinc-900'
-                                        : 'border-green-500/30 bg-green-500/10'
+                                    ? 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
+                                    : 'border-green-500/30 bg-green-500/10'
                                     }`}
                             >
                                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                     <div className="flex gap-3">
-                                        <div className="rounded-2xl bg-zinc-950 p-3 text-green-400">
+                                        <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-950 p-3 text-green-400">
                                             <Icon size={22} />
                                         </div>
 
@@ -126,7 +126,7 @@ export default function NotificationsPage() {
                                                 {notification.title}
                                             </h3>
 
-                                            <p className="mt-1 text-sm text-zinc-300">
+                                            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
                                                 {notification.message}
                                             </p>
 

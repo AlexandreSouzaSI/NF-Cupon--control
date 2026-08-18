@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 
 import { Loader2 } from 'lucide-react';
 
-import { toast, Toaster } from 'sonner';
+import { toast } from 'sonner';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -49,16 +49,14 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-      <Toaster richColors />
-
-      <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl">
+    <main className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
+      <div className="w-full max-w-md rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 shadow-2xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold">
             Controle Compras
           </h1>
 
-          <p className="mt-2 text-zinc-400">
+          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
             Gestão de compras e notas fiscais
           </p>
         </div>
@@ -68,7 +66,7 @@ export default function LoginPage() {
           className="space-y-4"
         >
           <div>
-            <label className="mb-2 block text-sm text-zinc-300">
+            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
               E-mail
             </label>
 
@@ -78,12 +76,12 @@ export default function LoginPage() {
               onChange={(e) =>
                 setEmail(e.target.value)
               }
-              className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none transition focus:border-green-500"
+              className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-green-500"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-zinc-300">
+            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
               Senha
             </label>
 
@@ -93,14 +91,14 @@ export default function LoginPage() {
               onChange={(e) =>
                 setPassword(e.target.value)
               }
-              className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none transition focus:border-green-500"
+              className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-green-500"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-green-500 font-semibold text-white transition hover:bg-green-600 disabled:opacity-50"
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white transition hover:bg-green-600 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="animate-spin" />

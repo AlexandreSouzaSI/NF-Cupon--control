@@ -75,12 +75,12 @@ export default function AlertsPage() {
     return (
         <AppLayout title="Alertas">
             {loading ? (
-                <p className="text-zinc-400">Carregando alertas...</p>
+                <p className="text-zinc-600 dark:text-zinc-400">Carregando alertas...</p>
             ) : alerts.length === 0 ? (
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center">
+                <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center">
                     <CheckCircle2 className="mx-auto mb-3 text-green-400" />
                     <h2 className="text-xl font-bold">Nenhum alerta pendente</h2>
-                    <p className="mt-2 text-zinc-400">
+                    <p className="mt-2 text-zinc-600 dark:text-zinc-400">
                         Tudo sob controle no momento.
                     </p>
                 </div>
@@ -89,7 +89,7 @@ export default function AlertsPage() {
                     {alerts.map((alert) => (
                         <div
                             key={alert.id}
-                            className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+                            className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
                         >
                             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                 <div>
@@ -103,24 +103,24 @@ export default function AlertsPage() {
 
                                         <div>
                                             <h2 className="text-lg font-bold">{alert.title}</h2>
-                                            <p className="text-sm text-zinc-400">
+                                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                                 {levelLabel[alert.level]} •{' '}
                                                 {new Date(alert.createdAt).toLocaleString('pt-BR')}
                                             </p>
                                         </div>
                                     </div>
 
-                                    <p className="text-sm text-zinc-300">
+                                    <p className="text-sm text-zinc-700 dark:text-zinc-300">
                                         {alert.description}
                                     </p>
 
                                     {alert.purchase && (
-                                        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+                                        <div className="mt-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4">
                                             <p className="font-medium">
                                                 {alert.purchase.description}
                                             </p>
 
-                                            <p className="mt-1 text-sm text-zinc-400">
+                                            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                                                 {alert.purchase.store?.name || 'Loja não informada'}
                                                 {alert.purchase.supplier?.name &&
                                                     ` • ${alert.purchase.supplier.name}`}

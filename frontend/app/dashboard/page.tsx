@@ -2,46 +2,153 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppLayout } from '../../src/components/app-layout';
-import { api } from '@/lib/api';
 import {
     AlertTriangle,
-    Bell,
+    Briefcase,
     CheckCircle2,
-    Clock,
+    Clock3,
+    FileWarning,
+    PackageCheck,
     ReceiptText,
-    ShoppingCart,
+    ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { AppLayout } from '../../src/components/app-layout';
+import { api } from '@/lib/api';
+import { getActiveStore } from '@/lib/active-store';
+
+type PendingTask = {
+    id: string;
+    purchaseId: string;
+    type: string;
+    title: string;
+    description: string;
+    storeName: string;
+    supplierName?: string | null;
+    createdAt: string;
+    href: string;
+};
+
+type RecentPurchase = {
+    id: string;
+    description: string;
+    value: string;
+    status: string;
+    createdAt: string;
+    store: {
+        id: string;
+        name: string;
+    };
+    supplier?: {
+        id: string;
+        name: string;
+    } | null;
+    createdBy: {
+        id: string;
+        name: string;
+    };
+    checkedBy?: {
+        id: string;
+        name: string;
+    } | null;
+};
+
+type RecentAlert = {
+    id: string;
+    title: string;
+    description: string;
+    level: string;
+    createdAt: string;
+    purchase?: {
+        id: string;
+        description: string;
+        store?: {
+            id: string;
+            name: string;
+        };
+    } | null;
+};
+
 type DashboardSummary = {
-    totalPurchases: number;
-    pendingApprovals: number;
-    waitingInvoices: number;
-    rejectedPurchases: number;
-    approvedTotal: number;
-    criticalAlerts: number;
-    unreadNotifications: number;
-    recentPurchases: {
-        id: string;
-        description: string;
-        value: string;
-        status: string;
-        createdAt: string;
-        store: { name: string };
-        supplier?: { name: string } | null;
-        createdBy: { name: string };
-    }[];
-    recentAlerts: {
-        id: string;
-        title: string;
-        description: string;
-        level: string;
-        createdAt: string;
-        purchase?: {
-            description: string;
-        } | null;
-    }[];
+    operational: {
+        totalPurchases: number;
+        waitingApproval: number;
+        waitingReceipt: number;
+        receivedWithDifference: number;
+        waitingInvoice: number;
+        couponOnly: number;
+        purchasesWithoutInvoice: number;
+    };
+
+    today: {
+        created: number;
+        received: number;
+        closed: number;
+        open: number;
+    };
+
+    financial: {
+        billsDueToday: number;
+        billsDueTodayTotal: number;
+        billsDueWeek: number;
+        billsDueWeekTotal: number;
+        overdueBills: number;
+        overdueBillsTotal: number;
+        cardPurchasesTotal: number;
+    };
+
+    alerts: {
+        critical: number;
+        unreadNotifications: number;
+    };
+
+    services: {
+        nfCountMonth: number;
+    };
+
+    pendingTasks: PendingTask[];
+    recentPurchases: RecentPurchase[];
+    recentAlerts: RecentAlert[];
+};
+
+const statusLabel: Record<string, string> = {
+    DRAFT: 'Rascunho',
+    WAITING_APPROVAL: 'Aguardando aprovação',
+    APPROVED: 'Aprovada',
+    REJECTED: 'Reprovada',
+    WAITING_RECEIPT: 'Aguardando recebimento',
+    RECEIVED_OK: 'Recebida corretamente',
+    RECEIVED_WITH_DIFFERENCE: 'Recebida com divergência',
+    WAITING_INVOICE: 'Aguardando NF',
+    HAS_COUPON_ONLY: 'Apenas com cupom',
+    HAS_INVOICE: 'Com NF',
+    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar',
+    CLOSED: 'Fechada',
+    CANCELED: 'Cancelada',
+};
+
+const statusColor: Record<string, string> = {
+    DRAFT: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
+    WAITING_APPROVAL: 'bg-yellow-500/10 text-yellow-400',
+    APPROVED: 'bg-blue-500/10 text-blue-400',
+    REJECTED: 'bg-red-500/10 text-red-400',
+    WAITING_RECEIPT: 'bg-orange-500/10 text-orange-400',
+    RECEIVED_OK: 'bg-emerald-500/10 text-emerald-400',
+    RECEIVED_WITH_DIFFERENCE: 'bg-red-500/10 text-red-400',
+    WAITING_INVOICE: 'bg-orange-500/10 text-orange-400',
+    HAS_COUPON_ONLY: 'bg-yellow-500/10 text-yellow-400',
+    HAS_INVOICE: 'bg-purple-500/10 text-purple-400',
+    WAITING_PAYMENT_REGISTER: 'bg-cyan-500/10 text-cyan-400',
+    CLOSED: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
+    CANCELED: 'bg-red-500/10 text-red-400',
+};
+
+const taskColor: Record<string, string> = {
+    WAITING_APPROVAL: 'text-yellow-400 bg-yellow-500/10',
+    WAITING_RECEIPT: 'text-orange-400 bg-orange-500/10',
+    WAITING_INVOICE: 'text-purple-400 bg-purple-500/10',
+    RECEIVED_WITH_DIFFERENCE: 'text-red-400 bg-red-500/10',
 };
 
 function formatCurrency(value: number | string) {
@@ -51,19 +158,32 @@ function formatCurrency(value: number | string) {
     });
 }
 
+function formatDate(value: string) {
+    return new Date(value).toLocaleString('pt-BR');
+}
+
 export default function DashboardPage() {
     const router = useRouter();
 
-    const [summary, setSummary] = useState<DashboardSummary | null>(null);
+    const [summary, setSummary] = useState<DashboardSummary | null>(
+        null,
+    );
+
     const [loading, setLoading] = useState(true);
 
     async function loadSummary() {
         try {
             setLoading(true);
-            const response = await api.get('/dashboard/summary');
+
+            const response = await api.get('/dashboard/summary', {
+                params: {
+                    storeId: getActiveStore()?.id || undefined,
+                },
+            });
+
             setSummary(response.data);
         } catch {
-            toast.error('Erro ao carregar dashboard');
+            toast.error('Erro ao carregar dashboard.');
         } finally {
             setLoading(false);
         }
@@ -73,209 +193,258 @@ export default function DashboardPage() {
         loadSummary();
     }, []);
 
-    const cards = [
+    if (loading) {
+        return (
+            <AppLayout title="Dashboard">
+                <p className="text-zinc-600 dark:text-zinc-400">
+                    Carregando centro de operações...
+                </p>
+            </AppLayout>
+        );
+    }
+
+    if (!summary) {
+        return (
+            <AppLayout title="Dashboard">
+                <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                        Não foi possível carregar o dashboard.
+                    </p>
+
+                    <button
+                        type="button"
+                        onClick={loadSummary}
+                        className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 font-medium text-zinc-900 dark:text-white hover:bg-emerald-700"
+                    >
+                        Tentar novamente
+                    </button>
+                </div>
+            </AppLayout>
+        );
+    }
+
+    const operationalCards = [
         {
             title: 'Aguardando aprovação',
-            value: summary?.pendingApprovals ?? 0,
-            description: 'Compras precisam de decisão',
-            icon: Clock,
-            color: 'text-yellow-400',
+            value: summary.operational.waitingApproval,
+            description: 'Compras que precisam de decisão',
+            icon: Clock3,
+            iconClass: 'text-yellow-400 bg-yellow-500/10',
             href: '/approvals',
         },
         {
-            title: 'Cupons sem NF',
-            value: summary?.waitingInvoices ?? 0,
-            description: 'Pendências fiscais abertas',
-            icon: ReceiptText,
-            color: 'text-orange-400',
+            title: 'Aguardando recebimento',
+            value: summary.operational.waitingReceipt,
+            description: 'Mercadorias ainda não conferidas',
+            icon: PackageCheck,
+            iconClass: 'text-orange-400 bg-orange-500/10',
+            href: '/purchases?status=WAITING_RECEIPT',
+        },
+        {
+            title: 'Com divergência',
+            value: summary.operational.receivedWithDifference,
+            description: 'Itens faltando ou recebidos a mais',
+            icon: AlertTriangle,
+            iconClass: 'text-red-400 bg-red-500/10',
+            href: '/purchases?status=RECEIVED_WITH_DIFFERENCE',
+        },
+        {
+            title: 'Compras sem NF',
+            value: summary.operational.purchasesWithoutInvoice,
+            description: 'Sem nota ou apenas com cupom',
+            icon: FileWarning,
+            iconClass: 'text-purple-400 bg-purple-500/10',
             href: '/fiscal-documents',
         },
         {
-            title: 'Alertas críticos',
-            value: summary?.criticalAlerts ?? 0,
-            description: 'Riscos não resolvidos',
+            title: 'Boletos hoje',
+            value: summary.financial.billsDueToday,
+            description: formatCurrency(
+                summary.financial.billsDueTodayTotal,
+            ),
+            icon: ReceiptText,
+            iconClass: 'text-cyan-400 bg-cyan-500/10',
+            href: '/bills',
+        },
+        {
+            title: 'Boletos vencidos',
+            value: summary.financial.overdueBills,
+            description: formatCurrency(
+                summary.financial.overdueBillsTotal,
+            ),
             icon: AlertTriangle,
-            color: 'text-red-400',
+            iconClass: 'text-red-400 bg-red-500/10',
+            href: '/bills',
+        },
+        {
+            title: 'Alertas críticos',
+            value: summary.alerts.critical,
+            description: 'Precisam de conferência',
+            icon: ShieldAlert,
+            iconClass: 'text-red-400 bg-red-500/10',
             href: '/alerts',
         },
         {
-            title: 'Notificações',
-            value: summary?.unreadNotifications ?? 0,
-            description: 'Avisos não lidos',
-            icon: Bell,
-            color: 'text-blue-400',
-            href: '/notifications',
+            title: 'NF Serviços',
+            value: summary.services.nfCountMonth,
+            description: 'Notas anexadas este mês',
+            icon: Briefcase,
+            iconClass: 'text-blue-400 bg-blue-500/10',
+            href: '/services?tab=nf',
         },
     ];
 
     return (
-        <AppLayout title="Dashboard">
-            {loading ? (
-                <p className="text-zinc-400">Carregando dashboard...</p>
-            ) : (
-                <>
-                    <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
-                        <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5">
-                            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                <div>
-                                    <p className="text-sm text-zinc-400">
-                                        Valor aprovado / em andamento
-                                    </p>
+        <AppLayout title="Centro de Operações">
+            <div className="space-y-6">
+                <header>
+                    <h2 className="text-2xl font-bold">
+                        O que precisa ser resolvido
+                    </h2>
 
-                                    <strong className="mt-1 block text-4xl text-green-400">
-                                        {formatCurrency(summary?.approvedTotal ?? 0)}
-                                    </strong>
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                        Acompanhe compras, recebimentos, documentos
+                        fiscais e pagamentos.
+                    </p>
+                </header>
 
-                                    <p className="mt-2 text-sm text-zinc-500">
-                                        Baseado em compras aprovadas, com cupom, NF, conferidas ou
-                                        fechadas.
-                                    </p>
-                                </div>
+                <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    {operationalCards.map((card) => {
+                        const Icon = card.icon;
 
-                                <div className="rounded-2xl bg-green-500/10 p-4 text-green-400">
-                                    <CheckCircle2 size={34} />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-zinc-400">Total de compras</p>
-                                    <strong className="mt-1 block text-4xl text-blue-400">
-                                        {summary?.totalPurchases ?? 0}
-                                    </strong>
-                                </div>
-
-                                <div className="rounded-2xl bg-blue-500/10 p-4 text-blue-400">
-                                    <ShoppingCart size={34} />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        {cards.map((card) => {
-                            const Icon = card.icon;
-
-                            return (
-                                <button
-                                    key={card.title}
-                                    onClick={() => router.push(card.href)}
-                                    className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5 text-left shadow-xl hover:bg-zinc-800/60"
-                                >
-                                    <div className="mb-4 flex items-center justify-between">
-                                        <div className={`rounded-2xl bg-zinc-950 p-3 ${card.color}`}>
-                                            <Icon size={24} />
-                                        </div>
-
-                                        <span className="rounded-full bg-zinc-950 px-3 py-1 text-xs text-zinc-400">
-                                            abrir
-                                        </span>
+                        return (
+                            <button
+                                type="button"
+                                key={card.title}
+                                onClick={() =>
+                                    router.push(card.href)
+                                }
+                                className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 text-left transition hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70"
+                            >
+                                <div className="mb-4 flex items-start justify-between gap-3">
+                                    <div
+                                        className={`rounded-2xl p-3 ${card.iconClass}`}
+                                    >
+                                        <Icon size={22} />
                                     </div>
 
-                                    <p className="text-sm text-zinc-400">{card.title}</p>
+                                    <span className="rounded-full bg-zinc-50 dark:bg-zinc-950 px-2.5 py-1 text-xs text-zinc-500">
+                                        abrir
+                                    </span>
+                                </div>
 
-                                    <strong className="mt-2 block text-3xl">{card.value}</strong>
+                                <strong className="block text-3xl">
+                                    {card.value}
+                                </strong>
 
-                                    <p className="mt-2 text-sm text-zinc-500">
-                                        {card.description}
-                                    </p>
-                                </button>
-                            );
-                        })}
-                    </div>
+                                <p className="mt-2 font-medium">
+                                    {card.title}
+                                </p>
 
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                        <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5">
-                            <h2 className="text-lg font-bold">Últimas compras</h2>
+                                <p className="mt-1 text-sm text-zinc-500">
+                                    {card.description}
+                                </p>
+                            </button>
+                        );
+                    })}
+                </section>
 
-                            <div className="mt-4 space-y-3">
-                                {summary?.recentPurchases.length === 0 ? (
-                                    <p className="text-sm text-zinc-400">
-                                        Nenhuma compra registrada.
-                                    </p>
-                                ) : (
-                                    summary?.recentPurchases.map((purchase) => (
-                                        <button
-                                            key={purchase.id}
-                                            onClick={() => router.push(`/purchases/${purchase.id}`)}
-                                            className="w-full rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-left hover:bg-zinc-900"
-                                        >
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <p className="font-medium">{purchase.description}</p>
 
-                                                    <p className="mt-1 text-sm text-zinc-400">
-                                                        {purchase.store.name} • {purchase.createdBy.name}
-                                                        {purchase.supplier?.name &&
-                                                            ` • ${purchase.supplier.name}`}
-                                                    </p>
+                <section>
+                    <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                        <div className="mb-5 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-bold">
+                                    Minhas pendências
+                                </h3>
 
-                                                    <p className="mt-1 text-xs text-zinc-500">
-                                                        {new Date(purchase.createdAt).toLocaleString(
-                                                            'pt-BR',
-                                                        )}
-                                                    </p>
-                                                </div>
-
-                                                <strong className="text-green-400">
-                                                    {formatCurrency(purchase.value)}
-                                                </strong>
-                                            </div>
-                                        </button>
-                                    ))
-                                )}
+                                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                    Ações mais antigas que precisam
+                                    avançar
+                                </p>
                             </div>
-                        </section>
 
-                        <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5">
-                            <h2 className="text-lg font-bold">Alertas recentes</h2>
+                            <Clock3 className="text-yellow-400" />
+                        </div>
 
-                            <div className="mt-4 space-y-3">
-                                {summary?.recentAlerts.length === 0 ? (
-                                    <p className="text-sm text-zinc-400">
-                                        Nenhum alerta pendente.
-                                    </p>
-                                ) : (
-                                    summary?.recentAlerts.map((alert) => (
-                                        <button
-                                            key={alert.id}
-                                            onClick={() => router.push('/alerts')}
-                                            className="w-full rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-left hover:bg-zinc-900"
-                                        >
-                                            <div className="flex gap-3">
+                        {summary.pendingTasks.length === 0 ? (
+                            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+                                <div className="flex items-center gap-3">
+                                    <CheckCircle2 className="text-emerald-400" />
+
+                                    <div>
+                                        <strong className="text-emerald-300">
+                                            Nenhuma pendência urgente
+                                        </strong>
+
+                                        <p className="text-sm text-emerald-400/70">
+                                            O fluxo está em dia.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {summary.pendingTasks.map((task) => (
+                                    <button
+                                        type="button"
+                                        key={task.id}
+                                        onClick={() =>
+                                            router.push(task.href)
+                                        }
+                                        className="flex w-full flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900 md:flex-row md:items-center md:justify-between"
+                                    >
+                                        <div className="flex gap-3">
+                                            <div
+                                                className={`mt-0.5 h-fit rounded-xl p-2 ${taskColor[
+                                                    task.type
+                                                    ] ||
+                                                    'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+                                                    }`}
+                                            >
                                                 <AlertTriangle
-                                                    size={20}
-                                                    className={
-                                                        alert.level === 'CRITICAL'
-                                                            ? 'text-red-400'
-                                                            : 'text-yellow-400'
-                                                    }
+                                                    size={18}
                                                 />
-
-                                                <div>
-                                                    <p className="font-medium">{alert.title}</p>
-
-                                                    <p className="mt-1 text-sm text-zinc-400">
-                                                        {alert.description}
-                                                    </p>
-
-                                                    {alert.purchase?.description && (
-                                                        <p className="mt-1 text-xs text-zinc-500">
-                                                            Compra: {alert.purchase.description}
-                                                        </p>
-                                                    )}
-                                                </div>
                                             </div>
-                                        </button>
-                                    ))
-                                )}
+
+                                            <div>
+                                                <p className="font-semibold">
+                                                    {task.title}
+                                                </p>
+
+                                                <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                                                    {
+                                                        task.description
+                                                    }
+                                                </p>
+
+                                                <p className="mt-1 text-xs text-zinc-500">
+                                                    {task.storeName}
+                                                    {task.supplierName
+                                                        ? ` • ${task.supplierName}`
+                                                        : ''}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-left md:text-right">
+                                            <p className="text-xs text-zinc-500">
+                                                {formatDate(
+                                                    task.createdAt,
+                                                )}
+                                            </p>
+
+                                            <span className="mt-2 inline-flex rounded-full bg-zinc-100 dark:bg-zinc-800 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300">
+                                                resolver
+                                            </span>
+                                        </div>
+                                    </button>
+                                ))}
                             </div>
-                        </section>
+                        )}
                     </div>
-                </>
-            )}
+                </section>
+            </div>
         </AppLayout>
     );
 }

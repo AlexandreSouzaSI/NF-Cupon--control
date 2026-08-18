@@ -28,10 +28,10 @@ type Purchase = {
 };
 
 const statusLabel: Record<string, string> = {
-    APPROVED: 'Aprovada',
+    PURCHASED: 'Aprovada',
     WAITING_INVOICE: 'Aguardando NF',
-    INVOICE_LINKED: 'NF vinculada',
-    CHECKED: 'Conferida',
+    HAS_INVOICE: 'NF vinculada',
+    RECEIVED_OK: 'Conferida',
     CLOSED: 'Fechada',
 };
 
@@ -58,7 +58,7 @@ export default function PurchaseManagementPage() {
             });
 
             const operationalPurchases = response.data.filter((purchase: Purchase) =>
-                ['APPROVED', 'WAITING_INVOICE', 'INVOICE_LINKED', 'CHECKED', 'CLOSED'].includes(
+                ['PURCHASED', 'WAITING_INVOICE', 'HAS_INVOICE', 'RECEIVED_OK', 'CLOSED'].includes(
                     purchase.status,
                 ),
             );
@@ -97,7 +97,7 @@ export default function PurchaseManagementPage() {
 
     return (
         <AppLayout title="Compras">
-            <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5">
+            <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                 <div className="mb-5 flex items-center gap-3">
                     <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
                         <ReceiptText size={22} />
@@ -105,7 +105,7 @@ export default function PurchaseManagementPage() {
 
                     <div>
                         <h2 className="text-lg font-bold">Gestão de compras</h2>
-                        <p className="text-sm text-zinc-400">
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
                             Acompanhe compras aprovadas, cupons, notas fiscais e fechamento.
                         </p>
                     </div>
@@ -115,19 +115,19 @@ export default function PurchaseManagementPage() {
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="h-12 rounded-xl border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-green-500"
+                        className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
                     >
                         <option value="">Todos os status</option>
-                        <option value="APPROVED">Aprovadas</option>
+                        <option value="PURCHASED">Aprovadas</option>
                         <option value="WAITING_INVOICE">Aguardando NF</option>
-                        <option value="INVOICE_LINKED">NF vinculada</option>
-                        <option value="CHECKED">Conferidas</option>
+                        <option value="HAS_INVOICE">NF vinculada</option>
+                        <option value="RECEIVED_OK">Conferidas</option>
                         <option value="CLOSED">Fechadas</option>
                     </select>
 
                     <button
                         onClick={loadPurchases}
-                        className="flex h-12 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 font-semibold text-white hover:bg-green-600"
+                        className="flex h-12 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 font-semibold text-zinc-900 dark:text-white hover:bg-green-600"
                     >
                         <Search size={18} />
                         Buscar
@@ -135,9 +135,9 @@ export default function PurchaseManagementPage() {
                 </div>
 
                 {loading ? (
-                    <p className="text-sm text-zinc-400">Carregando...</p>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">Carregando...</p>
                 ) : purchases.length === 0 ? (
-                    <p className="text-sm text-zinc-400">
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
                         Nenhuma compra operacional encontrada.
                     </p>
                 ) : (
@@ -145,13 +145,13 @@ export default function PurchaseManagementPage() {
                         {purchases.map((purchase) => (
                             <div
                                 key={purchase.id}
-                                className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4"
                             >
                                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                     <div>
                                         <h3 className="font-semibold">{purchase.description}</h3>
 
-                                        <p className="mt-1 text-sm text-zinc-400">
+                                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                                             {purchase.store.name} • {purchase.createdBy.name}
                                             {purchase.supplier?.name &&
                                                 ` • ${purchase.supplier.name}`}
@@ -186,11 +186,11 @@ export default function PurchaseManagementPage() {
                                             {formatCurrency(purchase.value)}
                                         </strong>
 
-                                        <span className="mt-2 inline-flex rounded-full bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
+                                        <span className="mt-2 inline-flex rounded-full bg-white dark:bg-zinc-900 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300">
                                             {statusLabel[purchase.status] || purchase.status}
                                         </span>
 
-                                        {purchase.status === 'INVOICE_LINKED' && (
+                                        {purchase.status === 'HAS_INVOICE' && (
                                             <button
                                                 onClick={() => checkPurchase(purchase.id)}
                                                 className="mt-3 block w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 md:w-auto"
@@ -199,7 +199,7 @@ export default function PurchaseManagementPage() {
                                             </button>
                                         )}
 
-                                        {purchase.status === 'CHECKED' && (
+                                        {purchase.status === 'RECEIVED_OK' && (
                                             <button
                                                 onClick={() => closePurchase(purchase.id)}
                                                 className="mt-3 block w-full rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20 md:w-auto"
