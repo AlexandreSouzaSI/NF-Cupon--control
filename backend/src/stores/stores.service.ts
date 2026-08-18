@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    ForbiddenException,
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
@@ -11,7 +12,8 @@ import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { UserRole } from '@prisma/client';
 import { encryptSecret } from './certificate-crypto.util';
-import { runDiagnostics, testCertificateConnection } from './sefaz-nfse-client';
+import { runDiagnostics, testCertificateConnection, loadCertificate } from './sefaz-nfse-client';
+import { testGoodsConnection } from './sefaz-nfe-client';
 
 // Fica fora de /uploads de propósito: /uploads é servido publicamente pelo
 // Express (app.useStaticAssets) e um certificado digital nunca pode ficar
@@ -37,6 +39,7 @@ export class StoresService {
                 cnpj: dto.cnpj,
                 address: dto.address,
                 phone: dto.phone,
+                uf: dto.uf,
             },
         });
     }
@@ -46,6 +49,27 @@ export class StoresService {
             user.role === UserRole.ADMINISTRATIVO ||
             user.role === UserRole.PROPRIETARIO
         );
+    }
+
+    // Gerente só administra (editar dados, certificado) as lojas às quais
+    // já está vinculado — diferente de Administrativo/Proprietário, que têm
+    // acesso global. Criar loja nova, excluir loja e vincular/desvincular
+    // usuário continuam restritos a Administrativo/Proprietário no
+    // controller (@Roles), então essa checagem só entra em cena pra
+    // update/certificado.
+    private ensureManagedStoreAccess(storeId: string, user: any) {
+        if (this.hasGlobalStoreAccess(user)) return;
+
+        const allowedStoreIds =
+            user.userStores?.map(
+                (item: any) => item.storeId || item.store?.id,
+            ) || [];
+
+        if (!allowedStoreIds.includes(storeId)) {
+            throw new ForbiddenException(
+                'Você só pode gerenciar as lojas vinculadas a você.',
+            );
+        }
     }
 
     async findAll(user: any) {
@@ -141,8 +165,9 @@ export class StoresService {
         return store;
     }
 
-    async update(id: string, dto: UpdateStoreDto) {
+    async update(id: string, dto: UpdateStoreDto, user: any) {
         await this.ensureStoreExists(id);
+        this.ensureManagedStoreAccess(id, user);
 
         return this.prisma.store.update({
             where: { id },
@@ -151,6 +176,7 @@ export class StoresService {
                 cnpj: dto.cnpj,
                 address: dto.address,
                 phone: dto.phone,
+                uf: dto.uf,
             },
         });
     }
@@ -218,8 +244,9 @@ export class StoresService {
         });
     }
 
-    async getCertificateStatus(storeId: string) {
+    async getCertificateStatus(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
+        this.ensureManagedStoreAccess(storeId, user);
 
         const certificate = await this.prisma.storeCertificate.findUnique({
             where: { storeId },
@@ -244,6 +271,7 @@ export class StoresService {
         user: any,
     ) {
         await this.ensureStoreExists(storeId);
+        this.ensureManagedStoreAccess(storeId, user);
 
         if (!file) {
             throw new BadRequestException(
@@ -284,11 +312,12 @@ export class StoresService {
             },
         });
 
-        return this.getCertificateStatus(storeId);
+        return this.getCertificateStatus(storeId, user);
     }
 
-    async removeCertificate(storeId: string) {
+    async removeCertificate(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
+        this.ensureManagedStoreAccess(storeId, user);
 
         const certificate = await this.prisma.storeCertificate.findUnique({
             where: { storeId },
@@ -311,8 +340,9 @@ export class StoresService {
         return { success: true };
     }
 
-    async testCertificateConnection(storeId: string) {
+    async testCertificateConnection(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
+        this.ensureManagedStoreAccess(storeId, user);
 
         const certificate = await this.prisma.storeCertificate.findUnique({
             where: { storeId },
@@ -331,13 +361,72 @@ export class StoresService {
         });
     }
 
+    // Testa a conexão com o webservice de NF-e de mercadoria (produção
+    // nacional) — diferente do teste de NFS-e acima, que fala com o ADN.
+    // Exige CNPJ e UF cadastrados na loja além do certificado.
+    async testGoodsConnection(storeId: string, user: any) {
+        const store = await this.ensureStoreExists(storeId);
+        this.ensureManagedStoreAccess(storeId, user);
+
+        if (!store.cnpj) {
+            throw new BadRequestException(
+                'Cadastre o CNPJ da loja antes de testar a busca de NF-e.',
+            );
+        }
+
+        if (!store.uf) {
+            throw new BadRequestException(
+                'Cadastre a UF da loja antes de testar a busca de NF-e.',
+            );
+        }
+
+        const certificate = await this.prisma.storeCertificate.findUnique({
+            where: { storeId },
+        });
+
+        if (!certificate) {
+            throw new NotFoundException(
+                'Nenhum certificado cadastrado para essa loja.',
+            );
+        }
+
+        const cert = loadCertificate(certificate.filePath, {
+            cipher: certificate.passwordCipher,
+            iv: certificate.passwordIv,
+            authTag: certificate.passwordAuthTag,
+        });
+
+        // Sempre parte do NSU salvo, nunca de 0 — repetir NSU=0 em
+        // cliques seguidos é o que faz a Sefaz bloquear por "consumo
+        // indevido".
+        const result = await testGoodsConnection(
+            cert,
+            store.cnpj,
+            store.uf,
+            certificate.lastNsuNfe,
+        );
+
+        // Mesmo sendo só um "teste", já aproveitamos o NSU que a Sefaz
+        // devolveu — assim o próximo clique (ou a sincronização de
+        // verdade) não repete a mesma consulta.
+        if (result.success && result.ultNSU) {
+            await this.prisma.storeCertificate.update({
+                where: { storeId },
+                data: { lastNsuNfe: BigInt(result.ultNSU) },
+            });
+        }
+
+        return result;
+    }
+
     // Ferramenta temporária de diagnóstico: usa o certificado (que já
     // autentica, como confirmado pelo testCertificateConnection) pra
     // sondar alguns caminhos possíveis da API da Sefaz e trazer de volta
     // o que cada um responde, já que a documentação oficial também exige
     // certificado pra ser vista.
-    async runCertificateDiagnostics(storeId: string) {
+    async runCertificateDiagnostics(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
+        this.ensureManagedStoreAccess(storeId, user);
 
         const certificate = await this.prisma.storeCertificate.findUnique({
             where: { storeId },

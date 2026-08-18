@@ -16,4 +16,8 @@ export class UpdateStoreDto {
     @IsOptional()
     @IsString()
     phone?: string;
+
+    @IsOptional()
+    @IsString()
+    uf?: string;
 }

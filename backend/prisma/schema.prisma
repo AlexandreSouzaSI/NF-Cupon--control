@@ -249,6 +249,12 @@ model User {
   deletionRequestsReviewed DeletionRequest[] @relation("DeletionReviewedBy")
 
   bankStatementImports BankStatementImport[]
+
+  taxRegimeConfigsCreated TaxRegimeConfig[] @relation("TaxRegimeConfigCreatedBy")
+  revenueEntriesCreated   RevenueEntry[]    @relation("RevenueEntryCreatedBy")
+
+  freelancersCreated        Freelancer[]        @relation("FreelancerCreatedBy")
+  freelancerPaymentsCreated FreelancerPayment[] @relation("FreelancerPaymentCreatedBy")
 }
 
 model Store {
@@ -258,6 +264,10 @@ model Store {
   address String?
   phone   String?
   active  Boolean @default(true)
+
+  // Sigla da UF (ex: SP, MG) — exigida pelo webservice NFeDistribuicaoDFe
+  // (campo cUFAutor) pra buscar as NF-e de mercadoria automaticamente.
+  uf String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -272,7 +282,12 @@ model Store {
   services              Service[]
   certificate           StoreCertificate?
   incomingServiceNfs    IncomingServiceNf[]
+  incomingGoodsNfs      IncomingGoodsNf[]
   employees             Employee[]
+  taxRegimeConfigs      TaxRegimeConfig[]
+  revenueEntries        RevenueEntry[]
+  freelancers           Freelancer[]
+  freelancerPayments    FreelancerPayment[]
 }
 
 model UserStore {
@@ -366,14 +381,15 @@ model Purchase {
   invoiceResponsible User? @relation("PurchaseInvoiceResponsible", fields: [invoiceResponsibleId], references: [id])
   closedBy           User? @relation("PurchaseClosedBy", fields: [closedById], references: [id])
 
-  items           PurchaseItem[]
-  receipts        PurchaseReceipt[]
-  approvals       Approval[]
-  fiscalDocuments FiscalDocument[]
-  attachments     Attachment[]
-  histories       PurchaseHistory[]
-  purchaseAlerts  PurchaseAlert[]
-  bills           Bill[]
+  items            PurchaseItem[]
+  receipts         PurchaseReceipt[]
+  approvals        Approval[]
+  fiscalDocuments  FiscalDocument[]
+  attachments      Attachment[]
+  histories        PurchaseHistory[]
+  purchaseAlerts   PurchaseAlert[]
+  bills            Bill[]
+  incomingGoodsNfs IncomingGoodsNf[]
 
   @@index([storeId])
   @@index([supplierId])
@@ -580,6 +596,12 @@ model StoreCertificate {
   // de novo.
   lastNsu BigInt @default(0)
 
+  // Cursor separado pra distribuição de NF-e de mercadoria (webservice
+  // NFeDistribuicaoDFe da Receita, produção nacional) — é um sistema
+  // totalmente diferente do ADN de NFS-e acima, com numeração de NSU
+  // própria; não pode compartilhar o mesmo cursor.
+  lastNsuNfe BigInt @default(0)
+
   uploadedById String
 
   createdAt DateTime @default(now())
@@ -616,6 +638,43 @@ model IncomingServiceNf {
   @@unique([storeId, chaveAcesso])
   @@index([storeId])
   @@index([serviceId])
+  @@index([tipoDocumento])
+}
+
+// Documento fiscal baixado da distribuição da Sefaz (NF-e de mercadoria
+// emitida pra o CNPJ da loja) que ainda não foi conciliado com uma Compra
+// cadastrada. Diferente da NFS-e, a resposta padrão do distDFeInt é só o
+// "resumo" (resNFe) — por isso já guardamos emitente/valor/data extraídos
+// dali, sem depender do XML completo (que só vem depois de manifestação,
+// funcionalidade que fica pra uma fase seguinte). purchaseId só é
+// preenchido quando o usuário confirma a qual compra aquela NF pertence.
+model IncomingGoodsNf {
+  id String @id @default(uuid())
+
+  storeId String
+
+  nsu           BigInt
+  chaveAcesso   String
+  tipoDocumento String // resNFe | resEvento | resCancNFe | procNFe etc.
+
+  issuerCnpj String?
+  issuerName String?
+  value      Decimal?  @db.Decimal(10, 2)
+  issueDate  DateTime?
+  situacao   String? // cSitNFe do resumo: autorizada, cancelada, etc.
+
+  fileUrl   String?
+  fetchedAt DateTime @default(now())
+
+  purchaseId String?
+  ignored    Boolean @default(false) // marcado como "não é nossa"/ignorado
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  purchase Purchase? @relation(fields: [purchaseId], references: [id])
+
+  @@unique([storeId, chaveAcesso])
+  @@index([storeId])
+  @@index([purchaseId])
   @@index([tipoDocumento])
 }
 
@@ -705,6 +764,89 @@ model EmployeePayment {
   @@index([dueDate])
   @@index([status])
   @@index([type])
+}
+
+// Freelancer é separado de Employee (RH) de propósito: pagamento por
+// diária trabalhada, sempre às sextas (Terça a Quinta) e segundas (Sexta a
+// Domingo) — não tem salário, vale-transporte, nem os outros campos da
+// folha fixa. Também é liberado pro Gerente (RH normal não é).
+model Freelancer {
+  id                String  @id @default(uuid())
+  name              String
+  defaultDailyValue Decimal @db.Decimal(10, 2)
+  active            Boolean @default(true)
+
+  storeId     String
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store @relation(fields: [storeId], references: [id])
+  createdBy User  @relation("FreelancerCreatedBy", fields: [createdById], references: [id])
+
+  workDays FreelancerWorkDay[]
+  payments FreelancerPayment[]
+
+  @@index([storeId])
+  @@index([name])
+}
+
+// Um registro por dia efetivamente trabalhado (Terça a Domingo — segunda
+// não entra porque é o dia de pagamento do ciclo anterior, não de
+// trabalho). `value` só é preenchido quando aquele dia específico foge do
+// padrão do cadastro; nulo = usa Freelancer.defaultDailyValue na hora de
+// montar o quadro de pagamentos.
+model FreelancerWorkDay {
+  id           String @id @default(uuid())
+  freelancerId String
+
+  date  DateTime // meio-dia UTC, mesmo padrão de datas do projeto
+  value Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+
+  freelancer Freelancer @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+
+  @@unique([freelancerId, date])
+  @@index([freelancerId])
+  @@index([date])
+}
+
+enum FreelancerPaymentGroup {
+  SEXTA // paga o que foi trabalhado terça a quinta
+  SEGUNDA // paga o que foi trabalhado sexta a domingo
+}
+
+// Snapshot congelado de um pagamento confirmado — depois de criado, editar
+// os FreelancerWorkDay daquela semana não muda mais o valor aqui. É essa
+// tabela que alimenta o relatório (por dia pago ou por freelancer), não um
+// recálculo em cima dos dias trabalhados.
+model FreelancerPayment {
+  id String @id @default(uuid())
+
+  freelancerId String
+  storeId      String
+
+  group       FreelancerPaymentGroup
+  paymentDate DateTime // a sexta ou a segunda em que foi pago
+  totalValue  Decimal                @db.Decimal(10, 2)
+
+  // [{ date: "2026-08-18", value: 100 }, ...] — os dias trabalhados que
+  // entraram nesse pagamento, congelados no momento da confirmação.
+  workDaysSnapshot Json
+
+  paidAt      DateTime @default(now())
+  createdById String
+
+  freelancer Freelancer @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  store      Store      @relation(fields: [storeId], references: [id])
+  createdBy  User       @relation("FreelancerPaymentCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([freelancerId, group, paymentDate])
+  @@index([storeId])
+  @@index([freelancerId])
+  @@index([paymentDate])
 }
 
 model Attachment {
@@ -952,4 +1094,85 @@ model FinancialClassificationRule {
 
   @@index([keyword])
   @@index([active])
+}
+
+enum TaxRegimeType {
+  SIMPLES
+  PRESUMIDO
+  REAL
+}
+
+enum RevenueSource {
+  MANUAL
+  IMPORTED_XML
+}
+
+// Configuração do regime tributário de uma loja, com vigência — importante
+// porque o mesmo estabelecimento pode migrar de regime ao longo do tempo
+// (ex: Presumido → Real). O cálculo de um mês sempre usa a configuração
+// vigente naquele referenceMonth, nunca a mais recente cadastrada. As
+// alíquotas ficam todas configuráveis (não fixas no código) porque mudam
+// por legislação e porque cada loja pode ter enquadramento diferente —
+// devem ser conferidas com o contador antes de usar pra guiar pagamento.
+model TaxRegimeConfig {
+  id String @id @default(uuid())
+
+  storeId       String
+  regime        TaxRegimeType
+  effectiveFrom DateTime
+  effectiveTo   DateTime? // null = vigente até um novo registro substituir
+
+  // Simples Nacional (Anexo I — comércio, caso de bares/restaurantes)
+  simplesAnexo String? // ex: "I"
+
+  // Lucro Presumido
+  presumidoIrpjPercent      Decimal? @db.Decimal(5, 2) // base de presunção IRPJ (ex: 8.00 ou 32.00)
+  presumidoCsllPercent      Decimal? @db.Decimal(5, 2) // base de presunção CSLL (ex: 12.00 ou 32.00)
+  presumidoPisCofinsPercent Decimal? @db.Decimal(5, 2) // cumulativo (ex: 3.65)
+
+  // Lucro Real
+  realPisCofinsPercent Decimal? @db.Decimal(5, 2) // não-cumulativo (ex: 9.25)
+
+  // ICMS — comum a Presumido/Real (no Simples já vai embutido no DAS)
+  icmsRegimeEspecialMg Boolean  @default(false) // regime especial bares/restaurantes (RICMS/MG art. 75, XXXIX)
+  icmsAliquotaRefeicao Decimal? @db.Decimal(5, 2) // ex: 3.00 (regime especial)
+  icmsAliquotaOutras   Decimal? @db.Decimal(5, 2) // ex: 4.00 (regime especial)
+  icmsAliquotaPadrao   Decimal? @db.Decimal(5, 2) // ex: 18.00 (sem regime especial)
+
+  notes String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store     Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("TaxRegimeConfigCreatedBy", fields: [createdById], references: [id])
+
+  @@index([storeId])
+  @@index([effectiveFrom])
+}
+
+// Faturamento (receita bruta) por loja e período — hoje lançado manualmente;
+// preparado pra futuramente ser preenchido automaticamente por importação de
+// XML de venda (campo source vira IMPORTED_XML nesse caso). É o dado que
+// falta pro purchases sozinho pra calcular qualquer regime tributário de
+// verdade (Simples, Presumido e Real dependem de receita, não só de compra).
+model RevenueEntry {
+  id String @id @default(uuid())
+
+  storeId        String
+  referenceMonth String // "2026-08"
+  grossRevenue   Decimal       @db.Decimal(12, 2)
+  source         RevenueSource @default(MANUAL)
+  notes          String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store     Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("RevenueEntryCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([storeId, referenceMonth])
+  @@index([storeId])
 }

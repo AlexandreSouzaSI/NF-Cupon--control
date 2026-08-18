@@ -45,12 +45,13 @@ export class StoresController {
     }
 
     @Put(':id')
-    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
     async update(
         @Param('id') id: string,
         @Body() body: UpdateStoreDto,
+        @Req() req: any,
     ) {
-        return this.storesService.update(id, body);
+        return this.storesService.update(id, body, req.user);
     }
 
     @Delete(':id')
@@ -81,13 +82,13 @@ export class StoresController {
     // APIs da Sefaz/NFS-e Nacional. Só metadado (nome do arquivo, data) é
     // devolvido — a senha e o caminho do arquivo nunca saem do backend.
     @Get(':id/certificate')
-    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
-    async getCertificateStatus(@Param('id') id: string) {
-        return this.storesService.getCertificateStatus(id);
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async getCertificateStatus(@Param('id') id: string, @Req() req: any) {
+        return this.storesService.getCertificateStatus(id, req.user);
     }
 
     @Post(':id/certificate')
-    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
     @UseInterceptors(
         FileInterceptor('file', {
             storage: memoryStorage(),
@@ -124,23 +125,31 @@ export class StoresController {
     }
 
     @Delete(':id/certificate')
-    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
-    async removeCertificate(@Param('id') id: string) {
-        return this.storesService.removeCertificate(id);
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async removeCertificate(@Param('id') id: string, @Req() req: any) {
+        return this.storesService.removeCertificate(id, req.user);
     }
 
     // Só testa se o certificado autentica na Sefaz (ambiente de
     // homologação) — não busca nem grava nenhuma NF ainda.
     @Post(':id/certificate/test-connection')
-    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
-    async testCertificateConnection(@Param('id') id: string) {
-        return this.storesService.testCertificateConnection(id);
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async testCertificateConnection(@Param('id') id: string, @Req() req: any) {
+        return this.storesService.testCertificateConnection(id, req.user);
     }
 
     // Temporário: ajuda a descobrir o endereço certo da API da Sefaz.
     @Post(':id/certificate/diagnostics')
-    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
-    async runCertificateDiagnostics(@Param('id') id: string) {
-        return this.storesService.runCertificateDiagnostics(id);
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async runCertificateDiagnostics(@Param('id') id: string, @Req() req: any) {
+        return this.storesService.runCertificateDiagnostics(id, req.user);
+    }
+
+    // Testa se o certificado autentica no webservice de NF-e de mercadoria
+    // (produção nacional) — serviço diferente do de NFS-e acima.
+    @Post(':id/certificate/test-goods-connection')
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async testGoodsConnection(@Param('id') id: string, @Req() req: any) {
+        return this.storesService.testGoodsConnection(id, req.user);
     }
 }

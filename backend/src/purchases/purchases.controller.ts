@@ -103,6 +103,47 @@ export class PurchasesController {
         return this.purchasesService.findPendingApprovals(user);
     }
 
+    // NF-e de mercadoria baixada automaticamente da Sefaz, ainda não
+    // conciliada com nenhuma compra cadastrada.
+    @Get('incoming-goods-nf')
+    async findIncomingGoodsNf(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId?: string,
+    ) {
+        return this.purchasesService.findIncomingGoodsNf(user, { storeId });
+    }
+
+    // Busca (produção Sefaz) as NF-e novas emitidas pro CNPJ da loja desde
+    // o último NSU salvo.
+    @Post('incoming-goods-nf/sync')
+    async syncIncomingGoodsNf(
+        @CurrentUser() user: any,
+        @Body('storeId') storeId: string,
+    ) {
+        return this.purchasesService.syncIncomingGoodsNf(storeId, user);
+    }
+
+    @Post('incoming-goods-nf/:id/link')
+    async linkIncomingGoodsNf(
+        @Param('id') id: string,
+        @Body('purchaseId') purchaseId: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.linkIncomingGoodsNf(
+            id,
+            purchaseId,
+            user,
+        );
+    }
+
+    @Post('incoming-goods-nf/:id/ignore')
+    async ignoreIncomingGoodsNf(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.ignoreIncomingGoodsNf(id, user);
+    }
+
     @Get(':id')
     async findOne(
         @Param('id') id: string,

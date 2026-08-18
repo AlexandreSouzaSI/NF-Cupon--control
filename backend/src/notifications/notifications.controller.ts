@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
@@ -8,17 +9,17 @@ export class NotificationsController {
     constructor(private notificationsService: NotificationsService) { }
 
     @Get()
-    async findAll() {
-        return this.notificationsService.findAll();
+    async findAll(@CurrentUser() user: any) {
+        return this.notificationsService.findAll(user);
     }
 
     @Get('unread')
-    async findUnread() {
-        return this.notificationsService.findUnread();
+    async findUnread(@CurrentUser() user: any) {
+        return this.notificationsService.findUnread(user);
     }
 
     @Post(':id/read')
-    async markAsRead(@Param('id') id: string) {
-        return this.notificationsService.markAsRead(id);
+    async markAsRead(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.notificationsService.markAsRead(id, user);
     }
 }

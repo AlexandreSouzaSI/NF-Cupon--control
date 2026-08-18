@@ -17,12 +17,48 @@ import {
     ReceiptStatus,
     UserRole,
 } from '@prisma/client';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 
 import { PrismaService } from 'prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFiscalDocumentDto } from './dto/create-fiscal-document.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { ReceivePurchaseDto } from './dto/receive-purchase.dto';
+import { loadCertificate } from '../stores/sefaz-nfse-client';
+import { fetchGoodsDistribution, parseResNFe, ufToCode } from '../stores/sefaz-nfe-client';
+
+// Mesmo padrão dos XMLs de NF de serviço: ficam dentro de /uploads, lado a
+// lado com os documentos enviados à mão.
+const incomingGoodsNfPath = join(process.cwd(), 'uploads', 'purchases-nfe');
+
+if (!existsSync(incomingGoodsNfPath)) {
+    mkdirSync(incomingGoodsNfPath, { recursive: true });
+}
+
+// Mesmo limite de segurança usado na sincronização de NFS-e — evita que uma
+// loja com histórico grande prenda a requisição; o NSU salvo garante que o
+// próximo clique continua de onde parou.
+const MAX_GOODS_SYNC_BATCHES = 25;
+
+// Perfis que têm acesso à aba Compras (ver frontend/lib/menu.ts) — usado
+// pra decidir quem recebe notificação de evento de compra. Administrativo/
+// Proprietário sempre recebem (acesso global), então não precisam entrar
+// nessa lista — notifyStoreAccess já cobre os dois automaticamente.
+const PURCHASE_NOTIFY_ROLES: UserRole[] = [
+    UserRole.GERENTE,
+    UserRole.COMPRADOR,
+    UserRole.ESTOQUISTA,
+];
+
+// Cupons e NF é liberado pra todo mundo (ver menu.ts), então o aviso de
+// "cupom aguardando NF" vai pros demais perfis vinculados à loja também.
+const FISCAL_NOTIFY_ROLES: UserRole[] = [
+    UserRole.GERENTE,
+    UserRole.COMPRADOR,
+    UserRole.ESTOQUISTA,
+    UserRole.FINANCEIRO,
+];
 
 @Injectable()
 export class PurchasesService {
@@ -60,6 +96,7 @@ export class PurchasesService {
             UserRole.PROPRIETARIO,
             UserRole.GERENTE,
             UserRole.COMPRADOR,
+            UserRole.ESTOQUISTA,
         ].includes(user.role);
     }
 
@@ -68,6 +105,7 @@ export class PurchasesService {
             UserRole.ADMINISTRATIVO,
             UserRole.PROPRIETARIO,
             UserRole.GERENTE,
+            UserRole.COMPRADOR,
         ].includes(user.role);
     }
 
@@ -76,6 +114,7 @@ export class PurchasesService {
             UserRole.ADMINISTRATIVO,
             UserRole.PROPRIETARIO,
             UserRole.GERENTE,
+            UserRole.COMPRADOR,
             UserRole.ESTOQUISTA,
         ].includes(user.role);
     }
@@ -168,7 +207,10 @@ export class PurchasesService {
 
         await this.generateAlertsForPurchase(purchase);
 
-        await this.notificationsService.create({
+        await this.notificationsService.notifyStoreAccess({
+            storeId: purchase.storeId,
+            allowedRoles: PURCHASE_NOTIFY_ROLES,
+            excludeUserId: user.id,
             title: requiresApproval
                 ? 'Compra aguardando aprovação'
                 : 'Nova compra cadastrada',
@@ -272,7 +314,10 @@ export class PurchasesService {
             comment || 'Compra aprovada.',
         );
 
-        await this.notificationsService.create({
+        await this.notificationsService.notifyStoreAccess({
+            storeId: updated.storeId,
+            allowedRoles: PURCHASE_NOTIFY_ROLES,
+            excludeUserId: user.id,
             title: 'Compra aprovada',
             message: `A compra "${updated.description}" foi aprovada.`,
             type: NotificationType.PURCHASE_APPROVED,
@@ -329,7 +374,10 @@ export class PurchasesService {
             comment || 'Compra reprovada.',
         );
 
-        await this.notificationsService.create({
+        await this.notificationsService.notifyStoreAccess({
+            storeId: updated.storeId,
+            allowedRoles: PURCHASE_NOTIFY_ROLES,
+            excludeUserId: user.id,
             title: 'Compra reprovada',
             message: `A compra "${updated.description}" foi reprovada.`,
             type: NotificationType.PURCHASE_REJECTED,
@@ -384,7 +432,7 @@ export class PurchasesService {
                 ? PurchaseStatus.HAS_COUPON_ONLY
                 : PurchaseStatus.HAS_INVOICE;
 
-        await this.prisma.purchase.update({
+        const updatedPurchase = await this.prisma.purchase.update({
             where: { id: purchaseId },
             data: {
                 status: newStatus,
@@ -403,7 +451,10 @@ export class PurchasesService {
         );
 
         if (dto.type === FiscalDocumentType.COUPON) {
-            await this.notificationsService.create({
+            await this.notificationsService.notifyStoreAccess({
+                storeId: updatedPurchase.storeId,
+                allowedRoles: FISCAL_NOTIFY_ROLES,
+                excludeUserId: user?.id,
                 title: 'Cupom aguardando NF',
                 message: 'Um cupom foi enviado e agora aguarda nota fiscal.',
                 type: NotificationType.WAITING_INVOICE,
@@ -878,5 +929,244 @@ export class PurchasesService {
         );
 
         return result;
+    }
+
+    // Busca automaticamente, direto na Sefaz (produção), as NF-e de
+    // mercadoria emitidas pro CNPJ da loja desde o último NSU salvo. Não
+    // cria nem altera nenhuma compra sozinho — só deixa os documentos
+    // disponíveis pra conciliação manual (vinculação a uma compra já
+    // cadastrada) na aba "Novas NFs".
+    async syncIncomingGoodsNf(storeId: string, user: any) {
+        if (!storeId) {
+            throw new BadRequestException(
+                'Selecione uma loja ativa no topo do sistema.',
+            );
+        }
+
+        this.ensureStoreAccess(storeId, user);
+
+        const store = await this.prisma.store.findUnique({
+            where: { id: storeId },
+        });
+
+        if (!store) {
+            throw new NotFoundException('Loja não encontrada.');
+        }
+
+        if (!store.cnpj) {
+            throw new BadRequestException(
+                'Cadastre o CNPJ da loja em Cadastros → Lojas antes de buscar as NFs.',
+            );
+        }
+
+        if (!store.uf) {
+            throw new BadRequestException(
+                'Cadastre a UF da loja em Cadastros → Lojas antes de buscar as NFs.',
+            );
+        }
+
+        const certificate = await this.prisma.storeCertificate.findUnique({
+            where: { storeId },
+        });
+
+        if (!certificate) {
+            throw new BadRequestException(
+                'Essa loja não tem certificado digital cadastrado. Cadastre em Cadastros → Lojas antes de buscar as NFs.',
+            );
+        }
+
+        const cert = loadCertificate(certificate.filePath, {
+            cipher: certificate.passwordCipher,
+            iv: certificate.passwordIv,
+            authTag: certificate.passwordAuthTag,
+        });
+
+        const ufCode = ufToCode(store.uf);
+
+        let cursor = certificate.lastNsuNfe;
+        let fetchedTotal = 0;
+        let resumoCount = 0;
+
+        for (let batch = 0; batch < MAX_GOODS_SYNC_BATCHES; batch++) {
+            const result = await fetchGoodsDistribution(cert, {
+                cnpj: store.cnpj,
+                ufCode,
+                ultNsu: cursor,
+                tpAmb: 1,
+            });
+
+            if (result.cStat !== '137' && result.cStat !== '138') {
+                throw new BadRequestException(
+                    `A Sefaz recusou a consulta: ${result.xMotivo || result.cStat}`,
+                );
+            }
+
+            for (const doc of result.docs) {
+                if (!doc.schema.startsWith('resNFe') && !doc.schema.startsWith('procNFe')) {
+                    // Eventos (cancelamento, ciência de terceiros etc.) não
+                    // interessam pra conciliação de compra ainda — só as
+                    // NF-e propriamente ditas.
+                    continue;
+                }
+
+                const parsedNf = parseResNFe(doc.xml);
+
+                if (!parsedNf?.chaveAcesso) {
+                    continue;
+                }
+
+                const fileName = `sefaz-${parsedNf.chaveAcesso}.xml`;
+
+                writeFileSync(
+                    join(incomingGoodsNfPath, fileName),
+                    doc.xml,
+                    'utf-8',
+                );
+
+                await this.prisma.incomingGoodsNf.upsert({
+                    where: {
+                        storeId_chaveAcesso: {
+                            storeId,
+                            chaveAcesso: parsedNf.chaveAcesso,
+                        },
+                    },
+                    update: {
+                        nsu: BigInt(doc.nsu || '0'),
+                        tipoDocumento: doc.schema,
+                        issuerCnpj: parsedNf.issuerCnpj,
+                        issuerName: parsedNf.issuerName,
+                        value: parsedNf.value,
+                        issueDate: parsedNf.issueDate
+                            ? new Date(parsedNf.issueDate)
+                            : undefined,
+                        situacao: parsedNf.situacao,
+                        fileUrl: `/uploads/purchases-nfe/${fileName}`,
+                    },
+                    create: {
+                        storeId,
+                        chaveAcesso: parsedNf.chaveAcesso,
+                        nsu: BigInt(doc.nsu || '0'),
+                        tipoDocumento: doc.schema,
+                        issuerCnpj: parsedNf.issuerCnpj,
+                        issuerName: parsedNf.issuerName,
+                        value: parsedNf.value,
+                        issueDate: parsedNf.issueDate
+                            ? new Date(parsedNf.issueDate)
+                            : undefined,
+                        situacao: parsedNf.situacao,
+                        fileUrl: `/uploads/purchases-nfe/${fileName}`,
+                    },
+                });
+
+                fetchedTotal += 1;
+                resumoCount += 1;
+            }
+
+            const maxNsu = BigInt(result.maxNSU || '0');
+            const respUltNsu = BigInt(result.ultNSU || '0');
+
+            cursor = respUltNsu;
+
+            if (result.cStat === '137' || respUltNsu >= maxNsu) {
+                break;
+            }
+        }
+
+        await this.prisma.storeCertificate.update({
+            where: { storeId },
+            data: { lastNsuNfe: cursor },
+        });
+
+        return { fetchedTotal, resumoCount };
+    }
+
+    async findIncomingGoodsNf(user: any, filters?: { storeId?: string }) {
+        const allowedStoreIds = this.getAllowedStoreIds(user);
+
+        if (filters?.storeId) {
+            this.ensureStoreAccess(filters.storeId, user);
+        }
+
+        const items = await this.prisma.incomingGoodsNf.findMany({
+            where: {
+                storeId:
+                    filters?.storeId ||
+                    (allowedStoreIds ? { in: allowedStoreIds } : undefined),
+                purchaseId: null,
+                ignored: false,
+            },
+            orderBy: {
+                issueDate: 'desc',
+            },
+        });
+
+        // BigInt não serializa em JSON por padrão.
+        return items.map((item) => ({
+            ...item,
+            nsu: item.nsu.toString(),
+        }));
+    }
+
+    // Vincula uma NF de mercadoria baixada automaticamente a uma compra já
+    // cadastrada — mesmo princípio da conciliação de NF de Serviço. Reusa
+    // addFiscalDocument pra manter o mesmo comportamento de status/histórico
+    // de quando a NF é anexada manualmente.
+    async linkIncomingGoodsNf(
+        incomingNfId: string,
+        purchaseId: string,
+        user: any,
+    ) {
+        const incoming = await this.prisma.incomingGoodsNf.findUnique({
+            where: { id: incomingNfId },
+        });
+
+        if (!incoming) {
+            throw new NotFoundException('Documento não encontrado.');
+        }
+
+        this.ensureStoreAccess(incoming.storeId, user);
+
+        const purchase = await this.ensurePurchaseAccess(purchaseId, user);
+
+        if (purchase.storeId !== incoming.storeId) {
+            throw new BadRequestException(
+                'A compra selecionada é de outra loja.',
+            );
+        }
+
+        await this.addFiscalDocument(
+            purchaseId,
+            {
+                type: FiscalDocumentType.INVOICE,
+                accessKey: incoming.chaveAcesso,
+                fileUrl: incoming.fileUrl || undefined,
+                value: incoming.value ? Number(incoming.value) : undefined,
+            },
+            user,
+        );
+
+        return this.prisma.incomingGoodsNf.update({
+            where: { id: incomingNfId },
+            data: { purchaseId },
+        });
+    }
+
+    // "Não é nossa" — some da lista de pendências sem apagar o registro
+    // (fica guardado caso precise investigar depois).
+    async ignoreIncomingGoodsNf(incomingNfId: string, user: any) {
+        const incoming = await this.prisma.incomingGoodsNf.findUnique({
+            where: { id: incomingNfId },
+        });
+
+        if (!incoming) {
+            throw new NotFoundException('Documento não encontrado.');
+        }
+
+        this.ensureStoreAccess(incoming.storeId, user);
+
+        return this.prisma.incomingGoodsNf.update({
+            where: { id: incomingNfId },
+            data: { ignored: true },
+        });
     }
 }

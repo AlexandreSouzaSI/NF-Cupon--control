@@ -17,6 +17,8 @@ import { StoresModule } from './stores/stores.module';
 import { BillsModule } from './bills/bills.module';
 import { ServicesModule } from './services/services.module';
 import { EmployeesModule } from './employees/employees.module';
+import { TaxModule } from './tax/tax.module';
+import { FreelancersModule } from './freelancers/freelancers.module';
 
 @Module({
   imports: [
@@ -37,7 +39,9 @@ import { EmployeesModule } from './employees/employees.module';
     StoresModule,
     BillsModule,
     ServicesModule,
-    EmployeesModule
+    EmployeesModule,
+    TaxModule,
+    FreelancersModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -15,4 +15,8 @@ export class CreateStoreDto {
     @IsOptional()
     @IsString()
     phone?: string;
+
+    @IsOptional()
+    @IsString()
+    uf?: string;
 }
