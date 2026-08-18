@@ -147,6 +147,24 @@ enum NotificationType {
   BILL_OVERDUE
   CRITICAL_ALERT
   DELETION_REQUESTED
+  TASK_ASSIGNED
+  TASK_OVERDUE
+  TASK_CONFIRMED
+}
+
+// Frequência de uma tarefa: diária/semanal/mensal geram uma nova ocorrência
+// a cada ciclo; ocasional (ONCE) tem uma única ocorrência com data fixa.
+enum TaskRecurrence {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ONCE
+}
+
+enum TaskOccurrenceStatus {
+  PENDING
+  DONE
+  LATE
 }
 
 enum DeletionRequestStatus {
@@ -255,6 +273,10 @@ model User {
 
   freelancersCreated        Freelancer[]        @relation("FreelancerCreatedBy")
   freelancerPaymentsCreated FreelancerPayment[] @relation("FreelancerPaymentCreatedBy")
+
+  tasksCreated             Task[]           @relation("TaskCreatedBy")
+  tasksAssigned            Task[]           @relation("TaskAssignedTo")
+  taskOccurrencesConfirmed TaskOccurrence[] @relation("TaskOccurrenceConfirmedBy")
 }
 
 model Store {
@@ -288,6 +310,7 @@ model Store {
   revenueEntries        RevenueEntry[]
   freelancers           Freelancer[]
   freelancerPayments    FreelancerPayment[]
+  tasks                 Task[]
 }
 
 model UserStore {
@@ -847,6 +870,70 @@ model FreelancerPayment {
   @@index([storeId])
   @@index([freelancerId])
   @@index([paymentDate])
+}
+
+// Definição da tarefa recorrente (ou ocasional). Não guarda o "feito/não
+// feito" em si — isso fica em TaskOccurrence, uma linha por ciclo (dia,
+// semana ou mês) que precisa ser confirmada pelo responsável.
+model Task {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  recurrence  TaskRecurrence
+
+  // Só usado quando recurrence = WEEKLY. 0=domingo ... 6=sábado (mesma
+  // convenção do JS getUTCDay usada no resto do sistema).
+  weekday Int?
+
+  // Só usado quando recurrence = MONTHLY. 1-31 (se o mês não tiver esse
+  // dia, cai no último dia do mês).
+  dayOfMonth Int?
+
+  // Só usado quando recurrence = ONCE — data única da tarefa ocasional.
+  dueDate DateTime?
+
+  storeId      String
+  assignedToId String
+  createdById  String
+  active       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store       Store            @relation(fields: [storeId], references: [id])
+  assignedTo  User             @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
+  createdBy   User             @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  occurrences TaskOccurrence[]
+
+  @@index([storeId])
+  @@index([assignedToId])
+}
+
+// Uma ocorrência concreta de uma Task num ciclo específico (o dia, a
+// semana ou o mês em questão). É isso que aparece pendente pro
+// responsável confirmar, e que vira "Atrasada" se passar da data.
+model TaskOccurrence {
+  id      String   @id @default(uuid())
+  taskId  String
+  dueDate DateTime
+
+  status        TaskOccurrenceStatus @default(PENDING)
+  confirmedAt   DateTime?
+  confirmedById String?
+
+  // Evita duplicar alerta de atraso — fica true assim que a notificação de
+  // atraso é disparada pra essa ocorrência.
+  overdueNotifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  task        Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  confirmedBy User? @relation("TaskOccurrenceConfirmedBy", fields: [confirmedById], references: [id])
+
+  @@unique([taskId, dueDate])
+  @@index([taskId])
+  @@index([dueDate])
+  @@index([status])
 }
 
 model Attachment {
