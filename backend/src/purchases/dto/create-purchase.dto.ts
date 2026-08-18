@@ -1,30 +1,54 @@
-import { Type } from 'class-transformer';
 import {
+    IsArray,
+    IsDateString,
     IsEnum,
-    IsNotEmpty,
     IsNumber,
     IsOptional,
     IsString,
-    Min,
+    ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+    PaymentMethod,
+    PurchaseCategory,
+    PurchaseOrigin,
+} from '@prisma/client';
 
-import { PaymentMethod } from '@prisma/client';
+class CreatePurchaseItemDto {
+    @IsString()
+    name!: string;
+
+    @IsNumber()
+    quantity!: number;
+
+    @IsOptional()
+    @IsString()
+    unit?: string;
+
+    @IsOptional()
+    @IsNumber()
+    unitPrice?: number;
+
+    @IsOptional()
+    @IsNumber()
+    total?: number;
+
+    @IsOptional()
+    @IsString()
+    notes?: string;
+}
 
 export class CreatePurchaseDto {
     @IsString()
-    @IsNotEmpty()
     description!: string;
 
-    @Type(() => Number)
     @IsNumber()
-    @Min(0)
     value!: number;
 
     @IsEnum(PaymentMethod)
     method!: PaymentMethod;
 
     @IsString()
-    @IsNotEmpty()
     storeId!: string;
 
     @IsOptional()
@@ -38,4 +62,34 @@ export class CreatePurchaseDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    @IsOptional()
+    @IsEnum(PurchaseCategory)
+    category?: PurchaseCategory;
+
+    @IsOptional()
+    @IsEnum(PurchaseOrigin)
+    origin?: PurchaseOrigin;
+
+    @IsOptional()
+    @IsString()
+    externalOrderCode?: string;
+
+    @IsOptional()
+    @IsString()
+    invoiceResponsibleId?: string;
+
+    @IsOptional()
+    @IsDateString()
+    purchasedAt?: string;
+
+    @IsOptional()
+    @IsDateString()
+    dueDate?: string;
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => CreatePurchaseItemDto)
+    items?: CreatePurchaseItemDto[];
 }

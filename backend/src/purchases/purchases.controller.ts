@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     Body,
     Controller,
     Get,
@@ -9,37 +10,33 @@ import {
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
-
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
 import { extname, join } from 'path';
-import { PurchaseStatus } from '@prisma/client';
+import { PurchaseCategory, PurchaseStatus } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
-
 import { PurchasesService } from './purchases.service';
-
+import { PurchaseVoiceService } from './purchase-voice.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { CreateFiscalDocumentDto } from './dto/create-fiscal-document.dto';
+import { ReceivePurchaseDto } from './dto/receive-purchase.dto';
 
-const uploadPath = join(
-    process.cwd(),
-    'uploads',
-    'fiscal-documents',
-);
+const uploadPath = join(process.cwd(), 'uploads', 'fiscal-documents');
 
 if (!existsSync(uploadPath)) {
-    mkdirSync(uploadPath, {
-        recursive: true,
-    });
+    mkdirSync(uploadPath, { recursive: true });
 }
 
 @Controller('purchases')
 @UseGuards(JwtAuthGuard)
 export class PurchasesController {
-    constructor(private purchasesService: PurchasesService) { }
+    constructor(
+        private purchasesService: PurchasesService,
+        private purchaseVoiceService: PurchaseVoiceService,
+    ) { }
 
     @Post()
     async create(
@@ -49,38 +46,34 @@ export class PurchasesController {
         return this.purchasesService.create(body, user);
     }
 
-    @Get('waiting-invoices')
-    async waitingInvoices() {
-        return this.purchasesService.findWaitingInvoices();
-    }
+    // Cadastro de compra por voz: recebe o áudio gravado no navegador,
+    // transcreve e devolve um rascunho pra preencher o formulário — não
+    // cria a compra sozinho, quem confirma e salva é sempre a pessoa.
+    @Post('voice-draft')
+    @UseInterceptors(
+        FileInterceptor('audio', {
+            storage: memoryStorage(),
+            limits: { fileSize: 20 * 1024 * 1024 },
+            fileFilter: (_req, file, callback) => {
+                if (!file.mimetype.startsWith('audio/')) {
+                    return callback(
+                        new Error('Envie um arquivo de áudio.'),
+                        false,
+                    );
+                }
 
-    @Get('pending-approvals')
-    async pendingApprovals() {
-        return this.purchasesService.findPendingApprovals();
-    }
+                callback(null, true);
+            },
+        }),
+    )
+    async voiceDraft(@UploadedFile() file: Express.Multer.File) {
+        if (!file) {
+            throw new BadRequestException('Nenhum áudio recebido.');
+        }
 
-    @Get(':id')
-    async findOne(@Param('id') id: string) {
-        return this.purchasesService.findOne(id);
-    }
-
-    @Post(':id/check')
-    async check(
-        @Param('id') id: string,
-        @CurrentUser() user: any,
-    ) {
-        return this.purchasesService.check(
-            id,
-        );
-    }
-
-    @Post(':id/close')
-    async close(
-        @Param('id') id: string,
-        @CurrentUser() user: any,
-    ) {
-        return this.purchasesService.close(
-            id,
+        return this.purchaseVoiceService.buildDraftFromAudio(
+            file.buffer,
+            file.mimetype,
         );
     }
 
@@ -90,12 +83,83 @@ export class PurchasesController {
         @Query('status') status?: PurchaseStatus,
         @Query('storeId') storeId?: string,
         @Query('supplierId') supplierId?: string,
+        @Query('category') category?: PurchaseCategory,
     ) {
         return this.purchasesService.findAll(user, {
             status,
             storeId,
             supplierId,
+            category,
         });
+    }
+
+    @Get('waiting-invoices')
+    async waitingInvoices(@CurrentUser() user: any) {
+        return this.purchasesService.findWaitingInvoices(user);
+    }
+
+    @Get('pending-approvals')
+    async pendingApprovals(@CurrentUser() user: any) {
+        return this.purchasesService.findPendingApprovals(user);
+    }
+
+    @Get(':id')
+    async findOne(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.findOne(id, user);
+    }
+
+    @Post(':id/approve')
+    async approve(
+        @Param('id') id: string,
+        @Body() body: { comment?: string },
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.approve(id, user, body?.comment);
+    }
+
+    @Post(':id/reject')
+    async reject(
+        @Param('id') id: string,
+        @Body() body: { comment?: string },
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.reject(id, user, body?.comment);
+    }
+
+    @Post(':id/check')
+    async check(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.check(id, user);
+    }
+
+    @Post(':id/close')
+    async close(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.close(id, user);
+    }
+
+    @Post(':id/fiscal-documents')
+    async addFiscalDocument(
+        @Param('id') id: string,
+        @Body() body: CreateFiscalDocumentDto,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.addFiscalDocument(id, body, user);
+    }
+
+    @Get(':id/fiscal-documents')
+    async findFiscalDocuments(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.findFiscalDocuments(id, user);
     }
 
     @Post(':id/fiscal-documents/upload')
@@ -105,7 +169,6 @@ export class PurchasesController {
                 destination: (_req, _file, callback) => {
                     callback(null, uploadPath);
                 },
-
                 filename: (_req, file, callback) => {
                     const uniqueName = `${Date.now()}-${Math.round(
                         Math.random() * 1e9,
@@ -114,7 +177,6 @@ export class PurchasesController {
                     callback(null, uniqueName);
                 },
             }),
-
             fileFilter: (_req, file, callback) => {
                 const allowedTypes = [
                     'image/jpeg',
@@ -127,9 +189,7 @@ export class PurchasesController {
 
                 if (!allowedTypes.includes(file.mimetype)) {
                     return callback(
-                        new Error(
-                            'Arquivo inválido. Envie imagem, PDF ou XML.',
-                        ),
+                        new Error('Arquivo inválido. Envie imagem, PDF ou XML.'),
                         false,
                     );
                 }
@@ -142,52 +202,31 @@ export class PurchasesController {
         @Param('id') id: string,
         @Body() body: CreateFiscalDocumentDto,
         @UploadedFile() file: Express.Multer.File,
+        @CurrentUser() user: any,
     ) {
         const fileUrl = `/uploads/fiscal-documents/${file.filename}`;
 
-        return this.purchasesService.addFiscalDocument(id, {
-            ...body,
-            fileUrl,
-            value: body.value ? Number(body.value) : undefined,
-        });
-    }
-
-    @Post(':id/approve')
-    async approve(
-        @Param('id') id: string,
-        @Body() body: { comment?: string },
-        @CurrentUser() user: any,
-    ) {
-        return this.purchasesService.approve(
+        return this.purchasesService.addFiscalDocument(
             id,
+            {
+                ...body,
+                fileUrl,
+                value: body.value ? Number(body.value) : undefined,
+            },
             user,
-            body?.comment,
         );
     }
 
-    @Post(':id/reject')
-    async reject(
+    @Post(':id/receive')
+    async receive(
         @Param('id') id: string,
-        @Body() body: { comment?: string },
+        @Body() body: ReceivePurchaseDto,
         @CurrentUser() user: any,
     ) {
-        return this.purchasesService.reject(
+        return this.purchasesService.receive(
             id,
+            body,
             user,
-            body?.comment,
         );
-    }
-
-    @Post(':id/fiscal-documents')
-    async addFiscalDocument(
-        @Param('id') id: string,
-        @Body() body: CreateFiscalDocumentDto,
-    ) {
-        return this.purchasesService.addFiscalDocument(id, body);
-    }
-
-    @Get(':id/fiscal-documents')
-    async findFiscalDocuments(@Param('id') id: string) {
-        return this.purchasesService.findFiscalDocuments(id);
     }
 }

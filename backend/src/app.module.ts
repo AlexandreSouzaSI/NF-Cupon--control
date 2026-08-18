@@ -14,6 +14,9 @@ import { ApprovalRulesModule } from './approval-rules/approval-rules.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { StoresModule } from './stores/stores.module';
+import { BillsModule } from './bills/bills.module';
+import { ServicesModule } from './services/services.module';
+import { EmployeesModule } from './employees/employees.module';
 
 @Module({
   imports: [
@@ -31,7 +34,10 @@ import { StoresModule } from './stores/stores.module';
     ApprovalRulesModule,
     AlertsModule,
     NotificationsModule,
-    StoresModule
+    StoresModule,
+    BillsModule,
+    ServicesModule,
+    EmployeesModule
   ],
   controllers: [AppController],
   providers: [AppService],

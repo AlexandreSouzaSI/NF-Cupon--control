@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 
 import { ApprovalRulesService } from './approval-rules.service';
 
@@ -12,12 +13,12 @@ export class ApprovalRulesController {
     constructor(private approvalRulesService: ApprovalRulesService) { }
 
     @Post()
-    async create(@Body() body: CreateApprovalRuleDto) {
-        return this.approvalRulesService.create(body);
+    async create(@Body() body: CreateApprovalRuleDto, @CurrentUser() user: any) {
+        return this.approvalRulesService.create(body, user);
     }
 
     @Get()
-    async findAll() {
-        return this.approvalRulesService.findAll();
+    async findAll(@CurrentUser() user: any) {
+        return this.approvalRulesService.findAll(user);
     }
 }

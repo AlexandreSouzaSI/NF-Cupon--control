@@ -4,9 +4,7 @@ import {
 } from '@nestjs/common';
 
 import * as bcrypt from 'bcrypt';
-
 import { JwtService } from '@nestjs/jwt';
-
 import { UsersService } from '../users/users.service';
 
 @Injectable()
@@ -19,7 +17,7 @@ export class AuthService {
     async login(email: string, password: string) {
         const user = await this.usersService.findByEmail(email);
 
-        if (!user) {
+        if (!user || !user.active) {
             throw new UnauthorizedException('Usuário ou senha inválidos');
         }
 
@@ -31,6 +29,14 @@ export class AuthService {
         if (!passwordMatch) {
             throw new UnauthorizedException('Usuário ou senha inválidos');
         }
+
+        const stores = user.userStores
+            .map((item) => item.store)
+            .filter((store) => store.active)
+            .map((store) => ({
+                id: store.id,
+                name: store.name,
+            }));
 
         const payload = {
             sub: user.id,
@@ -45,7 +51,7 @@ export class AuthService {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                stores: user.userStores.map((item) => item.store),
+                stores,
             },
         };
     }

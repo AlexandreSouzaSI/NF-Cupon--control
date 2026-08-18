@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateApprovalRuleDto } from './dto/create-approval-rule.dto';
 
@@ -6,7 +7,42 @@ import { CreateApprovalRuleDto } from './dto/create-approval-rule.dto';
 export class ApprovalRulesService {
     constructor(private prisma: PrismaService) { }
 
-    async create(dto: CreateApprovalRuleDto) {
+    private hasGlobalAccess(user: any) {
+        return (
+            user.role === UserRole.ADMINISTRATIVO ||
+            user.role === UserRole.PROPRIETARIO
+        );
+    }
+
+    private getAllowedStoreIds(user: any): string[] | undefined {
+        if (this.hasGlobalAccess(user)) {
+            return undefined;
+        }
+
+        return (
+            user.userStores?.map(
+                (item: any) => item.storeId || item.store?.id,
+            ) || []
+        );
+    }
+
+    async create(dto: CreateApprovalRuleDto, user: any) {
+        if (!dto.storeId && !this.hasGlobalAccess(user)) {
+            throw new ForbiddenException(
+                'Apenas Administrativo ou Proprietário podem criar uma regra válida para todas as lojas.',
+            );
+        }
+
+        if (dto.storeId) {
+            const allowedStoreIds = this.getAllowedStoreIds(user);
+
+            if (allowedStoreIds && !allowedStoreIds.includes(dto.storeId)) {
+                throw new ForbiddenException(
+                    'Você não tem acesso a esta loja.',
+                );
+            }
+        }
+
         return this.prisma.approvalRule.create({
             data: {
                 name: dto.name,
@@ -21,10 +57,20 @@ export class ApprovalRulesService {
         });
     }
 
-    async findAll() {
+    async findAll(user: any) {
+        const allowedStoreIds = this.getAllowedStoreIds(user);
+
         return this.prisma.approvalRule.findMany({
             where: {
                 active: true,
+                ...(allowedStoreIds
+                    ? {
+                        OR: [
+                            { storeId: null },
+                            { storeId: { in: allowedStoreIds } },
+                        ],
+                    }
+                    : {}),
             },
             include: {
                 store: true,

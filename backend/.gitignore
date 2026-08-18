@@ -56,3 +56,9 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Certificados digitais das lojas (dados sensíveis, nunca versionar)
+/storage
+
+# Arquivos enviados (NFs, comprovantes, fotos) — dados reais, nunca versionar
+/uploads

@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,22 +7,44 @@ datasource db {
 }
 
 enum UserRole {
-  ADMIN
-  APPROVER
-  BUYER
-  FINANCE
+  ADMINISTRATIVO
+  COMPRADOR
+  ESTOQUISTA
+  GERENTE
+  PROPRIETARIO
+  FINANCEIRO
 }
 
 enum PurchaseStatus {
   DRAFT
-  PENDING_APPROVAL
+  WAITING_APPROVAL
   APPROVED
   REJECTED
-  PURCHASED
+  WAITING_RECEIPT
+  RECEIVED_OK
+  RECEIVED_WITH_DIFFERENCE
   WAITING_INVOICE
-  INVOICE_LINKED
-  CHECKED
+  HAS_COUPON_ONLY
+  HAS_INVOICE
+  WAITING_PAYMENT_REGISTER
   CLOSED
+  CANCELED
+}
+
+enum PurchaseCategory {
+  SUPPLIER_ORDER
+  AVULSA_CARD
+  ONLINE_MARKETPLACE
+}
+
+enum PurchaseOrigin {
+  NORMAL
+  WEBSITE
+  MERCADO_LIVRE
+  WHATSAPP
+  PHONE
+  STORE_COUNTER
+  OTHER
 }
 
 enum PaymentMethod {
@@ -35,6 +52,7 @@ enum PaymentMethod {
   CASH
   PIX
   COMPANY_ACCOUNT
+  BOLETO
 }
 
 enum ApprovalStatus {
@@ -48,14 +66,50 @@ enum FiscalDocumentType {
   INVOICE
 }
 
+enum FiscalDocumentStatus {
+  LINKED
+  REPLACED
+  CANCELED
+}
+
+enum ReceiptStatus {
+  OK
+  MISSING_ITEMS
+  EXTRA_ITEMS
+  PARTIAL
+}
+
+enum BillStatus {
+  OPEN
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+enum PayableType {
+  BOLETO
+  PIX
+  CARD
+  NO_BILL
+}
+
+enum ExternalLaunchStatus {
+  NOT_LAUNCHED
+  LAUNCHED
+}
+
 enum PurchaseHistoryAction {
   CREATED
+  UPDATED
   APPROVED
   REJECTED
   COUPON_UPLOADED
   INVOICE_UPLOADED
-  CHECKED
+  RECEIVED
   CLOSED
+  BILL_CREATED
+  BILL_PAID
+  DELETION_REQUESTED
 }
 
 enum ApprovalLevel {
@@ -71,6 +125,8 @@ enum PurchaseAlertType {
   REPEATED_SUPPLIER
   SUSPICIOUS_DESCRIPTION
   CARD_USAGE
+  MISSING_RECEIPT
+  BILL_OVERDUE
 }
 
 enum PurchaseAlertLevel {
@@ -85,7 +141,77 @@ enum NotificationType {
   PURCHASE_REJECTED
   WAITING_APPROVAL
   WAITING_INVOICE
+  WAITING_RECEIPT
+  BILL_DUE_TODAY
+  BILL_DUE_WEEK
+  BILL_OVERDUE
   CRITICAL_ALERT
+  DELETION_REQUESTED
+}
+
+enum DeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DeletionTargetType {
+  STORE
+  PURCHASE
+  PURCHASE_ITEM
+  FISCAL_DOCUMENT
+  BILL
+  SUPPLIER
+  ATTACHMENT
+  CARD
+}
+
+enum BillPaymentMethod {
+  BANK_SLIP
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+  CASH
+  FLASH
+  BANK_TRANSFER
+  COMPANY_ACCOUNT
+}
+
+enum PixKeyType {
+  CPF
+  CNPJ
+  EMAIL
+  PHONE
+  RANDOM
+  EVP
+}
+
+// Forma de pagamento de prestadores de serviço e funcionários — contexto
+// separado de PaymentMethod (compras) e BillPaymentMethod (contas a pagar),
+// não misturar.
+enum PayoutMethod {
+  PIX
+  DINHEIRO
+  TRANSFERENCIA
+  BOLETO
+  OUTRO
+}
+
+enum EmployeePaymentType {
+  ADIANTAMENTO
+  PAGAMENTO
+  VALE_TRANSPORTE
+  PREMIACAO
+  DECIMO_TERCEIRO
+  FERIAS
+  RESCISAO
+  OUTRO
+}
+
+enum EmployeePaymentStatus {
+  OPEN
+  PAID
+  CANCELED
 }
 
 model User {
@@ -93,33 +219,60 @@ model User {
   name      String
   email     String   @unique
   password  String
-  role      UserRole @default(BUYER)
+  role      UserRole @default(COMPRADOR)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  checkedPurchases Purchase[]  @relation("PurchaseCheckedBy")
-  closedPurchases  Purchase[]  @relation("PurchaseClosedBy")
-  purchasesCreated Purchase[]  @relation("PurchaseCreatedBy")
-  approvals        Approval[]
-  userStores       UserStore[]
-  purchases        Purchase[]
+  userStores UserStore[]
 
-  purchaseHistories PurchaseHistory[]
-  notifications     Notification[]
+  purchasesCreated            Purchase[] @relation("PurchaseCreatedBy")
+  purchasesUpdated            Purchase[] @relation("PurchaseUpdatedBy")
+  purchasesChecked            Purchase[] @relation("PurchaseCheckedBy")
+  purchasesClosed             Purchase[] @relation("PurchaseClosedBy")
+  purchasesApproved           Purchase[] @relation("PurchaseApprovedBy")
+  invoiceResponsiblePurchases Purchase[] @relation("PurchaseInvoiceResponsible")
+
+  receipts             PurchaseReceipt[]
+  approvals            Approval[]
+  purchaseHistories    PurchaseHistory[]
+  fiscalDocuments      FiscalDocument[]
+  billsLaunched        Bill[]             @relation("BillLaunchedBy")
+  notifications        Notification[]
+  servicesCreated      Service[]          @relation("ServiceCreatedBy")
+  certificatesUploaded StoreCertificate[] @relation("StoreCertificateUploadedBy")
+
+  employeesCreated        Employee[]        @relation("EmployeeCreatedBy")
+  employeePaymentsCreated EmployeePayment[] @relation("EmployeePaymentCreatedBy")
+
+  deletionRequestsCreated  DeletionRequest[] @relation("DeletionRequestedBy")
+  deletionRequestsReviewed DeletionRequest[] @relation("DeletionReviewedBy")
+
+  bankStatementImports BankStatementImport[]
 }
 
 model Store {
-  id        String   @id @default(uuid())
-  name      String
-  active    Boolean  @default(true)
+  id      String  @id @default(uuid())
+  name    String
+  cnpj    String?
+  address String?
+  phone   String?
+  active  Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  purchases     Purchase[]
-  userStores    UserStore[]
-  cards         Card[]
-  approvalRules ApprovalRule[]
+  purchases             Purchase[]
+  userStores            UserStore[]
+  cards                 Card[]
+  approvalRules         ApprovalRule[]
+  bills                 Bill[]
+  bankStatementImports  BankStatementImport[]
+  financialTransactions FinancialTransaction[]
+  services              Service[]
+  certificate           StoreCertificate?
+  incomingServiceNfs    IncomingServiceNf[]
+  employees             Employee[]
 }
 
 model UserStore {
@@ -134,37 +287,48 @@ model UserStore {
 }
 
 model Supplier {
-  id        String   @id @default(uuid())
-  name      String
-  cnpj      String?
-  phone     String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid())
+  name           String
+  nameNormalized String   @unique
+  cnpj           String?
+  phone          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   purchases Purchase[]
+  bills     Bill[]
 }
 
 model Card {
-  id         String   @id @default(uuid())
+  id         String  @id @default(uuid())
   name       String
   lastDigits String?
   holderName String?
-  active     Boolean  @default(true)
-  storeId    String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  active     Boolean @default(true)
+
+  storeId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   store     Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
   purchases Purchase[]
 }
 
 model Purchase {
-  id          String         @id @default(uuid())
+  id          String           @id @default(uuid())
   description String
-  value       Decimal        @db.Decimal(10, 2)
-  status      PurchaseStatus @default(PENDING_APPROVAL)
+  value       Decimal          @db.Decimal(10, 2)
+  status      PurchaseStatus   @default(WAITING_RECEIPT)
+  category    PurchaseCategory @default(SUPPLIER_ORDER)
+  origin      PurchaseOrigin   @default(NORMAL)
   method      PaymentMethod
+
+  requiresApproval Boolean @default(false)
+
+  externalOrderCode String?
+
   purchasedAt DateTime?
   dueDate     DateTime?
   notes       String?
@@ -173,65 +337,374 @@ model Purchase {
   supplierId  String?
   cardId      String?
   createdById String
+  updatedById String?
+
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
 
   checkedById String?
-  checkedBy   User?   @relation("PurchaseCheckedBy", fields: [checkedById], references: [id])
+  checkedAt   DateTime?
 
-  checkedAt DateTime?
+  invoiceResponsibleId String?
 
   closedById String?
-  closedBy   User?   @relation("PurchaseClosedBy", fields: [closedById], references: [id])
-
-  closedAt DateTime?
+  closedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  store     Store     @relation(fields: [storeId], references: [id])
-  supplier  Supplier? @relation(fields: [supplierId], references: [id])
-  card      Card?     @relation(fields: [cardId], references: [id])
-  createdBy User      @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+  store    Store     @relation(fields: [storeId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  card     Card?     @relation(fields: [cardId], references: [id])
 
+  createdBy          User  @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+  updatedBy          User? @relation("PurchaseUpdatedBy", fields: [updatedById], references: [id])
+  approvedBy         User? @relation("PurchaseApprovedBy", fields: [approvedById], references: [id])
+  checkedBy          User? @relation("PurchaseCheckedBy", fields: [checkedById], references: [id])
+  invoiceResponsible User? @relation("PurchaseInvoiceResponsible", fields: [invoiceResponsibleId], references: [id])
+  closedBy           User? @relation("PurchaseClosedBy", fields: [closedById], references: [id])
+
+  items           PurchaseItem[]
+  receipts        PurchaseReceipt[]
   approvals       Approval[]
   fiscalDocuments FiscalDocument[]
   attachments     Attachment[]
   histories       PurchaseHistory[]
+  purchaseAlerts  PurchaseAlert[]
+  bills           Bill[]
 
-  user           User?           @relation(fields: [userId], references: [id])
-  userId         String?
-  purchaseAlerts PurchaseAlert[]
+  @@index([storeId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([category])
+  @@index([origin])
+  @@index([method])
+  @@index([purchasedAt])
+  @@index([dueDate])
+  @@index([approvedById])
+  @@index([invoiceResponsibleId])
 }
 
-model Approval {
-  id         String         @id @default(uuid())
-  status     ApprovalStatus @default(PENDING)
-  comment    String?
+model PurchaseItem {
+  id String @id @default(uuid())
+
   purchaseId String
-  approverId String
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+
+  name      String
+  quantity  Decimal  @db.Decimal(10, 3)
+  unit      String?
+  unitPrice Decimal? @db.Decimal(10, 2)
+  total     Decimal? @db.Decimal(10, 2)
+
+  receivedQuantity Decimal? @db.Decimal(10, 3)
+  notes            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  approver User     @relation(fields: [approverId], references: [id])
+
+  @@index([purchaseId])
+}
+
+model PurchaseReceipt {
+  id String @id @default(uuid())
+
+  purchaseId   String
+  receivedById String
+
+  status     ReceiptStatus
+  notes      String?
+  finalValue Decimal?      @db.Decimal(10, 2)
+
+  receivedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  receivedBy User     @relation(fields: [receivedById], references: [id])
+
+  fiscalDocuments FiscalDocument[]
+
+  @@index([purchaseId])
+  @@index([receivedById])
+  @@index([status])
 }
 
 model FiscalDocument {
-  id         String             @id @default(uuid())
-  type       FiscalDocumentType
-  number     String?
-  accessKey  String?
-  fileUrl    String?
-  issueDate  DateTime?
-  value      Decimal?           @db.Decimal(10, 2)
-  purchaseId String
-  linkedToId String?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  id     String               @id @default(uuid())
+  type   FiscalDocumentType
+  status FiscalDocumentStatus @default(LINKED)
 
-  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  number    String?
+  accessKey String?
+  fileUrl   String?
+  issueDate DateTime?
+  value     Decimal?  @db.Decimal(10, 2)
+
+  purchaseId   String
+  uploadedById String?
+  receiptId    String?
+
+  linkedToId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchase   Purchase         @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  uploadedBy User?            @relation(fields: [uploadedById], references: [id])
+  receipt    PurchaseReceipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
 
   linkedTo FiscalDocument?  @relation("DocumentLink", fields: [linkedToId], references: [id])
   linkedBy FiscalDocument[] @relation("DocumentLink")
+
+  @@index([purchaseId])
+  @@index([receiptId])
+  @@index([type])
+  @@index([status])
+  @@index([accessKey])
+}
+
+model Bill {
+  id          String  @id @default(uuid())
+  description String
+  value       Decimal @db.Decimal(10, 2)
+
+  type          PayableType       @default(BOLETO)
+  paymentMethod BillPaymentMethod @default(BANK_SLIP)
+
+  dueDate DateTime
+  paidAt  DateTime?
+
+  status BillStatus @default(OPEN)
+
+  externalLaunchStatus ExternalLaunchStatus @default(NOT_LAUNCHED)
+  externalSystemName   String?
+  externalCode         String?
+
+  hasBillFile Boolean @default(false)
+
+  barcode String?
+
+  pixKey     String?
+  pixKeyType PixKeyType?
+  pixQrCode  String?
+
+  bankName    String?
+  bankAgency  String?
+  bankAccount String?
+  beneficiary String?
+
+  storeId      String
+  purchaseId   String?
+  supplierId   String?
+  launchedById String
+
+  fileUrl         String?
+  imageUrl        String?
+  paymentProofUrl String?
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store      Store     @relation(fields: [storeId], references: [id])
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+  launchedBy User      @relation("BillLaunchedBy", fields: [launchedById], references: [id])
+
+  @@index([storeId])
+  @@index([purchaseId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([type])
+  @@index([paymentMethod])
+  @@index([externalLaunchStatus])
+  @@index([dueDate])
+  @@index([barcode])
+  @@index([pixKey])
+}
+
+model Service {
+  id           String  @id @default(uuid())
+  name         String
+  providerName String
+  description  String?
+  value        Decimal @db.Decimal(10, 2)
+
+  serviceDate DateTime
+  notes       String?
+
+  nfFileUrl      String?
+  nfOriginalName String?
+
+  paymentMethod PayoutMethod @default(PIX)
+  pixKey        String?
+  pixKeyType    PixKeyType?
+
+  storeId     String
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store @relation(fields: [storeId], references: [id])
+  createdBy User  @relation("ServiceCreatedBy", fields: [createdById], references: [id])
+
+  incomingNfs IncomingServiceNf[]
+
+  @@index([storeId])
+  @@index([serviceDate])
+  @@index([name])
+}
+
+// Certificado digital (e-CNPJ) usado pra autenticar via mTLS nas APIs da
+// Sefaz/NFS-e Nacional. O arquivo .pfx fica fora da pasta /uploads (que é
+// servida publicamente) e a senha nunca é gravada em texto puro — só o
+// resultado da criptografia AES-256-GCM feita com CERT_ENCRYPTION_KEY.
+model StoreCertificate {
+  id      String @id @default(uuid())
+  storeId String @unique
+
+  fileName String
+  filePath String
+
+  passwordCipher  String
+  passwordIv      String
+  passwordAuthTag String
+
+  // Cursor da distribuição de documentos da Sefaz (NSU = Número Sequencial
+  // Único). Cada busca continua a partir daqui, em vez de reprocessar tudo
+  // de novo.
+  lastNsu BigInt @default(0)
+
+  uploadedById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store      Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation("StoreCertificateUploadedBy", fields: [uploadedById], references: [id])
+}
+
+// Documento fiscal baixado da distribuição da Sefaz (NF-e de serviço, DPS ou
+// evento) que ainda não foi conciliado com um Serviço cadastrado. O XML fica
+// salvo em /uploads (mesmo padrão do envio manual); serviceId só é
+// preenchido quando o usuário confirma a qual Serviço aquele documento
+// pertence.
+model IncomingServiceNf {
+  id String @id @default(uuid())
+
+  storeId String
+
+  nsu           BigInt
+  chaveAcesso   String
+  tipoDocumento String
+  tipoEvento    String?
+
+  fileUrl     String?
+  generatedAt DateTime?
+  fetchedAt   DateTime  @default(now())
+
+  serviceId String?
+
+  store   Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id])
+
+  @@unique([storeId, chaveAcesso])
+  @@index([storeId])
+  @@index([serviceId])
+  @@index([tipoDocumento])
+}
+
+// Dados sensíveis (folha de pagamento) — acesso restrito a
+// ADMINISTRATIVO/PROPRIETARIO tanto no backend (RolesGuard) quanto na aba
+// do frontend.
+//
+// Os campos de recorrência (advance*/payment*/vt*/bonus*) descrevem a regra
+// fixa de pagamento do funcionário (valor + dia do mês). A partir deles o
+// sistema gera automaticamente os lançamentos (EmployeePayment) de cada mês
+// — o mesmo princípio das Contas a Pagar, mas com a origem do valor sendo o
+// cadastro do funcionário em vez de uma compra.
+model Employee {
+  id    String  @id @default(uuid())
+  name  String
+  cpf   String?
+  role  String? // cargo/função
+  phone String?
+
+  admissionDate DateTime?
+  active        Boolean   @default(true)
+
+  notes String?
+
+  salary Decimal? @db.Decimal(10, 2) // salário base, só informativo
+
+  advanceValue Decimal? @db.Decimal(10, 2) // adiantamento
+  advanceDay   Int? // dia do mês, 1-31
+
+  paymentValue Decimal? @db.Decimal(10, 2) // pagamento (complemento do salário)
+  paymentDay   Int?
+
+  vtValue Decimal? @db.Decimal(10, 2) // valor de uma passagem; total do dia = vtValue * 2
+
+  bonusValue Decimal? @db.Decimal(10, 2) // premiação
+  bonusDay   Int?
+
+  paymentMethod PayoutMethod @default(PIX)
+  pixKey        String?
+  pixKeyType    PixKeyType?
+
+  storeId     String
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store @relation(fields: [storeId], references: [id])
+  createdBy User  @relation("EmployeeCreatedBy", fields: [createdById], references: [id])
+
+  payments EmployeePayment[]
+
+  @@index([storeId])
+  @@index([name])
+}
+
+model EmployeePayment {
+  id String @id @default(uuid())
+
+  employeeId String
+  type       EmployeePaymentType
+  value      Decimal             @db.Decimal(10, 2)
+
+  dueDate DateTime
+  paidAt  DateTime?
+  status  EmployeePaymentStatus @default(OPEN)
+
+  referenceMonth String? // competência, formato YYYY-MM
+
+  notes          String?
+  receiptFileUrl String?
+
+  // Nulo quando o lançamento foi gerado automaticamente pelo sistema a
+  // partir da recorrência do funcionário (ninguém "criou" manualmente).
+  createdById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("EmployeePaymentCreatedBy", fields: [createdById], references: [id])
+
+  // Garante que a geração automática não duplique o mesmo lançamento (um
+  // por dia pro vale-transporte, um por mês pros demais tipos recorrentes).
+  @@unique([employeeId, type, dueDate])
+  @@index([employeeId])
+  @@index([dueDate])
+  @@index([status])
+  @@index([type])
 }
 
 model Attachment {
@@ -243,6 +716,27 @@ model Attachment {
   createdAt  DateTime @default(now())
 
   purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId])
+}
+
+model Approval {
+  id      String         @id @default(uuid())
+  status  ApprovalStatus @default(PENDING)
+  comment String?
+
+  purchaseId String
+  approverId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  approver User     @relation(fields: [approverId], references: [id])
+
+  @@index([purchaseId])
+  @@index([approverId])
+  @@index([status])
 }
 
 model PurchaseHistory {
@@ -257,20 +751,29 @@ model PurchaseHistory {
 
   purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
   user     User?    @relation(fields: [userId], references: [id])
+
+  @@index([purchaseId])
+  @@index([userId])
+  @@index([action])
 }
 
 model ApprovalRule {
-  id        String        @id @default(uuid())
-  name      String
-  minValue  Decimal       @db.Decimal(10, 2)
-  maxValue  Decimal?      @db.Decimal(10, 2)
-  level     ApprovalLevel
-  active    Boolean       @default(true)
-  storeId   String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id       String        @id @default(uuid())
+  name     String
+  minValue Decimal       @db.Decimal(10, 2)
+  maxValue Decimal?      @db.Decimal(10, 2)
+  level    ApprovalLevel
+  active   Boolean       @default(true)
+
+  storeId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([active])
 }
 
 model PurchaseAlert {
@@ -286,6 +789,11 @@ model PurchaseAlert {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([purchaseId])
+  @@index([type])
+  @@index([level])
+  @@index([resolved])
 }
 
 model Notification {
@@ -300,4 +808,148 @@ model Notification {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([read])
+}
+
+model DeletionRequest {
+  id         String                @id @default(uuid())
+  targetType DeletionTargetType
+  targetId   String
+  reason     String?
+  status     DeletionRequestStatus @default(PENDING)
+
+  requestedById String
+  reviewedById  String?
+
+  reviewedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  requestedBy User  @relation("DeletionRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy  User? @relation("DeletionReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([targetType])
+  @@index([targetId])
+  @@index([status])
+  @@index([requestedById])
+  @@index([reviewedById])
+}
+
+enum FinancialTransactionDirection {
+  IN
+  OUT
+}
+
+enum FinancialTransactionStatus {
+  PENDING_CLASSIFICATION
+  CLASSIFIED
+  IGNORED
+}
+
+model Truck {
+  id        String   @id @default(uuid())
+  plate     String   @unique
+  name      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  financialTransactions FinancialTransaction[]
+  classificationRules   FinancialClassificationRule[]
+}
+
+model FinancialCategory {
+  id        String   @id @default(uuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions        FinancialTransaction[]
+  classificationRules FinancialClassificationRule[]
+
+  @@unique([name])
+}
+
+model BankStatementImport {
+  id           String  @id @default(uuid())
+  fileName     String
+  originalName String?
+  totalRows    Int     @default(0)
+  importedRows Int     @default(0)
+  ignoredRows  Int     @default(0)
+
+  storeId String?
+  store   Store?  @relation(fields: [storeId], references: [id])
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  transactions FinancialTransaction[]
+
+  @@index([storeId])
+  @@index([createdById])
+}
+
+model FinancialTransaction {
+  id String @id @default(uuid())
+
+  date        DateTime
+  launch      String
+  companyName String?
+  document    String?
+  description String?
+  value       Decimal  @db.Decimal(10, 2)
+
+  direction FinancialTransactionDirection
+  status    FinancialTransactionStatus    @default(PENDING_CLASSIFICATION)
+
+  storeId String?
+  store   Store?  @relation(fields: [storeId], references: [id])
+
+  truckId String?
+  truck   Truck?  @relation(fields: [truckId], references: [id])
+
+  categoryId String?
+  category   FinancialCategory? @relation(fields: [categoryId], references: [id])
+
+  importId String?
+  import   BankStatementImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([direction])
+  @@index([truckId])
+  @@index([categoryId])
+  @@index([storeId])
+  @@index([status])
+}
+
+model FinancialClassificationRule {
+  id      String @id @default(uuid())
+  keyword String
+
+  categoryId String?
+  category   FinancialCategory? @relation(fields: [categoryId], references: [id])
+
+  truckId String?
+  truck   Truck?  @relation(fields: [truckId], references: [id])
+
+  active   Boolean @default(true)
+  priority Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([keyword])
+  @@index([active])
 }
