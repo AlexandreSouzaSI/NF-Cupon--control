@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import { AppLayout } from '../../src/components/app-layout';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
+import { getUser } from '@/lib/auth';
+import { canAccessHref } from '@/lib/menu';
 
 type PendingTask = {
     id: string;
@@ -164,6 +166,7 @@ function formatDate(value: string) {
 
 export default function DashboardPage() {
     const router = useRouter();
+    const user = getUser();
 
     const [summary, setSummary] = useState<DashboardSummary | null>(
         null,
@@ -294,6 +297,17 @@ export default function DashboardPage() {
         },
     ];
 
+    // Só mostra o card se o perfil logado tem acesso à página que ele
+    // aponta — mesma matriz de permissões do menu lateral, pra ninguém ver
+    // um atalho pra uma tela que depois não consegue abrir.
+    const visibleCards = user
+        ? operationalCards.filter((card) => canAccessHref(user.role, card.href))
+        : operationalCards;
+
+    const visiblePendingTasks = user
+        ? summary.pendingTasks.filter((task) => canAccessHref(user.role, task.href))
+        : summary.pendingTasks;
+
     return (
         <AppLayout title="Centro de Operações">
             <div className="space-y-6">
@@ -309,7 +323,7 @@ export default function DashboardPage() {
                 </header>
 
                 <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                    {operationalCards.map((card) => {
+                    {visibleCards.map((card) => {
                         const Icon = card.icon;
 
                         return (
@@ -367,7 +381,7 @@ export default function DashboardPage() {
                             <Clock3 className="text-yellow-400" />
                         </div>
 
-                        {summary.pendingTasks.length === 0 ? (
+                        {visiblePendingTasks.length === 0 ? (
                             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
                                 <div className="flex items-center gap-3">
                                     <CheckCircle2 className="text-emerald-400" />
@@ -385,7 +399,7 @@ export default function DashboardPage() {
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {summary.pendingTasks.map((task) => (
+                                {visiblePendingTasks.map((task) => (
                                     <button
                                         type="button"
                                         key={task.id}

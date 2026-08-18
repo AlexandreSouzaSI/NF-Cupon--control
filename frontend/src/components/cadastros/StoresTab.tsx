@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { getUser, hasGlobalStoreAccess } from '@/lib/auth';
 import {
     Building2,
+    FileSearch,
     KeyRound,
     Loader2,
     Pencil,
@@ -22,6 +23,7 @@ type Store = {
     cnpj?: string | null;
     address?: string | null;
     phone?: string | null;
+    uf?: string | null;
     active: boolean;
 };
 
@@ -49,6 +51,7 @@ export function StoresTab() {
         cnpj: '',
         address: '',
         phone: '',
+        uf: '',
     });
 
     const [certStatus, setCertStatus] = useState<
@@ -64,6 +67,9 @@ export function StoresTab() {
         string | null
     >(null);
     const [diagnosingCertStoreId, setDiagnosingCertStoreId] = useState<
+        string | null
+    >(null);
+    const [testingGoodsStoreId, setTestingGoodsStoreId] = useState<
         string | null
     >(null);
 
@@ -193,6 +199,37 @@ export function StoresTab() {
         }
     }
 
+    async function handleTestGoodsConnection(store: Store) {
+        try {
+            setTestingGoodsStoreId(store.id);
+
+            const response = await api.post(
+                `/stores/${store.id}/certificate/test-goods-connection`,
+            );
+
+            const result = response.data as {
+                success: boolean;
+                message: string;
+            };
+
+            if (result.success) {
+                toast.success(result.message);
+            } else {
+                toast.error(result.message);
+            }
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message ||
+                'Erro ao testar a conexão de NF-e de mercadoria.';
+
+            toast.error(
+                Array.isArray(message) ? message.join(', ') : message,
+            );
+        } finally {
+            setTestingGoodsStoreId(null);
+        }
+    }
+
     async function handleRunDiagnostics(store: Store) {
         try {
             setDiagnosingCertStoreId(store.id);
@@ -245,7 +282,7 @@ export function StoresTab() {
     }
 
     function resetForm() {
-        setForm({ name: '', cnpj: '', address: '', phone: '' });
+        setForm({ name: '', cnpj: '', address: '', phone: '', uf: '' });
         setEditingStore(null);
     }
 
@@ -256,6 +293,7 @@ export function StoresTab() {
             cnpj: store.cnpj || '',
             address: store.address || '',
             phone: store.phone || '',
+            uf: store.uf || '',
         });
     }
 
@@ -382,6 +420,28 @@ export function StoresTab() {
                             />
                         </div>
 
+                        <div>
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                UF
+                            </label>
+                            <input
+                                value={form.uf}
+                                maxLength={2}
+                                placeholder="Ex: SP, MG"
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        uf: e.target.value.toUpperCase(),
+                                    })
+                                }
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            />
+                            <p className="mt-1 text-xs text-zinc-500">
+                                Necessário pra buscar as NF-e de mercadoria
+                                automaticamente na Sefaz.
+                            </p>
+                        </div>
+
                         <div className="flex gap-3">
                             <button
                                 disabled={saving}
@@ -447,6 +507,7 @@ export function StoresTab() {
                                             <p>
                                                 Telefone: {store.phone || 'Não informado'}
                                             </p>
+                                            <p>UF: {store.uf || 'Não informado'}</p>
                                         </div>
                                     </div>
 
@@ -521,6 +582,38 @@ export function StoresTab() {
                                                             store.id
                                                             ? 'Testando... (pode levar até 15s)'
                                                             : 'Testar conexão'}
+                                                    </button>
+
+                                                    <button
+                                                        disabled={
+                                                            testingGoodsStoreId ===
+                                                            store.id
+                                                        }
+                                                        onClick={() =>
+                                                            handleTestGoodsConnection(
+                                                                store,
+                                                            )
+                                                        }
+                                                        title="Testa a conexão com o webservice de NF-e de mercadoria (produção)"
+                                                        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium disabled:cursor-wait ${testingGoodsStoreId ===
+                                                            store.id
+                                                            ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-500'
+                                                            : 'border-purple-500/30 bg-purple-500/10 text-purple-500 hover:bg-purple-500/20'
+                                                            }`}
+                                                    >
+                                                        {testingGoodsStoreId ===
+                                                            store.id ? (
+                                                            <Loader2
+                                                                size={14}
+                                                                className="animate-spin"
+                                                            />
+                                                        ) : (
+                                                            <FileSearch size={14} />
+                                                        )}
+                                                        {testingGoodsStoreId ===
+                                                            store.id
+                                                            ? 'Testando...'
+                                                            : 'Testar NF-e'}
                                                     </button>
 
                                                     <button

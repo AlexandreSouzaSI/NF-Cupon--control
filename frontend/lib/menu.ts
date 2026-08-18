@@ -11,6 +11,8 @@ import {
     AlertTriangle,
     Users,
     UserCog,
+    UserPlus,
+    TrendingUp,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -60,7 +62,13 @@ export const menu: MenuGroup[] = [
                 label: 'Nova Compra',
                 href: '/purchases/new',
                 icon: ShoppingCart,
-                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'ESTOQUISTA',
+                ],
             },
             {
                 label: 'Compras',
@@ -72,14 +80,13 @@ export const menu: MenuGroup[] = [
                     'GERENTE',
                     'COMPRADOR',
                     'ESTOQUISTA',
-                    'FINANCEIRO',
                 ],
             },
             {
                 label: 'Aprovações',
                 href: '/approvals',
                 icon: ClipboardList,
-                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
                 badgeKey: 'approvals',
             },
         ],
@@ -108,7 +115,7 @@ export const menu: MenuGroup[] = [
                 label: 'Contas a Pagar',
                 href: '/bills',
                 icon: Wallet,
-                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'FINANCEIRO'],
+                roles: ALL_ROLES,
             },
         ],
     },
@@ -119,7 +126,7 @@ export const menu: MenuGroup[] = [
                 label: 'Relatórios',
                 href: '/reports',
                 icon: BarChart3,
-                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'FINANCEIRO'],
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
             },
         ],
     },
@@ -130,7 +137,7 @@ export const menu: MenuGroup[] = [
                 label: 'Cadastros',
                 href: '/cadastros',
                 icon: Users,
-                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
             },
         ],
     },
@@ -142,6 +149,29 @@ export const menu: MenuGroup[] = [
                 href: '/employees',
                 icon: UserCog,
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO'],
+            },
+            {
+                label: 'Freelancer',
+                href: '/freelancers',
+                icon: UserPlus,
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
+            },
+        ],
+    },
+    {
+        group: 'Tributos',
+        items: [
+            {
+                label: 'Tributos',
+                href: '/revenue',
+                icon: TrendingUp,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'FINANCEIRO',
+                ],
             },
         ],
     },
@@ -165,3 +195,22 @@ export const menu: MenuGroup[] = [
         ],
     },
 ];
+
+// Usado pelo Dashboard pra decidir se mostra um card/atalho pra um perfil,
+// reaproveitando a mesma matriz de roles do menu — assim as duas coisas
+// nunca ficam dessincronizadas. Faz match exato do path (ignorando query
+// string) ou por prefixo, pra cobrir rotas com parâmetro (ex: uma tarefa
+// apontando pra "/purchases/123" cai no item de menu "/purchases").
+// Rotas que não existem no menu (não mapeadas) ficam liberadas por padrão.
+export function canAccessHref(role: MenuRole, href: string): boolean {
+    const path = href.split('?')[0];
+    const allItems = menu.flatMap((group) => group.items);
+
+    const matchedItem = allItems.find(
+        (item) => path === item.href || path.startsWith(`${item.href}/`),
+    );
+
+    if (!matchedItem) return true;
+
+    return matchedItem.roles.includes(role);
+}

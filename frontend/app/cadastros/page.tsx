@@ -23,25 +23,25 @@ const tabs: {
         key: 'usuarios',
         label: 'Usuários',
         icon: Users,
-        roles: ['ADMINISTRATIVO', 'PROPRIETARIO'],
+        roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
     },
     {
         key: 'lojas',
         label: 'Lojas',
         icon: Building2,
-        roles: ['ADMINISTRATIVO', 'PROPRIETARIO'],
+        roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
     },
     {
         key: 'fornecedores',
         label: 'Fornecedores',
         icon: Truck,
-        roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
+        roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
     },
     {
         key: 'cartoes',
         label: 'Cartões',
         icon: CreditCard,
-        roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
+        roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
     },
 ];
 
