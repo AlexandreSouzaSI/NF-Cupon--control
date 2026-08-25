@@ -277,6 +277,8 @@ model User {
   tasksCreated             Task[]           @relation("TaskCreatedBy")
   tasksAssigned            Task[]           @relation("TaskAssignedTo")
   taskOccurrencesConfirmed TaskOccurrence[] @relation("TaskOccurrenceConfirmedBy")
+
+  productLossesReported ProductLoss[] @relation("ProductLossReportedBy")
 }
 
 model Store {
@@ -311,6 +313,7 @@ model Store {
   freelancers           Freelancer[]
   freelancerPayments    FreelancerPayment[]
   tasks                 Task[]
+  productLosses         ProductLoss[]
 }
 
 model UserStore {
@@ -934,6 +937,29 @@ model TaskOccurrence {
   @@index([taskId])
   @@index([dueDate])
   @@index([status])
+}
+
+// Registro de perda de produto (quebra, vencimento, etc.) — foto tirada
+// na hora + descrição + quantidade, tudo no mesmo registro. Alimenta o
+// relatório mensal usado pra montar a NF de perda.
+model ProductLoss {
+  id          String  @id @default(uuid())
+  storeId     String
+  description String
+  quantity    Decimal @db.Decimal(10, 3)
+  unit        String?
+  reason      String?
+  photoUrl    String
+
+  reportedById String
+  occurredAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  store      Store @relation(fields: [storeId], references: [id])
+  reportedBy User  @relation("ProductLossReportedBy", fields: [reportedById], references: [id])
+
+  @@index([storeId])
+  @@index([occurredAt])
 }
 
 model Attachment {

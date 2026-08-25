@@ -21,6 +21,7 @@ import { EmployeesModule } from './employees/employees.module';
 import { TaxModule } from './tax/tax.module';
 import { FreelancersModule } from './freelancers/freelancers.module';
 import { TasksModule } from './tasks/tasks.module';
+import { LossesModule } from './losses/losses.module';
 
 @Module({
   imports: [
@@ -45,7 +46,8 @@ import { TasksModule } from './tasks/tasks.module';
     EmployeesModule,
     TaxModule,
     FreelancersModule,
-    TasksModule
+    TasksModule,
+    LossesModule
   ],
   controllers: [AppController],
   providers: [AppService],
