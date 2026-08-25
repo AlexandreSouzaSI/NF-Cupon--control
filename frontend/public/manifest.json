@@ -2,7 +2,7 @@
     "name": "Controle de Compras",
     "short_name": "Compras",
     "description": "Sistema de controle de compras, aprovações, cupons e notas fiscais",
-    "start_url": "/dashboard",
+    "start_url": "/home",
     "display": "standalone",
     "background_color": "#09090b",
     "theme_color": "#22c55e",

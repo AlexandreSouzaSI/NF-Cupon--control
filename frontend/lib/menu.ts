@@ -14,6 +14,8 @@ import {
     UserPlus,
     TrendingUp,
     ListChecks,
+    PackageX,
+    LayoutDashboard,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -49,9 +51,15 @@ export const menu: MenuGroup[] = [
         group: 'Principal',
         items: [
             {
+                label: 'Início',
+                href: '/home',
+                icon: Home,
+                roles: ALL_ROLES,
+            },
+            {
                 label: 'Dashboard',
                 href: '/dashboard',
-                icon: Home,
+                icon: LayoutDashboard,
                 roles: ALL_ROLES,
             },
         ],
@@ -106,6 +114,18 @@ export const menu: MenuGroup[] = [
                 href: '/services',
                 icon: Briefcase,
                 roles: ALL_ROLES,
+            },
+            {
+                label: 'Perdas',
+                href: '/losses',
+                icon: PackageX,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'ESTOQUISTA',
+                ],
             },
         ],
     },

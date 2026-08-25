@@ -40,7 +40,7 @@ export default function LoginPage() {
 
       toast.success('Login realizado');
 
-      router.push('/dashboard');
+      router.push('/home');
     } catch {
       toast.error('Login inválido');
     } finally {
