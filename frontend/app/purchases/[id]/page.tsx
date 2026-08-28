@@ -11,6 +11,7 @@ import {
     FileCheck2,
     FileText,
     PackageCheck,
+    Paperclip,
     ReceiptText,
     ShieldCheck,
     ShoppingCart,
@@ -111,6 +112,8 @@ type PurchaseDetail = {
     purchasedAt?: string | null;
     dueDate?: string | null;
     notes?: string | null;
+    orderMirrorUrl?: string | null;
+    orderMirrorName?: string | null;
 
     createdAt: string;
     approvedAt?: string | null;
@@ -805,6 +808,28 @@ export default function PurchaseDetailPage() {
                                     <p className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                                         {purchase.notes}
                                     </p>
+                                </div>
+                            )}
+
+                            {purchase.orderMirrorUrl && (
+                                <div className="mt-4 flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                                    <Paperclip className="text-emerald-400" />
+
+                                    <div>
+                                        <p className="text-sm text-emerald-300">
+                                            Espelho do pedido
+                                        </p>
+
+                                        <a
+                                            href={`${API_URL}${purchase.orderMirrorUrl}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="font-medium text-emerald-400 hover:underline"
+                                        >
+                                            {purchase.orderMirrorName ||
+                                                'Ver anexo'}
+                                        </a>
+                                    </div>
                                 </div>
                             )}
                         </section>

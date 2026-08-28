@@ -6,11 +6,13 @@ import { api } from '@/lib/api';
 import {
     AlertTriangle,
     Bell,
+    Briefcase,
     CheckCircle2,
     Clock,
     ListChecks,
     ReceiptText,
     ShieldCheck,
+    Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -33,6 +35,8 @@ const typeIcon: Record<string, React.ElementType> = {
     TASK_ASSIGNED: ListChecks,
     TASK_OVERDUE: AlertTriangle,
     TASK_CONFIRMED: CheckCircle2,
+    LOSS_ADDED: Trash2,
+    SERVICE_ADDED: Briefcase,
 };
 
 export default function NotificationsPage() {

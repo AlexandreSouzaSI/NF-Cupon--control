@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+    Bell,
     Building2,
     ChevronDown,
     FileText,
@@ -21,7 +22,7 @@ import {
     type ActiveStore,
 } from '@/lib/active-store';
 import { getTheme, toggleTheme, type Theme } from '@/lib/theme';
-import { menu } from '@/lib/menu';
+import { menu, menuColorStyles } from '@/lib/menu';
 
 type AppLayoutProps = {
     children: React.ReactNode;
@@ -223,8 +224,8 @@ export function AppLayout({ children, title }: AppLayoutProps) {
     const visibleMenuGroups = menu
         .map((group) => ({
             ...group,
-            items: group.items.filter((item) =>
-                item.roles.includes(user.role),
+            items: group.items.filter(
+                (item) => item.roles.includes(user.role) && !item.hidden,
             ),
         }))
         .filter((group) => group.items.length > 0);
@@ -290,6 +291,21 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                     </div>
 
                     <button
+                        onClick={() => router.push('/notifications')}
+                        title="Notificações"
+                        className="relative rounded-xl border border-zinc-200 dark:border-zinc-800 p-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                    >
+                        <Bell size={20} />
+                        {badgeCounts.notifications > 0 && (
+                            <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                                {badgeCounts.notifications > 9
+                                    ? '9+'
+                                    : badgeCounts.notifications}
+                            </span>
+                        )}
+                    </button>
+
+                    <button
                         onClick={handleToggleTheme}
                         title={
                             theme === 'dark'
@@ -346,6 +362,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                 <div className="space-y-1">
                                     {group.items.map((item) => {
                                         const Icon = item.icon;
+                                        const colors = menuColorStyles[item.color];
                                         const badgeValue = item.badgeKey
                                             ? badgeCounts[item.badgeKey as keyof typeof badgeCounts]
                                             : 0;
@@ -356,7 +373,11 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                                 onClick={() => router.push(item.href)}
                                                 className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
                                             >
-                                                <Icon size={20} />
+                                                <span
+                                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors.bg} ${colors.text}`}
+                                                >
+                                                    <Icon size={18} />
+                                                </span>
                                                 <span className="flex-1">
                                                     {item.label}
                                                 </span>
@@ -423,6 +444,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                         <div className="space-y-1">
                                             {group.items.map((item) => {
                                                 const Icon = item.icon;
+                                                const colors = menuColorStyles[item.color];
                                                 const badgeValue = item.badgeKey
                                                     ? badgeCounts[item.badgeKey as keyof typeof badgeCounts]
                                                     : 0;
@@ -436,7 +458,11 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                                         }}
                                                         className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
                                                     >
-                                                        <Icon size={20} />
+                                                        <span
+                                                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors.bg} ${colors.text}`}
+                                                        >
+                                                            <Icon size={18} />
+                                                        </span>
                                                         <span className="flex-1">
                                                             {item.label}
                                                         </span>

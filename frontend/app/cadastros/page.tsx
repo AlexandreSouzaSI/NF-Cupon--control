@@ -18,6 +18,9 @@ const tabs: {
     label: string;
     icon: typeof Users;
     roles: UserRole[];
+    // Abas fora de foco por enquanto — mesma lógica do menu (reversível,
+    // não é bloqueio de permissão, só não aparece na aba por padrão).
+    hidden?: boolean;
 }[] = [
     {
         key: 'usuarios',
@@ -36,12 +39,14 @@ const tabs: {
         label: 'Fornecedores',
         icon: Truck,
         roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
+        hidden: true,
     },
     {
         key: 'cartoes',
         label: 'Cartões',
         icon: CreditCard,
         roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
+        hidden: true,
     },
 ];
 
@@ -50,16 +55,27 @@ export default function CadastrosPage() {
     const searchParams = useSearchParams();
     const user = getUser();
 
-    const visibleTabs = useMemo(
+    // Abas permitidas pro perfil (independente de estarem "hidden" ou
+    // não) — usado só pra validar um link direto tipo ?tab=usuarios, que
+    // continua funcionando mesmo com a aba fora do menu por padrão.
+    const roleAllowedTabs = useMemo(
         () =>
             tabs.filter((tab) => !user || tab.roles.includes(user.role)),
         [user],
     );
 
+    const visibleTabs = useMemo(
+        () => roleAllowedTabs.filter((tab) => !tab.hidden),
+        [roleAllowedTabs],
+    );
+
     const requestedTab = searchParams.get('tab') as TabKey | null;
 
     const [activeTab, setActiveTab] = useState<TabKey>(() => {
-        if (requestedTab && visibleTabs.some((tab) => tab.key === requestedTab)) {
+        if (
+            requestedTab &&
+            roleAllowedTabs.some((tab) => tab.key === requestedTab)
+        ) {
             return requestedTab;
         }
 

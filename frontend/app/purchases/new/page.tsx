@@ -6,10 +6,13 @@ import {
     ArrowLeft,
     ArrowRight,
     Building2,
+    Camera,
     Check,
+    Paperclip,
     Plus,
     ShoppingCart,
     Trash2,
+    X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -175,6 +178,16 @@ export default function NewPurchasePage() {
     const [items, setItems] = useState<PurchaseItemForm[]>([
         createEmptyItem(),
     ]);
+
+    // Modo simplificado: pra quem não quer digitar item a item. Registra
+    // só fornecedor + valor final (vira 1 item por baixo dos panos, pra
+    // não quebrar recebimento/divergência que dependem de itens).
+    const [simplifiedMode, setSimplifiedMode] = useState(false);
+    const [simplifiedValue, setSimplifiedValue] = useState('');
+
+    // Espelho do pedido: foto/PDF do que foi combinado com o fornecedor,
+    // opcional em qualquer um dos dois modos.
+    const [mirrorFile, setMirrorFile] = useState<File | null>(null);
 
     useEffect(() => {
         loadBaseData();
@@ -464,10 +477,19 @@ export default function NewPurchasePage() {
             return false;
         }
 
+        if (simplifiedMode && parseDecimal(simplifiedValue) <= 0) {
+            toast.error('Informe o valor final da compra.');
+            return false;
+        }
+
         return true;
     }
 
     function validateStepTwo() {
+        if (simplifiedMode) {
+            return true;
+        }
+
         const validItems = items.filter(
             (item) =>
                 item.name.trim() &&
@@ -504,12 +526,22 @@ export default function NewPurchasePage() {
             return;
         }
 
+        if (step === 1 && simplifiedMode) {
+            setStep(3);
+            return;
+        }
+
         setStep((currentStep) =>
             Math.min(currentStep + 1, 3),
         );
     }
 
     function goToPreviousStep() {
+        if (step === 3 && simplifiedMode) {
+            setStep(1);
+            return;
+        }
+
         setStep((currentStep) =>
             Math.max(currentStep - 1, 1),
         );
@@ -525,31 +557,53 @@ export default function NewPurchasePage() {
 
             const resolvedSupplierId = await resolveSupplierId();
 
-            const normalizedItems = items.map((item) => {
-                const quantity = parseDecimal(item.quantity);
-                const unitPrice = parseDecimal(item.unitPrice);
-                const explicitTotal = parseDecimal(item.total);
+            let normalizedItems: {
+                name: string;
+                quantity: number;
+                unit?: string;
+                unitPrice?: number;
+                total?: number;
+                notes?: string;
+            }[];
+            let purchaseValue: number;
 
-                return {
-                    name: item.name.trim(),
-                    quantity,
-                    unit: item.unit || undefined,
-                    unitPrice:
-                        unitPrice > 0 ? unitPrice : undefined,
-                    total:
-                        explicitTotal > 0
-                            ? explicitTotal
-                            : quantity * unitPrice || undefined,
-                    notes: item.notes.trim() || undefined,
-                };
-            });
+            if (simplifiedMode) {
+                purchaseValue = parseDecimal(simplifiedValue);
+                normalizedItems = [
+                    {
+                        name: description.trim() || 'Pedido completo',
+                        quantity: 1,
+                        unit: 'UN',
+                        total: purchaseValue,
+                    },
+                ];
+            } else {
+                normalizedItems = items.map((item) => {
+                    const quantity = parseDecimal(item.quantity);
+                    const unitPrice = parseDecimal(item.unitPrice);
+                    const explicitTotal = parseDecimal(item.total);
 
-            const purchaseValue = normalizedItems.reduce(
-                (sum, item) => sum + Number(item.total || 0),
-                0,
-            );
+                    return {
+                        name: item.name.trim(),
+                        quantity,
+                        unit: item.unit || undefined,
+                        unitPrice:
+                            unitPrice > 0 ? unitPrice : undefined,
+                        total:
+                            explicitTotal > 0
+                                ? explicitTotal
+                                : quantity * unitPrice || undefined,
+                        notes: item.notes.trim() || undefined,
+                    };
+                });
 
-            await api.post('/purchases', {
+                purchaseValue = normalizedItems.reduce(
+                    (sum, item) => sum + Number(item.total || 0),
+                    0,
+                );
+            }
+
+            const response = await api.post('/purchases', {
                 description: description.trim(),
                 value: purchaseValue,
                 method,
@@ -570,6 +624,23 @@ export default function NewPurchasePage() {
                 notes: notes.trim() || undefined,
                 items: normalizedItems,
             });
+
+            if (mirrorFile) {
+                const mirrorFormData = new FormData();
+                mirrorFormData.append('file', mirrorFile);
+
+                try {
+                    await api.post(
+                        `/purchases/${response.data.id}/order-mirror`,
+                        mirrorFormData,
+                        { headers: { 'Content-Type': 'multipart/form-data' } },
+                    );
+                } catch {
+                    toast.error(
+                        'Compra cadastrada, mas o espelho do pedido não foi enviado.',
+                    );
+                }
+            }
 
             toast.success('Compra cadastrada com sucesso.');
             router.push('/purchases');
@@ -630,12 +701,21 @@ export default function NewPurchasePage() {
                     )}
                 </header>
 
-                <div className="grid grid-cols-3 gap-2">
-                    {[
-                        { number: 1, label: 'Informações' },
-                        { number: 2, label: 'Itens' },
-                        { number: 3, label: 'Revisão' },
-                    ].map((item) => {
+                <div
+                    className={`grid gap-2 ${simplifiedMode ? 'grid-cols-2' : 'grid-cols-3'
+                        }`}
+                >
+                    {(simplifiedMode
+                        ? [
+                            { number: 1, label: 'Informações' },
+                            { number: 3, label: 'Revisão' },
+                        ]
+                        : [
+                            { number: 1, label: 'Informações' },
+                            { number: 2, label: 'Itens' },
+                            { number: 3, label: 'Revisão' },
+                        ]
+                    ).map((item) => {
                         const active = step === item.number;
                         const completed = step > item.number;
 
@@ -699,6 +779,38 @@ export default function NewPurchasePage() {
                                 {activeStore?.name || 'loja não identificada'}
                             </strong>
                         </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setSimplifiedMode((current) => !current)}
+                            className={`mb-5 flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${simplifiedMode
+                                ? 'border-emerald-500 bg-emerald-500/10'
+                                : 'border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-950'
+                                }`}
+                        >
+                            <div>
+                                <p className="text-sm font-semibold">
+                                    Cadastro simplificado
+                                </p>
+                                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                                    Sem listar item a item — só fornecedor e
+                                    valor final. Ideal pra pedidos com muitos
+                                    itens.
+                                </p>
+                            </div>
+
+                            <div
+                                className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition ${simplifiedMode
+                                    ? 'bg-emerald-500'
+                                    : 'bg-zinc-300 dark:bg-zinc-700'
+                                    }`}
+                            >
+                                <div
+                                    className={`h-5 w-5 rounded-full bg-white transition ${simplifiedMode ? 'translate-x-5' : ''
+                                        }`}
+                                />
+                            </div>
+                        </button>
 
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
@@ -841,6 +953,24 @@ export default function NewPurchasePage() {
                                     )}
                             </div>
 
+                            {simplifiedMode && (
+                                <div>
+                                    <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                        Valor final
+                                    </label>
+
+                                    <input
+                                        value={simplifiedValue}
+                                        onChange={(event) =>
+                                            setSimplifiedValue(event.target.value)
+                                        }
+                                        inputMode="decimal"
+                                        placeholder="0,00"
+                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                    />
+                                </div>
+                            )}
+
                             {method === 'CREDIT_CARD' && (
                                 <div>
                                     <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
@@ -910,6 +1040,78 @@ export default function NewPurchasePage() {
                                     </div>
                                 )}
 
+                        </div>
+
+                        <div className="mt-4">
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                Espelho do pedido (opcional)
+                            </label>
+                            <p className="mb-2 text-xs text-zinc-500">
+                                Print do WhatsApp, orçamento ou confirmação do
+                                pedido — fica salvo pra conferir depois.
+                            </p>
+
+                            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-3">
+                                {mirrorFile ? (
+                                    <p className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
+                                        <Paperclip size={12} />
+                                        {mirrorFile.name}
+                                        <button
+                                            type="button"
+                                            onClick={() => setMirrorFile(null)}
+                                            className="ml-1 text-zinc-400 hover:text-red-500"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </p>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                document
+                                                    .getElementById('order-mirror-camera')
+                                                    ?.click()
+                                            }
+                                            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                                        >
+                                            <Camera size={14} />
+                                            Tirar foto
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                document
+                                                    .getElementById('order-mirror-file')
+                                                    ?.click()
+                                            }
+                                            className="flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                        >
+                                            <Paperclip size={14} />
+                                            Escolher arquivo
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <input
+                                id="order-mirror-camera"
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                onChange={(event) =>
+                                    setMirrorFile(event.target.files?.[0] || null)
+                                }
+                                className="hidden"
+                            />
+                            <input
+                                id="order-mirror-file"
+                                type="file"
+                                onChange={(event) =>
+                                    setMirrorFile(event.target.files?.[0] || null)
+                                }
+                                className="hidden"
+                            />
                         </div>
 
                         <button
@@ -1282,57 +1484,75 @@ export default function NewPurchasePage() {
                             </div>
                         </div>
 
-                        <div className="mt-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4">
-                            <div className="mb-3 flex items-center justify-between">
-                                <strong>Itens</strong>
-                                <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                                    {items.length} item(ns)
-                                </span>
+                        {simplifiedMode ? (
+                            <div className="mt-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4">
+                                <p className="text-sm text-zinc-500">
+                                    Cadastro simplificado — sem item a item
+                                </p>
+                                {mirrorFile && (
+                                    <p className="mt-2 flex items-center gap-1 text-sm text-emerald-500">
+                                        <Paperclip size={14} />
+                                        {mirrorFile.name}
+                                    </p>
+                                )}
                             </div>
+                        ) : (
+                            <div className="mt-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <strong>Itens</strong>
+                                    <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                                        {items.length} item(ns)
+                                    </span>
+                                </div>
 
-                            <div className="space-y-2">
-                                {items.map((item) => {
-                                    const quantity =
-                                        parseDecimal(item.quantity);
-                                    const itemTotal =
-                                        parseDecimal(item.total) ||
-                                        quantity *
-                                        parseDecimal(
-                                            item.unitPrice,
-                                        );
+                                <div className="space-y-2">
+                                    {items.map((item) => {
+                                        const quantity =
+                                            parseDecimal(item.quantity);
+                                        const itemTotal =
+                                            parseDecimal(item.total) ||
+                                            quantity *
+                                            parseDecimal(
+                                                item.unitPrice,
+                                            );
 
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            className="flex flex-col gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 md:flex-row md:items-center md:justify-between"
-                                        >
-                                            <div>
-                                                <strong>
-                                                    {item.name}
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                className="flex flex-col gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 md:flex-row md:items-center md:justify-between"
+                                            >
+                                                <div>
+                                                    <strong>
+                                                        {item.name}
+                                                    </strong>
+                                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                                        {quantity}{' '}
+                                                        {item.unit}
+                                                    </p>
+                                                </div>
+
+                                                <strong className="text-emerald-400">
+                                                    {formatCurrency(
+                                                        itemTotal,
+                                                    )}
                                                 </strong>
-                                                <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                                    {quantity}{' '}
-                                                    {item.unit}
-                                                </p>
                                             </div>
-
-                                            <strong className="text-emerald-400">
-                                                {formatCurrency(
-                                                    itemTotal,
-                                                )}
-                                            </strong>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                             <p className="text-sm text-emerald-300">
                                 Valor total da compra
                             </p>
                             <strong className="text-3xl text-emerald-400">
-                                {formatCurrency(calculatedItemsTotal)}
+                                {formatCurrency(
+                                    simplifiedMode
+                                        ? parseDecimal(simplifiedValue)
+                                        : calculatedItemsTotal,
+                                )}
                             </strong>
                         </div>
                     </section>

@@ -8,7 +8,8 @@ export type UserRole =
     | 'GERENTE'
     | 'COMPRADOR'
     | 'ESTOQUISTA'
-    | 'FINANCEIRO';
+    | 'FINANCEIRO'
+    | 'FUNCIONARIO';
 
 export const roleLabels: Record<UserRole, string> = {
     ADMINISTRATIVO: 'Administrativo',
@@ -17,6 +18,7 @@ export const roleLabels: Record<UserRole, string> = {
     COMPRADOR: 'Comprador',
     ESTOQUISTA: 'Estoquista',
     FINANCEIRO: 'Financeiro',
+    FUNCIONARIO: 'Funcionário',
 };
 
 // Perfis com acesso a todas as lojas, sem depender de vínculo em UserStore.

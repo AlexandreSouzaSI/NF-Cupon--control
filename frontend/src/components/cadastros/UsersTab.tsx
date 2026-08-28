@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
-import { Pencil, UserPlus, Users, UserX } from 'lucide-react';
+import { Pencil, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Store = {
@@ -22,12 +22,55 @@ type User = {
 };
 
 const roles = [
-    { value: 'ADMINISTRATIVO', label: 'Administrativo' },
-    { value: 'PROPRIETARIO', label: 'Proprietário' },
-    { value: 'GERENTE', label: 'Gerente' },
-    { value: 'COMPRADOR', label: 'Comprador' },
-    { value: 'ESTOQUISTA', label: 'Estoquista' },
-    { value: 'FINANCEIRO', label: 'Financeiro' },
+    {
+        value: 'PROPRIETARIO',
+        label: 'Proprietário',
+        permissions:
+            'Acesso total, sempre: todas as lojas, todas as telas, todas as tarefas — nunca é restringido por ninguém. É o único que pode ocultar uma tarefa do Administrativo.',
+    },
+    {
+        value: 'ADMINISTRATIVO',
+        label: 'Administrativo',
+        permissions:
+            'Acesso total às lojas vinculadas e vê todas as tarefas, igual ao Proprietário — a não ser que o Proprietário restrinja uma tarefa específica só pra ele não ver. Pode ocultar tarefas do Gerente.',
+    },
+    {
+        value: 'GERENTE',
+        label: 'Gerente',
+        permissions:
+            'Acesso operacional nas lojas vinculadas (compras, tarefas, perdas, serviços). Vê todas as tarefas da loja, a não ser que o Proprietário ou o Administrativo restrinjam alguma só pra ele não ver. Não gerencia usuários Administrativo/Proprietário/Gerente nem restringe tarefas de ninguém.',
+    },
+    {
+        value: 'FUNCIONARIO',
+        label: 'Funcionário',
+        permissions:
+            'Perfil restrito do projeto reduzido: só vê e responde às próprias tarefas (criadas por ele ou atribuídas a ele) e só acessa Perdas — sem Serviços, Compras ou Cadastros.',
+    },
+    // Perfis fora de foco por enquanto (mesma lógica reversível do menu:
+    // continuam existindo pra quem já tem esse perfil, mas somem da lista
+    // de opções ao criar/editar — é só tirar o "hidden" quando o módulo de
+    // Compras/Financeiro voltar a ficar visível).
+    {
+        value: 'COMPRADOR',
+        label: 'Comprador',
+        permissions:
+            'Registra e acompanha compras, tarefas e perdas nas lojas vinculadas. Só vê tarefas que criou ou que foram atribuídas a ele.',
+        hidden: true,
+    },
+    {
+        value: 'ESTOQUISTA',
+        label: 'Estoquista',
+        permissions:
+            'Recebe compras e registra perdas e tarefas nas lojas vinculadas. Só vê tarefas que criou ou que foram atribuídas a ele.',
+        hidden: true,
+    },
+    {
+        value: 'FINANCEIRO',
+        label: 'Financeiro',
+        permissions:
+            'Contas a pagar, tributos e alertas financeiros nas lojas vinculadas. Só vê tarefas que criou ou que foram atribuídas a ele.',
+        hidden: true,
+    },
 ];
 
 export function UsersTab() {
@@ -36,15 +79,23 @@ export function UsersTab() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const formRef = useRef<HTMLFormElement>(null);
 
     const [form, setForm] = useState({
         name: '',
         email: '',
         password: '',
-        role: 'COMPRADOR',
+        role: 'FUNCIONARIO',
         active: true,
         storeIds: [] as string[],
     });
+
+    // Some da lista de opções, exceto se for o perfil já selecionado (ex:
+    // editando um usuário Comprador antigo — continua aparecendo pra não
+    // sumir o valor do campo, mas não aparece como opção pra usuário novo).
+    const selectableRoles = roles.filter(
+        (role) => !role.hidden || role.value === form.role,
+    );
 
     async function loadData() {
         try {
@@ -74,7 +125,7 @@ export function UsersTab() {
             name: '',
             email: '',
             password: '',
-            role: 'COMPRADOR',
+            role: 'FUNCIONARIO',
             active: true,
             storeIds: [],
         });
@@ -90,6 +141,17 @@ export function UsersTab() {
             role: user.role,
             active: user.active,
             storeIds: user.userStores.map((item) => item.store.id),
+        });
+
+        // O form fica acima da lista (ou antes dela, empilhado no
+        // celular) — sem isso, clicar em "Editar" num usuário lá embaixo
+        // da lista muda o form mas ele fica fora da tela, parecendo que
+        // nada aconteceu.
+        requestAnimationFrame(() => {
+            formRef.current?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
         });
     }
 
@@ -174,8 +236,12 @@ export function UsersTab() {
     return (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[420px_1fr]">
             <form
+                ref={formRef}
                 onSubmit={handleSubmit}
-                className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
+                className={`rounded-3xl border bg-white dark:bg-zinc-900 p-5 transition ${editingUser
+                    ? 'border-emerald-400 ring-2 ring-emerald-400/30'
+                    : 'border-zinc-200 dark:border-zinc-800'
+                    }`}
             >
                 <div className="mb-5 flex items-center gap-3">
                     <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
@@ -235,7 +301,7 @@ export function UsersTab() {
 
                     <div>
                         <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            Perfil
+                            Perfil (permissões de acesso)
                         </label>
                         <select
                             value={form.role}
@@ -244,12 +310,26 @@ export function UsersTab() {
                             }
                             className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
                         >
-                            {roles.map((role) => (
+                            {selectableRoles.map((role) => (
                                 <option key={role.value} value={role.value}>
                                     {role.label}
                                 </option>
                             ))}
                         </select>
+
+                        <div className="mt-2 flex items-start gap-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 p-3 text-xs text-zinc-600 dark:text-zinc-400">
+                            <ShieldCheck
+                                size={14}
+                                className="mt-0.5 shrink-0 text-emerald-500"
+                            />
+                            <span>
+                                {
+                                    roles.find(
+                                        (role) => role.value === form.role,
+                                    )?.permissions
+                                }
+                            </span>
+                        </div>
                     </div>
 
                     <div>

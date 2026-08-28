@@ -3,14 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-    AlertTriangle,
     Briefcase,
-    CheckCircle2,
-    Clock3,
-    FileWarning,
-    PackageCheck,
-    ReceiptText,
-    ShieldAlert,
+    ListChecks,
+    PackageX,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -72,6 +67,16 @@ type RecentAlert = {
     } | null;
 };
 
+type TeamTaskStat = {
+    userId: string;
+    userName: string;
+    aFazer: number;
+    emAndamento: number;
+    pausada: number;
+    atraso: number;
+    concluidas: number;
+};
+
 type DashboardSummary = {
     operational: {
         totalPurchases: number;
@@ -107,6 +112,15 @@ type DashboardSummary = {
 
     services: {
         nfCountMonth: number;
+    };
+
+    losses: {
+        countMonth: number;
+    };
+
+    tasks: {
+        pendingToday: number;
+        team: TeamTaskStat[];
     };
 
     pendingTasks: PendingTask[];
@@ -145,24 +159,6 @@ const statusColor: Record<string, string> = {
     CLOSED: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
     CANCELED: 'bg-red-500/10 text-red-400',
 };
-
-const taskColor: Record<string, string> = {
-    WAITING_APPROVAL: 'text-yellow-400 bg-yellow-500/10',
-    WAITING_RECEIPT: 'text-orange-400 bg-orange-500/10',
-    WAITING_INVOICE: 'text-purple-400 bg-purple-500/10',
-    RECEIVED_WITH_DIFFERENCE: 'text-red-400 bg-red-500/10',
-};
-
-function formatCurrency(value: number | string) {
-    return Number(value).toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-    });
-}
-
-function formatDate(value: string) {
-    return new Date(value).toLocaleString('pt-BR');
-}
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -228,64 +224,20 @@ export default function DashboardPage() {
 
     const operationalCards = [
         {
-            title: 'Aguardando aprovação',
-            value: summary.operational.waitingApproval,
-            description: 'Compras que precisam de decisão',
-            icon: Clock3,
-            iconClass: 'text-yellow-400 bg-yellow-500/10',
-            href: '/approvals',
-        },
-        {
-            title: 'Aguardando recebimento',
-            value: summary.operational.waitingReceipt,
-            description: 'Mercadorias ainda não conferidas',
-            icon: PackageCheck,
-            iconClass: 'text-orange-400 bg-orange-500/10',
-            href: '/purchases?status=WAITING_RECEIPT',
-        },
-        {
-            title: 'Com divergência',
-            value: summary.operational.receivedWithDifference,
-            description: 'Itens faltando ou recebidos a mais',
-            icon: AlertTriangle,
+            title: 'Perdas este mês',
+            value: summary.losses.countMonth,
+            description: 'Registros de perda no período',
+            icon: PackageX,
             iconClass: 'text-red-400 bg-red-500/10',
-            href: '/purchases?status=RECEIVED_WITH_DIFFERENCE',
+            href: '/losses',
         },
         {
-            title: 'Compras sem NF',
-            value: summary.operational.purchasesWithoutInvoice,
-            description: 'Sem nota ou apenas com cupom',
-            icon: FileWarning,
-            iconClass: 'text-purple-400 bg-purple-500/10',
-            href: '/fiscal-documents',
-        },
-        {
-            title: 'Boletos hoje',
-            value: summary.financial.billsDueToday,
-            description: formatCurrency(
-                summary.financial.billsDueTodayTotal,
-            ),
-            icon: ReceiptText,
-            iconClass: 'text-cyan-400 bg-cyan-500/10',
-            href: '/bills',
-        },
-        {
-            title: 'Boletos vencidos',
-            value: summary.financial.overdueBills,
-            description: formatCurrency(
-                summary.financial.overdueBillsTotal,
-            ),
-            icon: AlertTriangle,
-            iconClass: 'text-red-400 bg-red-500/10',
-            href: '/bills',
-        },
-        {
-            title: 'Alertas críticos',
-            value: summary.alerts.critical,
-            description: 'Precisam de conferência',
-            icon: ShieldAlert,
-            iconClass: 'text-red-400 bg-red-500/10',
-            href: '/alerts',
+            title: 'Minhas tarefas pendentes',
+            value: summary.tasks.pendingToday,
+            description: 'Suas tarefas a fazer ou atrasadas até hoje',
+            icon: ListChecks,
+            iconClass: 'text-violet-400 bg-violet-500/10',
+            href: '/tasks',
         },
         {
             title: 'NF Serviços',
@@ -293,7 +245,7 @@ export default function DashboardPage() {
             description: 'Notas anexadas este mês',
             icon: Briefcase,
             iconClass: 'text-blue-400 bg-blue-500/10',
-            href: '/services?tab=nf',
+            href: '/services?tab=relatorios',
         },
     ];
 
@@ -304,10 +256,6 @@ export default function DashboardPage() {
         ? operationalCards.filter((card) => canAccessHref(user.role, card.href))
         : operationalCards;
 
-    const visiblePendingTasks = user
-        ? summary.pendingTasks.filter((task) => canAccessHref(user.role, task.href))
-        : summary.pendingTasks;
-
     return (
         <AppLayout title="Centro de Operações">
             <div className="space-y-6">
@@ -317,8 +265,7 @@ export default function DashboardPage() {
                     </h2>
 
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                        Acompanhe compras, recebimentos, documentos
-                        fiscais e pagamentos.
+                        Acompanhe perdas, serviços e tarefas.
                     </p>
                 </header>
 
@@ -363,101 +310,83 @@ export default function DashboardPage() {
                     })}
                 </section>
 
-
-                <section>
-                    <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
-                        <div className="mb-5 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-bold">
-                                    Minhas pendências
-                                </h3>
-
-                                <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                    Ações mais antigas que precisam
-                                    avançar
-                                </p>
-                            </div>
-
-                            <Clock3 className="text-yellow-400" />
+                {summary.tasks.team.length > 0 && (
+                    <section className="space-y-3">
+                        <div>
+                            <h3 className="text-lg font-bold">
+                                Quadro de tarefas por pessoa
+                            </h3>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                Quem está com o quê na loja ativa
+                            </p>
                         </div>
 
-                        {visiblePendingTasks.length === 0 ? (
-                            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle2 className="text-emerald-400" />
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {summary.tasks.team.map((person) => (
+                                <div
+                                    key={person.userId}
+                                    className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
+                                >
+                                    <p className="font-semibold">
+                                        Tarefas de {person.userName}
+                                    </p>
 
-                                    <div>
-                                        <strong className="text-emerald-300">
-                                            Nenhuma pendência urgente
-                                        </strong>
-
-                                        <p className="text-sm text-emerald-400/70">
-                                            O fluxo está em dia.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {visiblePendingTasks.map((task) => (
-                                    <button
-                                        type="button"
-                                        key={task.id}
-                                        onClick={() =>
-                                            router.push(task.href)
-                                        }
-                                        className="flex w-full flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900 md:flex-row md:items-center md:justify-between"
-                                    >
-                                        <div className="flex gap-3">
-                                            <div
-                                                className={`mt-0.5 h-fit rounded-xl p-2 ${taskColor[
-                                                    task.type
-                                                    ] ||
-                                                    'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
-                                                    }`}
-                                            >
-                                                <AlertTriangle
-                                                    size={18}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <p className="font-semibold">
-                                                    {task.title}
-                                                </p>
-
-                                                <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                                                    {
-                                                        task.description
-                                                    }
-                                                </p>
-
-                                                <p className="mt-1 text-xs text-zinc-500">
-                                                    {task.storeName}
-                                                    {task.supplierName
-                                                        ? ` • ${task.supplierName}`
-                                                        : ''}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="text-left md:text-right">
-                                            <p className="text-xs text-zinc-500">
-                                                {formatDate(
-                                                    task.createdAt,
-                                                )}
-                                            </p>
-
-                                            <span className="mt-2 inline-flex rounded-full bg-zinc-100 dark:bg-zinc-800 px-3 py-1 text-xs text-zinc-700 dark:text-zinc-300">
-                                                resolver
+                                    <div className="mt-3 space-y-2 text-sm">
+                                        <div className="flex items-center justify-between">
+                                            <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                                                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                                Concluídas (mês)
+                                            </span>
+                                            <span className="font-semibold">
+                                                {person.concluidas}
                                             </span>
                                         </div>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </section>
+
+                                        <div className="flex items-center justify-between">
+                                            <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                                                <span className="h-2 w-2 rounded-full bg-blue-500" />
+                                                Em andamento
+                                            </span>
+                                            <span className="font-semibold">
+                                                {person.emAndamento}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center justify-between">
+                                            <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                                                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                                                Pausada
+                                            </span>
+                                            <span className="font-semibold">
+                                                {person.pausada}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center justify-between">
+                                            <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                                                <span className="h-2 w-2 rounded-full bg-red-500" />
+                                                Em atraso
+                                            </span>
+                                            <span className="font-semibold">
+                                                {person.atraso}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center justify-between">
+                                            <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                                                <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                                                A fazer
+                                            </span>
+                                            <span className="font-semibold">
+                                                {person.aFazer}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
             </div>
         </AppLayout>
     );

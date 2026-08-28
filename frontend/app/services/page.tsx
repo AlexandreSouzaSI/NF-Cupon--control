@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { getUser, type UserRole } from '@/lib/auth';
-import { Briefcase, Receipt } from 'lucide-react';
+import { Briefcase, Plus, Receipt } from 'lucide-react';
 
+import { NewServiceTab } from '../../src/components/services/NewServiceTab';
 import { ServicesTab } from '../../src/components/services/ServicesTab';
 import { ServiceNfTab } from '../../src/components/services/ServiceNfTab';
 
-type TabKey = 'servicos' | 'nf';
+type TabKey = 'novo' | 'servicos' | 'relatorios';
 
 const tabs: {
     key: TabKey;
@@ -17,6 +18,19 @@ const tabs: {
     icon: typeof Briefcase;
     roles: UserRole[];
 }[] = [
+    {
+        key: 'novo',
+        label: 'Novo Serviço',
+        icon: Plus,
+        roles: [
+            'ADMINISTRATIVO',
+            'PROPRIETARIO',
+            'GERENTE',
+            'COMPRADOR',
+            'ESTOQUISTA',
+            'FINANCEIRO',
+        ],
+    },
     {
         key: 'servicos',
         label: 'Serviços',
@@ -31,8 +45,8 @@ const tabs: {
         ],
     },
     {
-        key: 'nf',
-        label: 'NF de Serviços',
+        key: 'relatorios',
+        label: 'Relatorios',
         icon: Receipt,
         roles: [
             'ADMINISTRATIVO',
@@ -106,8 +120,9 @@ export default function ServicesPage() {
                     })}
                 </div>
 
+                {activeTab === 'novo' && <NewServiceTab />}
                 {activeTab === 'servicos' && <ServicesTab />}
-                {activeTab === 'nf' && <ServiceNfTab />}
+                {activeTab === 'relatorios' && <ServiceNfTab />}
             </div>
         </AppLayout>
     );
