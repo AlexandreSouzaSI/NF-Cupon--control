@@ -30,6 +30,28 @@ if (!existsSync(uploadPath)) {
     mkdirSync(uploadPath, { recursive: true });
 }
 
+const orderMirrorUploadPath = join(process.cwd(), 'uploads', 'purchase-mirrors');
+
+if (!existsSync(orderMirrorUploadPath)) {
+    mkdirSync(orderMirrorUploadPath, { recursive: true });
+}
+
+const orderMirrorInterceptor = FileInterceptor('file', {
+    storage: diskStorage({
+        destination: (_req, _file, callback) => {
+            callback(null, orderMirrorUploadPath);
+        },
+        filename: (_req, file, callback) => {
+            const uniqueName = `${Date.now()}-${Math.round(
+                Math.random() * 1e9,
+            )}${extname(file.originalname)}`;
+
+            callback(null, uniqueName);
+        },
+    }),
+    limits: { fileSize: 15 * 1024 * 1024 },
+});
+
 @Controller('purchases')
 @UseGuards(JwtAuthGuard)
 export class PurchasesController {
@@ -253,6 +275,27 @@ export class PurchasesController {
                 ...body,
                 fileUrl,
                 value: body.value ? Number(body.value) : undefined,
+            },
+            user,
+        );
+    }
+
+    @Post(':id/order-mirror')
+    @UseInterceptors(orderMirrorInterceptor)
+    async uploadOrderMirror(
+        @Param('id') id: string,
+        @UploadedFile() file: Express.Multer.File,
+        @CurrentUser() user: any,
+    ) {
+        if (!file) {
+            throw new BadRequestException('Nenhum arquivo recebido.');
+        }
+
+        return this.purchasesService.attachOrderMirror(
+            id,
+            {
+                url: `/uploads/purchase-mirrors/${file.filename}`,
+                name: file.originalname,
             },
             user,
         );

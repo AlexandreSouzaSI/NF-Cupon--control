@@ -7,9 +7,10 @@ import {
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { UserRole } from '@prisma/client';
+import { NotificationType, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import {
@@ -31,9 +32,17 @@ if (!existsSync(incomingNfPath)) {
 // sobrar continua no próximo clique, já que o NSU fica salvo.
 const MAX_SYNC_BATCHES = 25;
 
+// Quem recebe o aviso de novo serviço registrado — Administrativo e
+// Proprietário sempre entram automaticamente (acesso global, ver
+// notifyStoreAccess), então só precisa listar Gerente aqui.
+const SERVICE_NOTIFY_ROLES: UserRole[] = [UserRole.GERENTE];
+
 @Injectable()
 export class ServicesService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private notificationsService: NotificationsService,
+    ) { }
 
     private getAllowedStoreIds(user: any): string[] | undefined {
         if (
@@ -106,7 +115,7 @@ export class ServicesService {
     async create(dto: CreateServiceDto, user: any) {
         this.ensureStoreAccess(dto.storeId, user);
 
-        return this.prisma.service.create({
+        const service = await this.prisma.service.create({
             data: {
                 name: dto.name,
                 providerName: dto.providerName,
@@ -124,6 +133,17 @@ export class ServicesService {
             },
             include: this.defaultInclude(),
         });
+
+        await this.notificationsService.notifyStoreAccess({
+            storeId: service.storeId,
+            allowedRoles: SERVICE_NOTIFY_ROLES,
+            excludeUserId: user.id,
+            title: 'Novo serviço registrado',
+            message: `${service.createdBy.name} registrou o serviço "${service.name}" (${service.providerName}) em ${service.store.name}.`,
+            type: NotificationType.SERVICE_ADDED,
+        });
+
+        return service;
     }
 
     async findAll(

@@ -3,10 +3,29 @@ import {
     BillStatus,
     PurchaseAlertLevel,
     PurchaseStatus,
+    TaskOccurrenceStatus,
     UserRole,
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+
+// Mesmo critério de "quem vê tudo" usado em tasks.service.ts — Proprietário
+// e Administrativo enxergam o quadro da equipe inteira; os demais perfis só
+// veem o próprio card de pendências pessoais.
+const GLOBAL_TASK_VIEW_ROLES: UserRole[] = [
+    UserRole.ADMINISTRATIVO,
+    UserRole.PROPRIETARIO,
+];
+
+type TeamTaskStat = {
+    userId: string;
+    userName: string;
+    aFazer: number;
+    emAndamento: number;
+    pausada: number;
+    atraso: number;
+    concluidas: number;
+};
 
 @Injectable()
 export class DashboardService {
@@ -99,6 +118,9 @@ export class DashboardService {
 
     async summary(user: any, storeId?: string) {
         const storeFilter = this.resolveStoreFilter(user, storeId);
+        const isGlobalTaskViewer = GLOBAL_TASK_VIEW_ROLES.includes(
+            user.role,
+        );
 
         const purchaseWhere = {
             storeId: storeFilter,
@@ -138,6 +160,10 @@ export class DashboardService {
             totalCardPurchases,
 
             serviceNfCountMonth,
+
+            lossesCountMonth,
+            myPendingTasks,
+            teamTaskOccurrences,
 
             criticalAlerts,
             unreadNotifications,
@@ -334,6 +360,77 @@ export class DashboardService {
                 },
             }),
 
+            this.prisma.productLoss.count({
+                where: {
+                    storeId: storeFilter,
+                    occurredAt: {
+                        gte: monthStart,
+                        lte: monthEnd,
+                    },
+                },
+            }),
+
+            // Card pessoal: só as ocorrências atribuídas a quem está
+            // olhando o dashboard, já vencidas ou vencendo hoje, ainda não
+            // concluídas — "tarefas que eu sou obrigado a concluir".
+            this.prisma.taskOccurrence.count({
+                where: {
+                    status: {
+                        not: TaskOccurrenceStatus.DONE,
+                    },
+                    dueDate: {
+                        lte: todayEnd,
+                    },
+                    task: {
+                        storeId: storeFilter,
+                        active: true,
+                        assignedToId: user.id,
+                    },
+                },
+            }),
+
+            // Quadro por pessoa: só carregado pra quem enxerga tudo
+            // (Proprietário/Administrativo) — pega o estado atual de cada
+            // ocorrência em aberto, mais as concluídas dentro do mês
+            // corrente (senão o total só cresceria pra sempre).
+            isGlobalTaskViewer
+                ? this.prisma.taskOccurrence.findMany({
+                    where: {
+                        task: {
+                            storeId: storeFilter,
+                            active: true,
+                            // Proprietário nunca é restringido; Administrativo
+                            // não deve ver no quadro geral nem os agregados
+                            // de uma tarefa que o Proprietário restringiu
+                            // especificamente pra ele.
+                            ...(user.role === UserRole.ADMINISTRATIVO
+                                ? { restrictedFromAdministrativo: false }
+                                : {}),
+                        },
+                        OR: [
+                            { status: { not: TaskOccurrenceStatus.DONE } },
+                            {
+                                status: TaskOccurrenceStatus.DONE,
+                                confirmedAt: {
+                                    gte: monthStart,
+                                    lte: monthEnd,
+                                },
+                            },
+                        ],
+                    },
+                    select: {
+                        status: true,
+                        task: {
+                            select: {
+                                assignedTo: {
+                                    select: { id: true, name: true },
+                                },
+                            },
+                        },
+                    },
+                })
+                : Promise.resolve([]),
+
             this.prisma.purchaseAlert.count({
                 where: {
                     resolved: false,
@@ -491,6 +588,47 @@ export class DashboardService {
             0,
         );
 
+        const teamBoardMap = new Map<string, TeamTaskStat>();
+
+        for (const occurrence of teamTaskOccurrences as Array<{
+            status: TaskOccurrenceStatus;
+            task: { assignedTo: { id: string; name: string } | null };
+        }>) {
+            const assignee = occurrence.task.assignedTo;
+
+            if (!assignee) continue;
+
+            if (!teamBoardMap.has(assignee.id)) {
+                teamBoardMap.set(assignee.id, {
+                    userId: assignee.id,
+                    userName: assignee.name,
+                    aFazer: 0,
+                    emAndamento: 0,
+                    pausada: 0,
+                    atraso: 0,
+                    concluidas: 0,
+                });
+            }
+
+            const stat = teamBoardMap.get(assignee.id)!;
+
+            if (occurrence.status === TaskOccurrenceStatus.PENDING) {
+                stat.aFazer += 1;
+            } else if (occurrence.status === TaskOccurrenceStatus.IN_PROGRESS) {
+                stat.emAndamento += 1;
+            } else if (occurrence.status === TaskOccurrenceStatus.PAUSED) {
+                stat.pausada += 1;
+            } else if (occurrence.status === TaskOccurrenceStatus.LATE) {
+                stat.atraso += 1;
+            } else if (occurrence.status === TaskOccurrenceStatus.DONE) {
+                stat.concluidas += 1;
+            }
+        }
+
+        const taskTeamBoard = Array.from(teamBoardMap.values()).sort(
+            (a, b) => a.userName.localeCompare(b.userName),
+        );
+
         const pendingTasks = [
             ...pendingApprovalPurchases.map((purchase) => ({
                 id: `approval-${purchase.id}`,
@@ -591,6 +729,15 @@ export class DashboardService {
 
             services: {
                 nfCountMonth: serviceNfCountMonth,
+            },
+
+            losses: {
+                countMonth: lossesCountMonth,
+            },
+
+            tasks: {
+                pendingToday: myPendingTasks,
+                team: taskTeamBoard,
             },
 
             pendingTasks,

@@ -20,7 +20,11 @@ import { extname, join } from 'path';
 import type { Response } from 'express';
 import archiver from 'archiver';
 
+import { UserRole } from '@prisma/client';
+
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
 import { ServicesService } from './services.service';
@@ -33,8 +37,18 @@ if (!existsSync(uploadPath)) {
     mkdirSync(uploadPath, { recursive: true });
 }
 
+// Funcionário não participa do módulo de Serviços no projeto reduzido —
+// o único perfil de fora deixado fora daqui.
 @Controller('services')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(
+    UserRole.ADMINISTRATIVO,
+    UserRole.PROPRIETARIO,
+    UserRole.GERENTE,
+    UserRole.COMPRADOR,
+    UserRole.ESTOQUISTA,
+    UserRole.FINANCEIRO,
+)
 export class ServicesController {
     constructor(private servicesService: ServicesService) { }
 

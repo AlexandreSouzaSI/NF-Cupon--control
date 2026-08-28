@@ -4,9 +4,10 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { NotificationType, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateLossDto } from './dto/create-loss.dto';
 
 // Além de quem registrou, só gestão pode apagar um registro (ex: foto
@@ -17,9 +18,17 @@ const MANAGE_ROLES: UserRole[] = [
     UserRole.GERENTE,
 ];
 
+// Quem recebe o aviso de nova perda registrada — Administrativo e
+// Proprietário sempre entram automaticamente (acesso global, ver
+// notifyStoreAccess), então só precisa listar Gerente aqui.
+const LOSS_NOTIFY_ROLES: UserRole[] = [UserRole.GERENTE];
+
 @Injectable()
 export class LossesService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private notificationsService: NotificationsService,
+    ) { }
 
     private getAllowedStoreIds(user: any): string[] | undefined {
         if (
@@ -62,7 +71,7 @@ export class LossesService {
             );
         }
 
-        return this.prisma.productLoss.create({
+        const loss = await this.prisma.productLoss.create({
             data: {
                 storeId: dto.storeId,
                 description: dto.description,
@@ -75,6 +84,17 @@ export class LossesService {
             },
             include: this.defaultInclude(),
         });
+
+        await this.notificationsService.notifyStoreAccess({
+            storeId: loss.storeId,
+            allowedRoles: LOSS_NOTIFY_ROLES,
+            excludeUserId: user.id,
+            title: 'Nova perda registrada',
+            message: `${loss.reportedBy.name} registrou perda de "${loss.description}" (${Number(loss.quantity)}${loss.unit ? ` ${loss.unit}` : ''}) em ${loss.store.name}.`,
+            type: NotificationType.LOSS_ADDED,
+        });
+
+        return loss;
     }
 
     async findAll(

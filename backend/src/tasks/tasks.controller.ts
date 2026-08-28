@@ -7,9 +7,15 @@ import {
     Post,
     Put,
     Query,
+    UploadedFile,
     UseGuards,
+    UseInterceptors,
 } from '@nestjs/common';
 import { TaskOccurrenceStatus, UserRole } from '@prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { existsSync, mkdirSync } from 'fs';
+import { extname, join } from 'path';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -19,6 +25,29 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { ConfirmOccurrenceDto } from './dto/confirm-occurrence.dto';
+
+const uploadPath = join(process.cwd(), 'uploads', 'tasks');
+
+if (!existsSync(uploadPath)) {
+    mkdirSync(uploadPath, { recursive: true });
+}
+
+const attachmentInterceptor = FileInterceptor('attachment', {
+    storage: diskStorage({
+        destination: (_req, _file, callback) => {
+            callback(null, uploadPath);
+        },
+        filename: (_req, file, callback) => {
+            const uniqueName = `${Date.now()}-${Math.round(
+                Math.random() * 1e9,
+            )}${extname(file.originalname)}`;
+
+            callback(null, uniqueName);
+        },
+    }),
+    limits: { fileSize: 15 * 1024 * 1024 },
+});
 
 // Página aberta a todos os perfis, mas o service filtra o que cada um
 // enxerga: Administrativo/Proprietário veem tudo da loja, os demais só o
@@ -32,8 +61,17 @@ export class TasksController {
 
     @Post()
     @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
-    async create(@Body() body: CreateTaskDto, @CurrentUser() user: any) {
-        return this.tasksService.create(body, user);
+    @UseInterceptors(attachmentInterceptor)
+    async create(
+        @Body() body: CreateTaskDto,
+        @UploadedFile() file: Express.Multer.File,
+        @CurrentUser() user: any,
+    ) {
+        const attachment = file
+            ? { url: `/uploads/tasks/${file.filename}`, name: file.originalname }
+            : undefined;
+
+        return this.tasksService.create(body, user, attachment);
     }
 
     @Get()
@@ -73,11 +111,42 @@ export class TasksController {
     }
 
     @Post('occurrences/:id/confirm')
+    @UseInterceptors(attachmentInterceptor)
     async confirmOccurrence(
+        @Param('id') id: string,
+        @Body() body: ConfirmOccurrenceDto,
+        @UploadedFile() file: Express.Multer.File,
+        @CurrentUser() user: any,
+    ) {
+        const attachment = file
+            ? { url: `/uploads/tasks/${file.filename}`, name: file.originalname }
+            : undefined;
+
+        return this.tasksService.confirmOccurrence(id, body, attachment, user);
+    }
+
+    @Post('occurrences/:id/start')
+    async startOccurrence(
         @Param('id') id: string,
         @CurrentUser() user: any,
     ) {
-        return this.tasksService.confirmOccurrence(id, user);
+        return this.tasksService.startOccurrence(id, user);
+    }
+
+    @Post('occurrences/:id/pause')
+    async pauseOccurrence(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.tasksService.pauseOccurrence(id, user);
+    }
+
+    @Post('occurrences/:id/resume')
+    async resumeOccurrence(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.tasksService.resumeOccurrence(id, user);
     }
 
     @Post('occurrences/:id/undo')

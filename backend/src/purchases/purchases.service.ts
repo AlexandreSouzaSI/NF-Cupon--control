@@ -405,6 +405,35 @@ export class PurchasesService {
         });
     }
 
+    // Espelho do pedido: foto/PDF do que foi combinado com o fornecedor,
+    // anexado no cadastro ou depois — só documentação de apoio, não muda
+    // status nem participa da conferência de itens no recebimento.
+    async attachOrderMirror(
+        purchaseId: string,
+        attachment: { url: string; name: string },
+        user: any,
+    ) {
+        await this.ensurePurchaseAccess(purchaseId, user);
+
+        const purchase = await this.prisma.purchase.update({
+            where: { id: purchaseId },
+            data: {
+                orderMirrorUrl: attachment.url,
+                orderMirrorName: attachment.name,
+            },
+            include: this.defaultInclude(),
+        });
+
+        await this.createHistory(
+            purchaseId,
+            user.id,
+            PurchaseHistoryAction.UPDATED,
+            'Espelho do pedido anexado.',
+        );
+
+        return purchase;
+    }
+
     async addFiscalDocument(
         purchaseId: string,
         dto: CreateFiscalDocumentDto,

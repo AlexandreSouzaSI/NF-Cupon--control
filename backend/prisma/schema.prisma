@@ -13,6 +13,11 @@ enum UserRole {
   GERENTE
   PROPRIETARIO
   FINANCEIRO
+  // Perfil operacional do projeto reduzido: só vê/responde as próprias
+  // tarefas e só acessa Perdas (sem Serviços). Adicionado à parte dos
+  // perfis antigos (Comprador/Estoquista/Financeiro), que continuam
+  // intactos pra quando o módulo de Compras voltar a ficar visível.
+  FUNCIONARIO
 }
 
 enum PurchaseStatus {
@@ -150,6 +155,8 @@ enum NotificationType {
   TASK_ASSIGNED
   TASK_OVERDUE
   TASK_CONFIRMED
+  LOSS_ADDED
+  SERVICE_ADDED
 }
 
 // Frequência de uma tarefa: diária/semanal/mensal geram uma nova ocorrência
@@ -163,6 +170,8 @@ enum TaskRecurrence {
 
 enum TaskOccurrenceStatus {
   PENDING
+  IN_PROGRESS
+  PAUSED
   DONE
   LATE
 }
@@ -373,6 +382,13 @@ model Purchase {
   purchasedAt DateTime?
   dueDate     DateTime?
   notes       String?
+
+  // Foto/PDF do pedido feito ao fornecedor (print de WhatsApp, orçamento,
+  // confirmação do site etc.) — anexado no cadastro, antes do recebimento.
+  // Serve de referência pra conferir o que chegou, principalmente nas
+  // compras cadastradas no modo simplificado (sem item a item).
+  orderMirrorUrl  String?
+  orderMirrorName String?
 
   storeId     String
   supplierId  String?
@@ -900,6 +916,21 @@ model Task {
   createdById  String
   active       Boolean @default(true)
 
+  // Restrição de visibilidade por hierarquia — por padrão uma tarefa é
+  // visível pra todo mundo com acesso amplo (Administrativo/Gerente).
+  // Proprietário pode restringir a visibilidade dela pro Administrativo
+  // e/ou pro Gerente; Administrativo só pode restringir do Gerente pra
+  // baixo. Quem é responsável ou criou a tarefa sempre enxerga, mesmo
+  // restrita. Gerente/Administrativo não conseguem restringir nada.
+  restrictedFromAdministrativo Boolean @default(false)
+  restrictedFromGerente        Boolean @default(false)
+
+  // Anexo opcional deixado por quem criou a tarefa (ex: um formulário em
+  // branco pra preencher). Diferente do anexo da TaskOccurrence, que é o
+  // que quem confirma anexa de volta.
+  attachmentUrl  String?
+  attachmentName String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -923,6 +954,13 @@ model TaskOccurrence {
   status        TaskOccurrenceStatus @default(PENDING)
   confirmedAt   DateTime?
   confirmedById String?
+
+  // Observação e anexo deixados por quem confirmou — opcionais, só quando
+  // fizer sentido pra aquela ocorrência específica (ex: "faltou material",
+  // com foto do problema).
+  notes          String?
+  attachmentUrl  String?
+  attachmentName String?
 
   // Evita duplicar alerta de atraso — fica true assim que a notificação de
   // atraso é disparada pra essa ocorrência.

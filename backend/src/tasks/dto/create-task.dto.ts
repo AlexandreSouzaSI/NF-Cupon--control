@@ -1,4 +1,5 @@
 import {
+    IsBoolean,
     IsEnum,
     IsInt,
     IsOptional,
@@ -6,8 +7,14 @@ import {
     Max,
     Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { TaskRecurrence } from '@prisma/client';
+
+// FormData (multipart, usado na criação) manda tudo como string — sem
+// isso, "false" viraria truthy pro class-transformer.
+function toBoolean({ value }: { value: unknown }) {
+    return value === true || value === 'true';
+}
 
 export class CreateTaskDto {
     @IsString()
@@ -46,4 +53,18 @@ export class CreateTaskDto {
     @IsOptional()
     @IsString()
     dueDate?: string;
+
+    // Só tem efeito se quem estiver criando/editando for Proprietário —
+    // o service ignora silenciosamente se vier de outro perfil.
+    @IsOptional()
+    @Transform(toBoolean)
+    @IsBoolean()
+    restrictedFromAdministrativo?: boolean;
+
+    // Só tem efeito se quem estiver criando/editando for Proprietário ou
+    // Administrativo.
+    @IsOptional()
+    @Transform(toBoolean)
+    @IsBoolean()
+    restrictedFromGerente?: boolean;
 }

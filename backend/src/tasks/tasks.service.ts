@@ -18,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { ConfirmOccurrenceDto } from './dto/confirm-occurrence.dto';
 
 // Quem pode criar/editar/remover tarefas e desfazer confirmações — a
 // própria tela é aberta pra todo mundo ver, mas só gestão pode atribuir.
@@ -27,14 +28,19 @@ const MANAGE_ROLES: UserRole[] = [
     UserRole.GERENTE,
 ];
 
-// Só esses dois perfis enxergam todas as tarefas da loja. Todo o resto
-// (inclusive Gerente) só vê a tarefa se foi ele quem criou ou se foi
-// atribuída a ele — sem tarefa nenhuma vinculada, não vê tarefa de
-// ninguém.
-const GLOBAL_VIEW_ROLES: UserRole[] = [
-    UserRole.ADMINISTRATIVO,
-    UserRole.PROPRIETARIO,
-];
+// Visibilidade em camadas (hierarquia):
+// - Proprietário: vê e mexe em tudo, sempre — nunca é restringido.
+// - Administrativo: vê tudo, exceto tarefas que o Proprietário marcou
+//   como restritas pra ele (restrictedFromAdministrativo).
+// - Gerente: vê tudo, exceto tarefas que o Proprietário ou o
+//   Administrativo marcaram como restritas pra ele (restrictedFromGerente).
+// - Qualquer outro perfil (Funcionário, Comprador, Estoquista,
+//   Financeiro): só vê a tarefa se foi ele quem criou ou se foi
+//   atribuída a ele — sem nenhum vínculo, não vê a tarefa de ninguém,
+//   independente das flags de restrição acima (elas não se aplicam a
+//   esse nível).
+// Em todos os casos, ser o criador ou o responsável sempre garante
+// acesso, mesmo que a tarefa esteja restrita.
 
 // Precisa do nome do responsável pra montar a mensagem de notificação de
 // quem criou a tarefa ("atribuída a Fulano").
@@ -87,17 +93,132 @@ export class TasksService implements OnModuleInit {
         }
     }
 
-    // Fora de Administrativo/Proprietário (que veem tudo), só quem criou
-    // a tarefa ou é o responsável por fazê-la pode vê-la/gerenciá-la.
-    private ensureTaskVisible(
-        task: { createdById: string; assignedToId: string },
+    // Regra única de visibilidade/ação, usada tanto pra decidir o que
+    // aparece nas listas quanto pra autorizar uma ação numa tarefa
+    // específica.
+    private canViewTask(
+        task: {
+            createdById: string;
+            assignedToId: string;
+            restrictedFromAdministrativo: boolean;
+            restrictedFromGerente: boolean;
+        },
         user: any,
-    ) {
-        if (GLOBAL_VIEW_ROLES.includes(user.role)) return;
+    ): boolean {
+        if (user.role === UserRole.PROPRIETARIO) return true;
 
         if (task.createdById === user.id || task.assignedToId === user.id) {
-            return;
+            return true;
         }
+
+        if (user.role === UserRole.ADMINISTRATIVO) {
+            return !task.restrictedFromAdministrativo;
+        }
+
+        if (user.role === UserRole.GERENTE) {
+            return !task.restrictedFromGerente;
+        }
+
+        return false;
+    }
+
+    // Fragmento de "where" do Prisma equivalente a canViewTask, pra usar
+    // nas listagens (findAll/findOccurrences) sem precisar carregar tudo
+    // e filtrar em memória.
+    private taskVisibilityWhere(user: any) {
+        if (user.role === UserRole.PROPRIETARIO) return {};
+
+        if (user.role === UserRole.ADMINISTRATIVO) {
+            return {
+                OR: [
+                    { restrictedFromAdministrativo: false },
+                    { createdById: user.id },
+                    { assignedToId: user.id },
+                ],
+            };
+        }
+
+        if (user.role === UserRole.GERENTE) {
+            return {
+                OR: [
+                    { restrictedFromGerente: false },
+                    { createdById: user.id },
+                    { assignedToId: user.id },
+                ],
+            };
+        }
+
+        return {
+            OR: [{ createdById: user.id }, { assignedToId: user.id }],
+        };
+    }
+
+    // Quem pode marcar restrictedFromAdministrativo/restrictedFromGerente
+    // ao criar/editar uma tarefa — ignora silenciosamente o valor mandado
+    // por quem não tem autoridade sobre aquele campo (em vez de dar erro),
+    // pra não travar o formulário por causa de um campo que a pessoa nem
+    // deveria ver.
+    private resolveRestrictionFlags(
+        user: any,
+        dto: {
+            restrictedFromAdministrativo?: boolean;
+            restrictedFromGerente?: boolean;
+        },
+    ) {
+        const restrictedFromAdministrativo =
+            user.role === UserRole.PROPRIETARIO
+                ? !!dto.restrictedFromAdministrativo
+                : false;
+
+        const restrictedFromGerente =
+            user.role === UserRole.PROPRIETARIO ||
+                user.role === UserRole.ADMINISTRATIVO
+                ? !!dto.restrictedFromGerente
+                : false;
+
+        return { restrictedFromAdministrativo, restrictedFromGerente };
+    }
+
+    // Mesma coisa, mas pra edição: só sobrescreve o campo se (a) quem tá
+    // editando tem autoridade sobre ele, e (b) o valor veio de fato no
+    // DTO — senão devolve undefined, e o Prisma simplesmente não toca
+    // naquela coluna, preservando o que já estava salvo.
+    private resolveRestrictionFlagsForUpdate(
+        user: any,
+        dto: {
+            restrictedFromAdministrativo?: boolean;
+            restrictedFromGerente?: boolean;
+        },
+    ) {
+        const restrictedFromAdministrativo =
+            user.role === UserRole.PROPRIETARIO &&
+                dto.restrictedFromAdministrativo !== undefined
+                ? dto.restrictedFromAdministrativo
+                : undefined;
+
+        const restrictedFromGerente =
+            (user.role === UserRole.PROPRIETARIO ||
+                user.role === UserRole.ADMINISTRATIVO) &&
+                dto.restrictedFromGerente !== undefined
+                ? dto.restrictedFromGerente
+                : undefined;
+
+        return { restrictedFromAdministrativo, restrictedFromGerente };
+    }
+
+    // Fora de Administrativo/Proprietário/Gerente (que veem tudo, exceto
+    // o que foi restrito pra eles), só quem criou a tarefa ou é o
+    // responsável por fazê-la pode vê-la/gerenciá-la.
+    private ensureTaskVisible(
+        task: {
+            createdById: string;
+            assignedToId: string;
+            restrictedFromAdministrativo: boolean;
+            restrictedFromGerente: boolean;
+        },
+        user: any,
+    ) {
+        if (this.canViewTask(task, user)) return;
 
         throw new ForbiddenException('Você não tem acesso a essa tarefa.');
     }
@@ -166,7 +287,11 @@ export class TasksService implements OnModuleInit {
         }
     }
 
-    async create(dto: CreateTaskDto, user: any) {
+    async create(
+        dto: CreateTaskDto,
+        user: any,
+        attachment?: { url: string; name: string },
+    ) {
         this.ensureCanManage(user);
         this.ensureStoreAccess(dto.storeId, user);
         this.validateRecurrenceFields(dto);
@@ -178,6 +303,9 @@ export class TasksService implements OnModuleInit {
         if (!assignee || !assignee.active) {
             throw new BadRequestException('Responsável inválido.');
         }
+
+        const { restrictedFromAdministrativo, restrictedFromGerente } =
+            this.resolveRestrictionFlags(user, dto);
 
         const task = await this.prisma.task.create({
             data: {
@@ -194,6 +322,10 @@ export class TasksService implements OnModuleInit {
                     dto.recurrence === TaskRecurrence.ONCE && dto.dueDate
                         ? this.toDateNoonUtc(dto.dueDate)
                         : null,
+                restrictedFromAdministrativo,
+                restrictedFromGerente,
+                attachmentUrl: attachment?.url ?? null,
+                attachmentName: attachment?.name ?? null,
             },
             include: this.defaultInclude(),
         });
@@ -224,9 +356,7 @@ export class TasksService implements OnModuleInit {
                     (allowedStoreIds ? { in: allowedStoreIds } : undefined),
                 assignedToId: filters?.assignedToId,
                 active: filters?.active,
-                ...(GLOBAL_VIEW_ROLES.includes(user.role)
-                    ? {}
-                    : { OR: [{ createdById: user.id }, { assignedToId: user.id }] }),
+                ...this.taskVisibilityWhere(user),
             },
             orderBy: { createdAt: 'desc' },
             include: this.defaultInclude(),
@@ -276,6 +406,9 @@ export class TasksService implements OnModuleInit {
             });
         }
 
+        const { restrictedFromAdministrativo, restrictedFromGerente } =
+            this.resolveRestrictionFlagsForUpdate(user, dto);
+
         return this.prisma.task.update({
             where: { id },
             data: {
@@ -300,6 +433,8 @@ export class TasksService implements OnModuleInit {
                     recurrence === TaskRecurrence.ONCE && dto.dueDate
                         ? this.toDateNoonUtc(dto.dueDate)
                         : undefined,
+                restrictedFromAdministrativo,
+                restrictedFromGerente,
                 active: dto.active,
             },
             include: this.defaultInclude(),
@@ -562,14 +697,7 @@ export class TasksService implements OnModuleInit {
                 task: {
                     storeId: filters.storeId,
                     assignedToId: filters.assignedToId,
-                    ...(GLOBAL_VIEW_ROLES.includes(user.role)
-                        ? {}
-                        : {
-                            OR: [
-                                { createdById: user.id },
-                                { assignedToId: user.id },
-                            ],
-                        }),
+                    ...this.taskVisibilityWhere(user),
                 },
             },
             orderBy: { dueDate: 'desc' },
@@ -581,6 +709,10 @@ export class TasksService implements OnModuleInit {
                         description: true,
                         recurrence: true,
                         storeId: true,
+                        attachmentUrl: true,
+                        attachmentName: true,
+                        restrictedFromAdministrativo: true,
+                        restrictedFromGerente: true,
                         assignedTo: { select: { id: true, name: true } },
                     },
                 },
@@ -590,18 +722,95 @@ export class TasksService implements OnModuleInit {
     }
 
     private canConfirm(
-        occurrenceTask: { assignedToId: string; createdById: string },
+        occurrenceTask: {
+            assignedToId: string;
+            createdById: string;
+            restrictedFromAdministrativo: boolean;
+            restrictedFromGerente: boolean;
+        },
         user: any,
     ) {
-        if (GLOBAL_VIEW_ROLES.includes(user.role)) return true;
-
-        return (
-            occurrenceTask.assignedToId === user.id ||
-            occurrenceTask.createdById === user.id
-        );
+        return this.canViewTask(occurrenceTask, user);
     }
 
-    async confirmOccurrence(id: string, user: any) {
+    // Movimentações manuais do quadro estilo Trello (A fazer → Em
+    // andamento → Pausada/Concluída). Mesma regra de quem pode agir que a
+    // confirmação: responsável, quem criou, ou Administrativo/Proprietário.
+    private async loadOccurrenceForAction(id: string, user: any) {
+        const occurrence = await this.prisma.taskOccurrence.findUnique({
+            where: { id },
+            include: { task: true },
+        });
+
+        if (!occurrence) {
+            throw new NotFoundException('Tarefa não encontrada.');
+        }
+
+        this.ensureStoreAccess(occurrence.task.storeId, user);
+
+        if (!this.canConfirm(occurrence.task, user)) {
+            throw new ForbiddenException(
+                'Só o responsável, quem criou a tarefa ou Administrativo/Proprietário podem mover essa tarefa.',
+            );
+        }
+
+        return occurrence;
+    }
+
+    async startOccurrence(id: string, user: any) {
+        const occurrence = await this.loadOccurrenceForAction(id, user);
+
+        if (
+            occurrence.status !== TaskOccurrenceStatus.PENDING &&
+            occurrence.status !== TaskOccurrenceStatus.LATE
+        ) {
+            throw new BadRequestException(
+                'Só dá pra iniciar uma tarefa que está em "A fazer".',
+            );
+        }
+
+        return this.prisma.taskOccurrence.update({
+            where: { id },
+            data: { status: TaskOccurrenceStatus.IN_PROGRESS },
+        });
+    }
+
+    async pauseOccurrence(id: string, user: any) {
+        const occurrence = await this.loadOccurrenceForAction(id, user);
+
+        if (occurrence.status !== TaskOccurrenceStatus.IN_PROGRESS) {
+            throw new BadRequestException(
+                'Só dá pra pausar uma tarefa que está "Em andamento".',
+            );
+        }
+
+        return this.prisma.taskOccurrence.update({
+            where: { id },
+            data: { status: TaskOccurrenceStatus.PAUSED },
+        });
+    }
+
+    async resumeOccurrence(id: string, user: any) {
+        const occurrence = await this.loadOccurrenceForAction(id, user);
+
+        if (occurrence.status !== TaskOccurrenceStatus.PAUSED) {
+            throw new BadRequestException(
+                'Só dá pra retomar uma tarefa que está "Pausada".',
+            );
+        }
+
+        return this.prisma.taskOccurrence.update({
+            where: { id },
+            data: { status: TaskOccurrenceStatus.IN_PROGRESS },
+        });
+    }
+
+    async confirmOccurrence(
+        id: string,
+        dto: ConfirmOccurrenceDto,
+        attachment: { url: string; name: string } | undefined,
+        user: any,
+    ) {
         const occurrence = await this.prisma.taskOccurrence.findUnique({
             where: { id },
             include: { task: true },
@@ -625,6 +834,9 @@ export class TasksService implements OnModuleInit {
                 status: TaskOccurrenceStatus.DONE,
                 confirmedAt: new Date(),
                 confirmedById: user.id,
+                notes: dto.notes || null,
+                attachmentUrl: attachment?.url ?? null,
+                attachmentName: attachment?.name ?? null,
             },
         });
 

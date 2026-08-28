@@ -55,7 +55,9 @@ const photoInterceptor = FileInterceptor('photo', {
 });
 
 // Quem lida com o estoque/compras da loja no dia a dia — Financeiro não
-// participa desse fluxo operacional.
+// participa desse fluxo operacional. Funcionário também entra aqui: no
+// projeto reduzido, Perdas é o único módulo operacional que esse perfil
+// acessa.
 @Controller('losses')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(
@@ -64,6 +66,7 @@ const photoInterceptor = FileInterceptor('photo', {
     UserRole.GERENTE,
     UserRole.COMPRADOR,
     UserRole.ESTOQUISTA,
+    UserRole.FUNCIONARIO,
 )
 export class LossesController {
     constructor(private lossesService: LossesService) { }
