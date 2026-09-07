@@ -18,7 +18,17 @@ import {
     type LossNfeStoreData,
 } from './loss-nfe-builder';
 import { CreateLossDto } from './dto/create-loss.dto';
+import { CreateLossBatchDto } from './dto/create-loss-batch.dto';
 import { CreateLossNfeDto } from './dto/create-loss-nfe.dto';
+
+type LossBatchItemInput = {
+    description: string;
+    quantity: number;
+    unit?: string;
+    reason?: string;
+    unitValue?: number;
+    ncm?: string;
+};
 
 // XML assinado das NF-e de baixa por perda — mesmo padrão de pasta das
 // outras NF-e já guardadas em disco (purchases-nfe, services-nfe etc.).
@@ -115,6 +125,121 @@ export class LossesService {
         });
 
         return loss;
+    }
+
+    // Mesma coisa que create(), mas pra várias perdas de uma vez
+    // compartilhando UMA foto — cada item vira um ProductLoss próprio
+    // (mesma tabela, mesmo formato de sempre), só que todos com o mesmo
+    // photoUrl/occurredAt/reportedById. "items" chega como string JSON
+    // (multipart não manda array de objeto direto), então parseia e
+    // valida cada item manualmente aqui.
+    async createBatch(
+        dto: CreateLossBatchDto,
+        photoUrl: string | undefined,
+        user: any,
+    ) {
+        this.ensureStoreAccess(dto.storeId, user);
+
+        if (!photoUrl) {
+            throw new BadRequestException(
+                'A foto do que foi perdido é obrigatória.',
+            );
+        }
+
+        let rawItems: any[];
+
+        try {
+            rawItems = JSON.parse(dto.items);
+        } catch {
+            throw new BadRequestException('Lista de itens inválida.');
+        }
+
+        if (!Array.isArray(rawItems) || rawItems.length === 0) {
+            throw new BadRequestException('Adicione pelo menos um item.');
+        }
+
+        const items: LossBatchItemInput[] = rawItems.map((item, index) => {
+            const description = String(item?.description ?? '').trim();
+
+            if (!description) {
+                throw new BadRequestException(
+                    `Item ${index + 1}: informe a descrição do produto.`,
+                );
+            }
+
+            const quantity = Number(item?.quantity);
+
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+                throw new BadRequestException(
+                    `Item "${description}": informe uma quantidade válida.`,
+                );
+            }
+
+            let unitValue: number | undefined;
+
+            if (item?.unitValue !== undefined && item?.unitValue !== null && item?.unitValue !== '') {
+                unitValue = Number(item.unitValue);
+
+                if (!Number.isFinite(unitValue) || unitValue < 0) {
+                    throw new BadRequestException(
+                        `Item "${description}": valor unitário inválido.`,
+                    );
+                }
+            }
+
+            return {
+                description,
+                quantity,
+                unit: item?.unit ? String(item.unit).trim() || undefined : undefined,
+                reason: item?.reason ? String(item.reason).trim() || undefined : undefined,
+                unitValue,
+                ncm: item?.ncm ? String(item.ncm).trim() || undefined : undefined,
+            };
+        });
+
+        const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
+
+        const losses = await this.prisma.$transaction(
+            items.map((item) =>
+                this.prisma.productLoss.create({
+                    data: {
+                        storeId: dto.storeId,
+                        description: item.description,
+                        quantity: item.quantity,
+                        unit: item.unit,
+                        reason: item.reason,
+                        unitValue: item.unitValue,
+                        ncm: item.ncm,
+                        photoUrl,
+                        occurredAt,
+                        reportedById: user.id,
+                    },
+                    include: this.defaultInclude(),
+                }),
+            ),
+        );
+
+        const descriptions = losses.map((loss) => loss.description);
+        const preview = descriptions.slice(0, 3).join(', ');
+        const extra =
+            descriptions.length > 3 ? ` e mais ${descriptions.length - 3}` : '';
+
+        await this.notificationsService.notifyStoreAccess({
+            storeId: dto.storeId,
+            allowedRoles: LOSS_NOTIFY_ROLES,
+            excludeUserId: user.id,
+            title:
+                losses.length > 1
+                    ? `${losses.length} perdas registradas`
+                    : 'Nova perda registrada',
+            message:
+                losses.length > 1
+                    ? `${user.name} registrou ${losses.length} itens perdidos (${preview}${extra}) em ${losses[0].store.name}.`
+                    : `${user.name} registrou perda de "${descriptions[0]}" (${Number(losses[0].quantity)}${losses[0].unit ? ` ${losses[0].unit}` : ''}) em ${losses[0].store.name}.`,
+            type: NotificationType.LOSS_ADDED,
+        });
+
+        return losses;
     }
 
     async findAll(

@@ -12,6 +12,7 @@ import {
     ImageOff,
     Loader2,
     PackageX,
+    Plus,
     Printer,
     Trash2,
 } from 'lucide-react';
@@ -116,6 +117,18 @@ function formatQuantity(value: number | string, unit: string | null) {
 
 type TabKey = 'registrar' | 'relatorio' | 'nfe';
 
+type LossItemForm = {
+    description: string;
+    quantity: string;
+    unit: string;
+    unitValue: string;
+    ncm: string;
+};
+
+function emptyLossItem(): LossItemForm {
+    return { description: '', quantity: '', unit: '', unitValue: '', ncm: '' };
+}
+
 export default function LossesPage() {
     const [tab, setTab] = useState<TabKey>('registrar');
 
@@ -181,15 +194,25 @@ function RegistrarTab() {
     const [saving, setSaving] = useState(false);
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-    const [form, setForm] = useState({
-        description: '',
-        quantity: '',
-        unit: '',
-        reason: '',
-        unitValue: '',
-        ncm: '',
-    });
+    const [reason, setReason] = useState('');
+    const [items, setItems] = useState<LossItemForm[]>([emptyLossItem()]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    function updateItem(index: number, field: keyof LossItemForm, value: string) {
+        setItems((prev) =>
+            prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+        );
+    }
+
+    function addItem() {
+        setItems((prev) => [...prev, emptyLossItem()]);
+    }
+
+    function removeItem(index: number) {
+        setItems((prev) =>
+            prev.length === 1 ? prev : prev.filter((_, i) => i !== index),
+        );
+    }
 
     async function load() {
         const store = getActiveStore();
@@ -233,14 +256,8 @@ function RegistrarTab() {
     }
 
     function resetForm() {
-        setForm({
-            description: '',
-            quantity: '',
-            unit: '',
-            reason: '',
-            unitValue: '',
-            ncm: '',
-        });
+        setItems([emptyLossItem()]);
+        setReason('');
         setPhotoFile(null);
         if (photoPreview) URL.revokeObjectURL(photoPreview);
         setPhotoPreview(null);
@@ -262,34 +279,51 @@ function RegistrarTab() {
             return;
         }
 
-        if (!form.description.trim()) {
-            toast.error('Descreva o produto perdido.');
+        const filledItems = items.filter((item) => item.description.trim());
+
+        if (filledItems.length === 0) {
+            toast.error('Adicione pelo menos um item (descrição do produto).');
             return;
         }
 
-        if (!form.quantity || Number(form.quantity) <= 0) {
-            toast.error('Informe a quantidade perdida.');
-            return;
+        for (const item of filledItems) {
+            if (!item.quantity || Number(item.quantity) <= 0) {
+                toast.error(`Informe a quantidade de "${item.description}".`);
+                return;
+            }
         }
 
         const formData = new FormData();
         formData.append('storeId', store.id);
-        formData.append('description', form.description);
-        formData.append('quantity', form.quantity);
-        if (form.unit.trim()) formData.append('unit', form.unit.trim());
-        if (form.reason.trim()) formData.append('reason', form.reason.trim());
-        if (form.unitValue.trim()) formData.append('unitValue', form.unitValue.trim());
-        if (form.ncm.trim()) formData.append('ncm', form.ncm.trim());
+        formData.append(
+            'items',
+            JSON.stringify(
+                filledItems.map((item) => ({
+                    description: item.description.trim(),
+                    quantity: Number(item.quantity),
+                    unit: item.unit.trim() || undefined,
+                    reason: reason.trim() || undefined,
+                    unitValue: item.unitValue.trim()
+                        ? Number(item.unitValue)
+                        : undefined,
+                    ncm: item.ncm.trim() || undefined,
+                })),
+            ),
+        );
         formData.append('photo', photoFile);
 
         try {
             setSaving(true);
 
-            await api.post('/losses', formData, {
+            await api.post('/losses/batch', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            toast.success('Perda registrada.');
+            toast.success(
+                filledItems.length > 1
+                    ? `${filledItems.length} perdas registradas.`
+                    : 'Perda registrada.',
+            );
             resetForm();
             await load();
         } catch (error: any) {
@@ -380,94 +414,114 @@ function RegistrarTab() {
 
                 <div>
                     <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                        Produto perdido
-                    </label>
-                    <input
-                        value={form.description}
-                        onChange={(e) =>
-                            setForm({ ...form, description: e.target.value })
-                        }
-                        placeholder="Ex: Garrafa de vodka quebrada"
-                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
-                    />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            Quantidade
-                        </label>
-                        <input
-                            type="number"
-                            step="0.001"
-                            min="0"
-                            value={form.quantity}
-                            onChange={(e) =>
-                                setForm({ ...form, quantity: e.target.value })
-                            }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            Unidade (opcional)
-                        </label>
-                        <input
-                            value={form.unit}
-                            onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                            placeholder="un, kg, L..."
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
-                        />
-                    </div>
-                </div>
-
-                <div>
-                    <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                         Motivo (opcional)
                     </label>
                     <input
-                        value={form.reason}
-                        onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                        placeholder="Quebra, vencimento, extravio..."
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Quebra, vencimento, extravio... (vale pra todos os itens dessa foto)"
                         className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
                     />
                 </div>
 
-                <div>
-                    <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                        Valor unitário (opcional)
-                    </label>
-                    <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={form.unitValue}
-                        onChange={(e) => setForm({ ...form, unitValue: e.target.value })}
-                        placeholder="Só preencha se for entrar numa NF de perda"
-                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
-                    />
-                    <p className="mt-1 text-xs text-zinc-500">
-                        Preenchendo isso, essa perda fica disponível na aba
-                        &quot;NF de Perda&quot; pra entrar numa nota fiscal de
-                        baixa de estoque.
-                    </p>
-                </div>
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <label className="block text-sm text-zinc-700 dark:text-zinc-300">
+                            Itens perdidos
+                        </label>
+                        <span className="text-xs text-zinc-500">
+                            {items.length} {items.length === 1 ? 'item' : 'itens'}
+                        </span>
+                    </div>
 
-                <div>
-                    <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                        NCM (opcional)
-                    </label>
-                    <input
-                        value={form.ncm}
-                        onChange={(e) => setForm({ ...form, ncm: e.target.value })}
-                        placeholder="Ex: 22030000 — se não souber, deixe em branco"
-                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
-                    />
-                    <p className="mt-1 text-xs text-zinc-500">
-                        Se não informar, a NF de perda sai com um NCM
-                        genérico — só corrija aqui se souber o código certo
-                        do produto.
+                    <div className="space-y-3">
+                        {items.map((item, index) => (
+                            <div
+                                key={index}
+                                className="space-y-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-500">
+                                        {index + 1}
+                                    </span>
+                                    <input
+                                        value={item.description}
+                                        onChange={(e) =>
+                                            updateItem(index, 'description', e.target.value)
+                                        }
+                                        placeholder="Ex: Heineken long neck"
+                                        className="h-11 flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
+                                    />
+                                    {items.length > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => removeItem(index)}
+                                            title="Remover item"
+                                            className="shrink-0 rounded-lg p-2 text-zinc-400 hover:bg-red-500/10 hover:text-red-500"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2">
+                                    <input
+                                        type="number"
+                                        step="0.001"
+                                        min="0"
+                                        value={item.quantity}
+                                        onChange={(e) =>
+                                            updateItem(index, 'quantity', e.target.value)
+                                        }
+                                        placeholder="Qtd."
+                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
+                                    />
+                                    <input
+                                        value={item.unit}
+                                        onChange={(e) =>
+                                            updateItem(index, 'unit', e.target.value)
+                                        }
+                                        placeholder="Un. (Lt, kg)"
+                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
+                                    />
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={item.unitValue}
+                                        onChange={(e) =>
+                                            updateItem(index, 'unitValue', e.target.value)
+                                        }
+                                        placeholder="Valor R$"
+                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
+                                    />
+                                </div>
+
+                                <input
+                                    value={item.ncm}
+                                    onChange={(e) => updateItem(index, 'ncm', e.target.value)}
+                                    placeholder="NCM (opcional)"
+                                    className="h-9 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-xs outline-none focus:border-emerald-500"
+                                />
+                            </div>
+                        ))}
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={addItem}
+                        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:border-emerald-500 hover:text-emerald-500"
+                    >
+                        <Plus size={16} />
+                        Adicionar item
+                    </button>
+
+                    <p className="text-xs text-zinc-500">
+                        Preenchendo o valor (R$) de um item, ele fica
+                        disponível na aba &quot;NF de Perda&quot; pra entrar
+                        numa nota fiscal de baixa de estoque. NCM é
+                        opcional — sem ele, a nota sai com um código
+                        genérico.
                     </p>
                 </div>
 
@@ -475,7 +529,11 @@ function RegistrarTab() {
                     disabled={saving}
                     className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
-                    {saving ? 'Registrando...' : 'Registrar perda'}
+                    {saving
+                        ? 'Registrando...'
+                        : items.filter((i) => i.description.trim()).length > 1
+                            ? `Registrar ${items.filter((i) => i.description.trim()).length} perdas`
+                            : 'Registrar perda'}
                 </button>
             </form>
 

@@ -15,6 +15,7 @@ import {
 
 import {
     BillStatus,
+    UserRole,
 } from '@prisma/client';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -23,6 +24,8 @@ import { existsSync, mkdirSync } from 'fs';
 import { extname, join } from 'path';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
 import { BillsService } from './bills.service';
@@ -41,8 +44,12 @@ if (!existsSync(uploadPath)) {
     });
 }
 
+// Contas a Pagar é dado financeiro — Gerente fica de fora de propósito
+// (mesmo espírito de Tributos), assim como os perfis operacionais
+// (Comprador/Estoquista/Funcionário) que não mexem com pagamento.
 @Controller('bills')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.FINANCEIRO)
 export class BillsController {
     constructor(private billsService: BillsService) { }
 

@@ -18,12 +18,13 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { TaxConfigService } from './tax-config.service';
 import { CreateTaxRegimeConfigDto } from './dto/create-tax-regime-config.dto';
 
+// Gerente fora daqui de propósito — Tributos é acesso restrito
+// (Administrativo/Proprietário/Comprador/Financeiro).
 @Controller('tax-regime-configs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(
     UserRole.ADMINISTRATIVO,
     UserRole.PROPRIETARIO,
-    UserRole.GERENTE,
     UserRole.COMPRADOR,
     UserRole.FINANCEIRO,
 )

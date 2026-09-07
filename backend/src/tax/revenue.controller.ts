@@ -23,12 +23,13 @@ import { UpdateRevenueEntryDto } from './dto/update-revenue-entry.dto';
 // Faturamento é dado financeiro estratégico (base de todo o cálculo de
 // tributo) — acesso mais restrito que Contas a Pagar, no mesmo espírito da
 // folha de pagamento: administrativo, proprietário e financeiro.
+// Gerente fora daqui de propósito — Tributos é acesso restrito
+// (Administrativo/Proprietário/Comprador/Financeiro).
 @Controller('revenue-entries')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(
     UserRole.ADMINISTRATIVO,
     UserRole.PROPRIETARIO,
-    UserRole.GERENTE,
     UserRole.COMPRADOR,
     UserRole.FINANCEIRO,
 )

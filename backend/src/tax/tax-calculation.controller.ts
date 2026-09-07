@@ -10,10 +10,11 @@ import { TaxCalculationService } from './tax-calculation.service';
 
 @Controller('tax-calculations')
 @UseGuards(JwtAuthGuard, RolesGuard)
+// Gerente fora daqui de propósito — Tributos é acesso restrito
+// (Administrativo/Proprietário/Comprador/Financeiro).
 @Roles(
     UserRole.ADMINISTRATIVO,
     UserRole.PROPRIETARIO,
-    UserRole.GERENTE,
     UserRole.COMPRADOR,
     UserRole.FINANCEIRO,
 )

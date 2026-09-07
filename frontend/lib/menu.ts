@@ -200,10 +200,10 @@ export const menu: MenuGroup[] = [
                 label: 'Tributos',
                 href: '/revenue',
                 icon: TrendingUp,
+                // Gerente fora de propósito — acesso restrito.
                 roles: [
                     'ADMINISTRATIVO',
                     'PROPRIETARIO',
-                    'GERENTE',
                     'COMPRADOR',
                     'FINANCEIRO',
                 ],
@@ -232,7 +232,9 @@ export const menu: MenuGroup[] = [
                 label: 'Contas a Pagar',
                 href: '/bills',
                 icon: Wallet,
-                roles: ALL_ROLES,
+                // Gerente fora de propósito — acesso restrito, mesmo
+                // espírito de Tributos.
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
                 color: 'teal',
             },
         ],

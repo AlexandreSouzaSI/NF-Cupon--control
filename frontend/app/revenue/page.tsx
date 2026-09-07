@@ -102,10 +102,10 @@ type CalculationResult = {
     };
 };
 
+// Gerente fora de propósito — Tributos é acesso restrito.
 const ALLOWED_ROLES = [
     'ADMINISTRATIVO',
     'PROPRIETARIO',
-    'GERENTE',
     'COMPRADOR',
     'FINANCEIRO',
 ];

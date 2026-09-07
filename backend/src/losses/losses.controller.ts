@@ -23,6 +23,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 
 import { LossesService } from './losses.service';
 import { CreateLossDto } from './dto/create-loss.dto';
+import { CreateLossBatchDto } from './dto/create-loss-batch.dto';
 import { CreateLossNfeDto } from './dto/create-loss-nfe.dto';
 
 const uploadPath = join(process.cwd(), 'uploads', 'losses');
@@ -82,6 +83,22 @@ export class LossesController {
         const photoUrl = file ? `/uploads/losses/${file.filename}` : undefined;
 
         return this.lossesService.create(body, photoUrl, user);
+    }
+
+    // Registra várias perdas de uma vez, compartilhando UMA foto — ex:
+    // tirou uma foto de tudo que quebrou junto e listou item por item
+    // (nome, quantidade, valor) em vez de repetir o formulário e a foto
+    // pra cada um.
+    @Post('batch')
+    @UseInterceptors(photoInterceptor)
+    async createBatch(
+        @Body() body: CreateLossBatchDto,
+        @UploadedFile() file: Express.Multer.File,
+        @CurrentUser() user: any,
+    ) {
+        const photoUrl = file ? `/uploads/losses/${file.filename}` : undefined;
+
+        return this.lossesService.createBatch(body, photoUrl, user);
     }
 
     @Get()
