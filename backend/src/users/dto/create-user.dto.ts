@@ -25,6 +25,13 @@ export class CreateUserDto {
     @IsEnum(UserRole)
     role!: UserRole;
 
+    // Só usado pra mandar aviso no WhatsApp (login continua por e-mail).
+    // Aceita qualquer formato digitado — é normalizado no service antes de
+    // gravar.
+    @IsOptional()
+    @IsString()
+    phone?: string;
+
     @IsOptional()
     @IsArray()
     @IsString({ each: true })

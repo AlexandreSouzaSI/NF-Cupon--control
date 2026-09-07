@@ -40,6 +40,14 @@ export class StoresService {
                 address: dto.address,
                 phone: dto.phone,
                 uf: dto.uf,
+                logradouro: dto.logradouro,
+                numero: dto.numero,
+                complemento: dto.complemento,
+                bairro: dto.bairro,
+                municipio: dto.municipio,
+                codigoMunicipioIbge: dto.codigoMunicipioIbge,
+                cep: dto.cep,
+                inscricaoEstadual: dto.inscricaoEstadual,
             },
         });
     }
@@ -177,6 +185,14 @@ export class StoresService {
                 address: dto.address,
                 phone: dto.phone,
                 uf: dto.uf,
+                logradouro: dto.logradouro,
+                numero: dto.numero,
+                complemento: dto.complemento,
+                bairro: dto.bairro,
+                municipio: dto.municipio,
+                codigoMunicipioIbge: dto.codigoMunicipioIbge,
+                cep: dto.cep,
+                inscricaoEstadual: dto.inscricaoEstadual,
             },
         });
     }
@@ -354,11 +370,19 @@ export class StoresService {
             );
         }
 
-        return testCertificateConnection(certificate.filePath, {
-            cipher: certificate.passwordCipher,
-            iv: certificate.passwordIv,
-            authTag: certificate.passwordAuthTag,
-        });
+        // Sempre parte do NSU salvo, nunca de 0 — mesmo raciocínio do teste
+        // de NF-e de mercadoria abaixo: repetir NSU=0 em cliques seguidos é
+        // o que a Sefaz/ADN pune como "consumo indevido".
+        return testCertificateConnection(
+            certificate.filePath,
+            {
+                cipher: certificate.passwordCipher,
+                iv: certificate.passwordIv,
+                authTag: certificate.passwordAuthTag,
+            },
+            'PRODUCAO',
+            certificate.lastNsu,
+        );
     }
 
     // Testa a conexão com o webservice de NF-e de mercadoria (produção
@@ -442,6 +466,19 @@ export class StoresService {
             cipher: certificate.passwordCipher,
             iv: certificate.passwordIv,
             authTag: certificate.passwordAuthTag,
+        });
+    }
+
+    // Últimas tentativas de busca (manual ou automática) de NF-e/NFS-e na
+    // Sefaz/ADN dessa loja — sucesso e erro, mais recente primeiro.
+    async getSefazSyncLogs(storeId: string, user: any) {
+        await this.ensureStoreExists(storeId);
+        this.ensureManagedStoreAccess(storeId, user);
+
+        return this.prisma.sefazSyncLog.findMany({
+            where: { storeId },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
         });
     }
 }

@@ -28,6 +28,10 @@ export class UpdateUserDto {
     role?: UserRole;
 
     @IsOptional()
+    @IsString()
+    phone?: string;
+
+    @IsOptional()
     @IsArray()
     @IsString({ each: true })
     storeIds?: string[];

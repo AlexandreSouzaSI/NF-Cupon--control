@@ -11,17 +11,34 @@ const prisma = new PrismaClient({
     adapter,
 });
 
-async function main() {
-    const password = await bcrypt.hash('123456', 10);
+// Só dígitos, com DDI 55 na frente — mesma normalização usada em
+// users.service.ts e whatsapp.service.ts, duplicada aqui só porque o seed
+// roda fora do Nest (sem acesso ao resto do módulo).
+function normalizePhone(raw: string): string {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('55') && digits.length >= 12) return digits;
+    return `55${digits}`;
+}
 
-    const admin = await prisma.user.upsert({
-        where: { email: 'admin@compras.com' },
-        update: { role: UserRole.ADMINISTRATIVO },
+async function main() {
+    // Ninguém se cadastra sozinho nesse sistema — toda conta é criada por
+    // Proprietário/Administrativo/Gerente dentro do app (Cadastros →
+    // Usuários). O seed só garante a conta inicial do dono, pra sempre ter
+    // como entrar e cadastrar o resto do time a partir dela.
+    const ownerPassword = await bcrypt.hash('92988096', 10);
+
+    const owner = await prisma.user.upsert({
+        where: { email: 'alemourasouza33@gmail.com' },
+        update: {
+            role: UserRole.PROPRIETARIO,
+            phone: normalizePhone('31975805400'),
+        },
         create: {
-            name: 'Administrador',
-            email: 'admin@compras.com',
-            password,
-            role: UserRole.ADMINISTRATIVO,
+            name: 'Alexandre',
+            email: 'alemourasouza33@gmail.com',
+            password: ownerPassword,
+            phone: normalizePhone('31975805400'),
+            role: UserRole.PROPRIETARIO,
         },
     });
 
@@ -58,83 +75,16 @@ async function main() {
         await prisma.userStore.upsert({
             where: {
                 userId_storeId: {
-                    userId: admin.id,
+                    userId: owner.id,
                     storeId: store.id,
                 },
             },
             update: {},
             create: {
-                userId: admin.id,
+                userId: owner.id,
                 storeId: store.id,
             },
         });
-    }
-
-    const demoUsers: {
-        name: string;
-        email: string;
-        role: UserRole;
-        storeIds: string[];
-    }[] = [
-        {
-            name: 'Proprietário Demo',
-            email: 'proprietario@compras.com',
-            role: UserRole.PROPRIETARIO,
-            storeIds: stores.map((store) => store.id),
-        },
-        {
-            name: 'Gerente Demo',
-            email: 'gerente@compras.com',
-            role: UserRole.GERENTE,
-            storeIds: [lojaAnchieta.id],
-        },
-        {
-            name: 'Comprador Demo',
-            email: 'comprador@compras.com',
-            role: UserRole.COMPRADOR,
-            storeIds: [lojaAnchieta.id],
-        },
-        {
-            name: 'Estoquista Demo',
-            email: 'estoquista@compras.com',
-            role: UserRole.ESTOQUISTA,
-            storeIds: [lojaAnchieta.id],
-        },
-        {
-            name: 'Financeiro Demo',
-            email: 'financeiro@compras.com',
-            role: UserRole.FINANCEIRO,
-            storeIds: [lojaAnchieta.id],
-        },
-    ];
-
-    for (const demoUser of demoUsers) {
-        const user = await prisma.user.upsert({
-            where: { email: demoUser.email },
-            update: { role: demoUser.role },
-            create: {
-                name: demoUser.name,
-                email: demoUser.email,
-                password,
-                role: demoUser.role,
-            },
-        });
-
-        for (const storeId of demoUser.storeIds) {
-            await prisma.userStore.upsert({
-                where: {
-                    userId_storeId: {
-                        userId: user.id,
-                        storeId,
-                    },
-                },
-                update: {},
-                create: {
-                    userId: user.id,
-                    storeId,
-                },
-            });
-        }
     }
 
     await prisma.card.upsert({
@@ -150,13 +100,11 @@ async function main() {
     });
 
     console.log('Seed executado com sucesso.');
-    console.log('Senha para todos os usuários demo: 123456');
-    console.log('Login administrativo: admin@compras.com');
-    console.log('Login proprietário: proprietario@compras.com');
-    console.log('Login gerente: gerente@compras.com');
-    console.log('Login comprador: comprador@compras.com');
-    console.log('Login estoquista: estoquista@compras.com');
-    console.log('Login financeiro: financeiro@compras.com');
+    console.log('Login: alemourasouza33@gmail.com');
+    console.log('Senha: 92988096');
+    console.log(
+        'Esse é o único login criado pelo seed — o resto do time precisa ser cadastrado por essa conta em Cadastros → Usuários.',
+    );
 }
 
 main()

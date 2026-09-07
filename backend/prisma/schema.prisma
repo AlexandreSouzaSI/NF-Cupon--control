@@ -251,6 +251,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Só um canal a mais de notificação (WhatsApp) — login continua sendo
+  // sempre por e-mail/senha. Formato livre no cadastro, mas é normalizado
+  // (só dígitos, com DDI 55) antes de comparar/enviar. Único porque a
+  // resposta que chega no webhook precisa achar exatamente uma pessoa.
+  phone String? @unique
+
   userStores UserStore[]
 
   purchasesCreated            Purchase[] @relation("PurchaseCreatedBy")
@@ -277,8 +283,9 @@ model User {
 
   bankStatementImports BankStatementImport[]
 
-  taxRegimeConfigsCreated TaxRegimeConfig[] @relation("TaxRegimeConfigCreatedBy")
-  revenueEntriesCreated   RevenueEntry[]    @relation("RevenueEntryCreatedBy")
+  taxRegimeConfigsCreated  TaxRegimeConfig[] @relation("TaxRegimeConfigCreatedBy")
+  revenueEntriesCreated    RevenueEntry[]    @relation("RevenueEntryCreatedBy")
+  outgoingSalesNfsImported OutgoingSalesNf[] @relation("OutgoingSalesNfImportedBy")
 
   freelancersCreated        Freelancer[]        @relation("FreelancerCreatedBy")
   freelancerPaymentsCreated FreelancerPayment[] @relation("FreelancerPaymentCreatedBy")
@@ -288,6 +295,28 @@ model User {
   taskOccurrencesConfirmed TaskOccurrence[] @relation("TaskOccurrenceConfirmedBy")
 
   productLossesReported ProductLoss[] @relation("ProductLossReportedBy")
+  lossNfesCreated       LossNfe[]     @relation("LossNfeCreatedBy")
+
+  pushSubscriptions PushSubscription[]
+  whatsappMessages  WhatsappOutboundMessage[]
+}
+
+// Inscrição de push notification (Web Push) do navegador/PWA de um
+// usuário. Um mesmo usuário pode ter várias (celular + notebook, por
+// exemplo). "endpoint" é único por navegador/dispositivo — reinstalar o
+// PWA ou limpar dados do site gera um endpoint novo.
+model PushSubscription {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Store {
@@ -301,6 +330,19 @@ model Store {
   // Sigla da UF (ex: SP, MG) — exigida pelo webservice NFeDistribuicaoDFe
   // (campo cUFAutor) pra buscar as NF-e de mercadoria automaticamente.
   uf String?
+
+  // Endereço estruturado + Inscrição Estadual — não usado pra nada além de
+  // emitir NF-e própria (bloco <emit>/<enderEmit> exige endereço em campos
+  // separados, com código IBGE do município, não endereço livre). Ficam em
+  // branco até serem preenchidos manualmente em Cadastros → Lojas.
+  logradouro          String?
+  numero              String?
+  complemento         String?
+  bairro              String?
+  municipio           String?
+  codigoMunicipioIbge String?
+  cep                 String?
+  inscricaoEstadual   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -316,6 +358,7 @@ model Store {
   certificate           StoreCertificate?
   incomingServiceNfs    IncomingServiceNf[]
   incomingGoodsNfs      IncomingGoodsNf[]
+  outgoingSalesNfs      OutgoingSalesNf[]
   employees             Employee[]
   taxRegimeConfigs      TaxRegimeConfig[]
   revenueEntries        RevenueEntry[]
@@ -323,6 +366,17 @@ model Store {
   freelancerPayments    FreelancerPayment[]
   tasks                 Task[]
   productLosses         ProductLoss[]
+  sefazSyncLogs         SefazSyncLog[]
+  lossNfes              LossNfe[]
+
+  // Numeração própria da série de NF-e de baixa por perda (Nota de
+  // Débito, finNFe=6/tpNFDebito=07 — Ajuste SINIEF 49/2025), separada da
+  // série que o PDV já usa nas vendas pra nunca colidir. Fica em branco
+  // até alguém configurar em Cadastros → Lojas antes da primeira emissão
+  // de verdade; enquanto isso as emissões só valem pro ambiente de
+  // homologação (sem valor fiscal).
+  lossNfeSerie      Int?
+  lossNfeNextNumber Int?
 }
 
 model UserStore {
@@ -558,6 +612,7 @@ model Bill {
   storeId      String
   purchaseId   String?
   supplierId   String?
+  categoryId   String?
   launchedById String
 
   fileUrl         String?
@@ -568,14 +623,21 @@ model Bill {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  store      Store     @relation(fields: [storeId], references: [id])
-  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
-  supplier   Supplier? @relation(fields: [supplierId], references: [id])
-  launchedBy User      @relation("BillLaunchedBy", fields: [launchedById], references: [id])
+  store      Store         @relation(fields: [storeId], references: [id])
+  purchase   Purchase?     @relation(fields: [purchaseId], references: [id])
+  supplier   Supplier?     @relation(fields: [supplierId], references: [id])
+  category   BillCategory? @relation(fields: [categoryId], references: [id])
+  launchedBy User          @relation("BillLaunchedBy", fields: [launchedById], references: [id])
+
+  // NF que deram origem a essa conta ao serem aceitas direto (sem passar
+  // por Compra/Serviço já cadastrado) — ver IncomingGoodsNf/IncomingServiceNf.
+  incomingGoodsNfs   IncomingGoodsNf[]   @relation("IncomingGoodsNfBill")
+  incomingServiceNfs IncomingServiceNf[] @relation("IncomingServiceNfBill")
 
   @@index([storeId])
   @@index([purchaseId])
   @@index([supplierId])
+  @@index([categoryId])
   @@index([status])
   @@index([type])
   @@index([paymentMethod])
@@ -583,6 +645,21 @@ model Bill {
   @@index([dueDate])
   @@index([barcode])
   @@index([pixKey])
+}
+
+// Categoria livre da conta a pagar (ex.: Revenda, Matéria-prima,
+// Manutenção...) — cadastrada na hora (igual Fornecedor: digita e cria se
+// não existir). A ideia é que, com o tempo, cada Fornecedor tenha um
+// padrão de categoria e o sistema sugira sozinho nas próximas NFs.
+model BillCategory {
+  id             String   @id @default(uuid())
+  name           String
+  nameNormalized String   @unique
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  bills Bill[]
 }
 
 model Service {
@@ -644,6 +721,14 @@ model StoreCertificate {
   // própria; não pode compartilhar o mesmo cursor.
   lastNsuNfe BigInt @default(0)
 
+  // Até quando NÃO vale a pena tentar sincronizar de novo (Sefaz/ADN pedem
+  // pelo menos 1h de espera depois de "nada de novo" ou de um bloqueio por
+  // "consumo indevido" — e reinicia a contagem se a gente insistir antes da
+  // hora passar). Null = sem bloqueio conhecido no momento. Campos
+  // separados porque NF-e (Sefaz) e NFS-e (ADN) são sistemas independentes.
+  nfeBlockedUntil  DateTime?
+  nfseBlockedUntil DateTime?
+
   uploadedById String
 
   createdAt DateTime @default(now())
@@ -651,6 +736,28 @@ model StoreCertificate {
 
   store      Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
   uploadedBy User  @relation("StoreCertificateUploadedBy", fields: [uploadedById], references: [id])
+}
+
+// Registro de cada tentativa de buscar documentos fiscais na Sefaz/ADN —
+// manual (clique em "Buscar") ou automática (job agendado). Existe pra dar
+// visibilidade a erros que aconteceriam sem ninguém olhando, como uma busca
+// automática de madrugada que esbarrou em bloqueio da Sefaz.
+model SefazSyncLog {
+  id      String @id @default(uuid())
+  storeId String
+
+  // 'NFE_COMPRA' (mercadoria, via SEFAZ) ou 'NFSE_SERVICO' (via ADN).
+  source String
+
+  success      Boolean
+  message      String
+  fetchedTotal Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, source, createdAt])
 }
 
 // Documento fiscal baixado da distribuição da Sefaz (NF-e de serviço, DPS ou
@@ -668,19 +775,38 @@ model IncomingServiceNf {
   tipoDocumento String
   tipoEvento    String?
 
+  // Extraídos do XML completo (ArquivoXml do ADN) na hora da captura — pra
+  // mostrar informação útil no card de conciliação em vez de só a chave de
+  // acesso. Podem ficar em branco se o documento não trouxer XML (só
+  // resumo/evento) ou se o schema do NFS-e nacional divergir do esperado.
+  numeroNf   String?
+  issuerName String? // nome do prestador do serviço
+  issuerDoc  String? // CNPJ/CPF do prestador
+  value      Decimal?  @db.Decimal(10, 2)
+  issueDate  DateTime?
+
   fileUrl     String?
   generatedAt DateTime?
   fetchedAt   DateTime  @default(now())
 
   serviceId String?
+  ignored   Boolean @default(false) // marcado como "não é nossa"/recusado
+
+  // Aceita direto (sem vincular a um Serviço já cadastrado): accepted =
+  // aceita sem gerar conta, billId = aceita e a conta a pagar foi criada
+  // direto a partir dessa NF.
+  accepted Boolean @default(false)
+  billId   String?
 
   store   Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   service Service? @relation(fields: [serviceId], references: [id])
+  bill    Bill?    @relation("IncomingServiceNfBill", fields: [billId], references: [id])
 
   @@unique([storeId, chaveAcesso])
   @@index([storeId])
   @@index([serviceId])
   @@index([tipoDocumento])
+  @@index([billId])
 }
 
 // Documento fiscal baixado da distribuição da Sefaz (NF-e de mercadoria
@@ -708,16 +834,77 @@ model IncomingGoodsNf {
   fileUrl   String?
   fetchedAt DateTime @default(now())
 
+  // Manifestação do destinatário (Ciência da Operação) — enviada
+  // automaticamente pro documento que chegou como resumo (resNFe), pra
+  // Sefaz liberar o XML completo (com itens) na próxima consulta.
+  // manifestStatus guarda o texto de retorno (sucesso ou erro) só pra
+  // diagnóstico; não bloqueia nada se der errado.
+  manifestedAt   DateTime?
+  manifestStatus String?
+
+  // De onde veio esse registro: busca automática na Sefaz (padrão) ou
+  // upload manual de XML feito pelo usuário (fallback pra quando a API não
+  // funciona). Não muda o fluxo de conciliação, só identifica a origem na
+  // tela.
+  source IncomingNfSource @default(SEFAZ)
+
   purchaseId String?
-  ignored    Boolean @default(false) // marcado como "não é nossa"/ignorado
+  ignored    Boolean @default(false) // marcado como "não é nossa"/recusado
+
+  // Aceita direto (sem vincular a uma Compra já cadastrada): accepted =
+  // aceita sem gerar conta, billId = aceita e a conta a pagar foi criada
+  // direto a partir dessa NF.
+  accepted Boolean @default(false)
+  billId   String?
 
   store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   purchase Purchase? @relation(fields: [purchaseId], references: [id])
+  bill     Bill?     @relation("IncomingGoodsNfBill", fields: [billId], references: [id])
 
   @@unique([storeId, chaveAcesso])
   @@index([storeId])
   @@index([purchaseId])
   @@index([tipoDocumento])
+  @@index([billId])
+}
+
+enum IncomingNfSource {
+  SEFAZ
+  XML_UPLOAD
+}
+
+// NF-e/NFC-e de venda (a loja é a emitente), importadas em lote via upload
+// manual de XML — hoje não existe distribuição automática confiável pra
+// nota de saída, então o fluxo é sempre o usuário exportar do sistema de
+// venda/PDV e subir aqui. referenceMonth já vem calculado do issueDate pra
+// agrupar rápido e alimentar o RevenueEntry (Faturamento) do mês.
+model OutgoingSalesNf {
+  id String @id @default(uuid())
+
+  storeId String
+
+  chaveAcesso   String
+  tipoDocumento String // 55 = NF-e, 65 = NFC-e (campo mod do XML)
+
+  recipientCnpj  String?
+  recipientName  String?
+  value          Decimal  @db.Decimal(10, 2)
+  issueDate      DateTime
+  referenceMonth String // "AAAA-MM", derivado do issueDate
+  situacao       String?
+
+  fileUrl      String?
+  importedAt   DateTime @default(now())
+  importedById String
+
+  ignored Boolean @default(false) // marcado como importado por engano
+
+  store      Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  importedBy User  @relation("OutgoingSalesNfImportedBy", fields: [importedById], references: [id])
+
+  @@unique([storeId, chaveAcesso])
+  @@index([storeId])
+  @@index([referenceMonth])
 }
 
 // Dados sensíveis (folha de pagamento) — acesso restrito a
@@ -971,10 +1158,52 @@ model TaskOccurrence {
   task        Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   confirmedBy User? @relation("TaskOccurrenceConfirmedBy", fields: [confirmedById], references: [id])
 
+  whatsappMessages WhatsappOutboundMessage[]
+
   @@unique([taskId, dueDate])
   @@index([taskId])
   @@index([dueDate])
   @@index([status])
+}
+
+// Tipo de aviso mandado por WhatsApp — hoje só existe um, mas o campo já
+// deixa pronto pra outros avisos (aprovação, alerta etc.) usarem o mesmo
+// mecanismo de pergunta/resposta no futuro.
+enum WhatsappMessageKind {
+  TASK_ASSIGNED
+}
+
+// Registro de uma mensagem de WhatsApp mandada pelo sistema, guardado pra
+// conseguir interpretar a resposta da pessoa (webhook manda só telefone +
+// texto — é aqui que a gente descobre "resposta de quê"). taskOccurrenceId
+// só é preenchido quando kind = TASK_ASSIGNED; outros tipos futuros podem
+// precisar de outro campo de vínculo.
+model WhatsappOutboundMessage {
+  id String @id @default(uuid())
+
+  userId String
+  phone  String // normalizado (só dígitos, com DDI) no momento do envio
+  kind   WhatsappMessageKind
+
+  taskOccurrenceId String?
+
+  text              String
+  providerMessageId String?
+  sentAt            DateTime @default(now())
+
+  // Preenchidos quando a pessoa responde e o texto bate com uma ação
+  // reconhecida (ex: "iniciar"). Fica null se a mensagem nunca foi
+  // respondida ou se a resposta não foi reconhecida.
+  respondedAt     DateTime?
+  responseText    String?
+  respondedAction String?
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskOccurrence TaskOccurrence? @relation(fields: [taskOccurrenceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([phone])
+  @@index([taskOccurrenceId])
 }
 
 // Registro de perda de produto (quebra, vencimento, etc.) — foto tirada
@@ -989,15 +1218,83 @@ model ProductLoss {
   reason      String?
   photoUrl    String
 
+  // Valor unitário opcional — só precisa ser preenchido se a perda for
+  // entrar numa NF-e de baixa de estoque (Nota de Débito) mais tarde. Sem
+  // valor, a perda continua registrada normalmente, só não pode ser
+  // selecionada na hora de montar a nota.
+  unitValue Decimal? @db.Decimal(10, 2)
+
+  // NCM do produto (8 dígitos) — opcional, só usado pra montar a NF de
+  // perda com o código certo em vez do genérico de fallback.
+  ncm String?
+
   reportedById String
   occurredAt   DateTime @default(now())
   createdAt    DateTime @default(now())
 
-  store      Store @relation(fields: [storeId], references: [id])
-  reportedBy User  @relation("ProductLossReportedBy", fields: [reportedById], references: [id])
+  // Preenchido quando essa perda entra numa nota de baixa já emitida (ou
+  // em rascunho) — evita que a mesma perda seja lançada em duas notas.
+  lossNfeId String?
+
+  store      Store    @relation(fields: [storeId], references: [id])
+  reportedBy User     @relation("ProductLossReportedBy", fields: [reportedById], references: [id])
+  lossNfe    LossNfe? @relation(fields: [lossNfeId], references: [id])
 
   @@index([storeId])
   @@index([occurredAt])
+  @@index([lossNfeId])
+}
+
+enum LossNfeStatus {
+  RASCUNHO // montada mas ainda não enviada pra Sefaz
+  ENVIADA // lote enviado, aguardando retorno
+  AUTORIZADA
+  REJEITADA
+  CANCELADA
+}
+
+// NF-e de baixa de estoque por perda (Nota de Débito — finNFe=6,
+// tpNFDebito=07, CFOP 5.927 — Ajuste SINIEF 49/2025). Diferente de
+// IncomingGoodsNf/OutgoingSalesNf (que só guardam NF-e de terceiros já
+// emitidas), esse é o único documento que o próprio NuGalho Hub emite —
+// por isso guarda o XML assinado inteiro, não só um resumo.
+model LossNfe {
+  id String @id @default(uuid())
+
+  storeId String
+
+  status LossNfeStatus @default(RASCUNHO)
+
+  // tpAmb da Sefaz: 1 = produção (valor fiscal real), 2 = homologação
+  // (teste, sem valor fiscal). Toda emissão nasce em homologação até a
+  // loja ter uma série de produção configurada e alguém decidir usar de
+  // verdade.
+  ambiente Int @default(2)
+
+  serie  Int?
+  numero Int?
+
+  chaveAcesso String?
+  issueDate   DateTime?
+
+  // Motivo geral da baixa (perecimento, quebra, roubo/furto etc.) — vira
+  // o texto de infAdFisco, exigido pelo Ajuste SINIEF 49/2025. Se for
+  // roubo/furto, é aqui que entra o número do Boletim de Ocorrência.
+  justificativa String
+
+  xmlFileUrl    String? // XML assinado, guardado em disco (mesmo padrão das outras NF-e)
+  protocolo     String? // nProt devolvido pela Sefaz quando autorizada
+  statusMessage String? // cStat/xMotivo do último retorno, só pra diagnóstico
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store     Store         @relation(fields: [storeId], references: [id])
+  createdBy User          @relation("LossNfeCreatedBy", fields: [createdById], references: [id])
+  losses    ProductLoss[]
+
+  @@index([storeId])
 }
 
 model Attachment {

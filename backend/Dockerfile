@@ -21,7 +21,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
 RUN npm run build
-RUN npm prune --omit=dev
+# Não faz "npm prune --omit=dev" aqui de propósito: o comando de seed
+# (prisma/seed/seed.ts) roda via ts-node, que é devDependency. O plano free
+# do Render não tem Shell nem "one-off jobs" pra instalar isso depois, então
+# mantemos o node_modules completo na imagem final — imagem um pouco maior,
+# mas o seed funciona de forma confiável no entrypoint.
 
 # ---- runtime: imagem final, só com o necessário pra rodar ----
 FROM node:20-bookworm-slim AS runtime

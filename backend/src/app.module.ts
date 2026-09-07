@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from 'prisma/prisma.module';
@@ -22,6 +23,10 @@ import { TaxModule } from './tax/tax.module';
 import { FreelancersModule } from './freelancers/freelancers.module';
 import { TasksModule } from './tasks/tasks.module';
 import { LossesModule } from './losses/losses.module';
+import { PushModule } from './push/push.module';
+import { OutgoingSalesNfModule } from './outgoing-sales-nf/outgoing-sales-nf.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { BillCategoriesModule } from './bill-categories/bill-categories.module';
 
 @Module({
   imports: [
@@ -29,6 +34,7 @@ import { LossesModule } from './losses/losses.module';
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot(),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -47,7 +53,11 @@ import { LossesModule } from './losses/losses.module';
     TaxModule,
     FreelancersModule,
     TasksModule,
-    LossesModule
+    LossesModule,
+    PushModule,
+    OutgoingSalesNfModule,
+    WhatsappModule,
+    BillCategoriesModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -9,6 +9,7 @@ import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { normalizePhone } from '../common/phone.util';
 
 // Perfis que um Gerente nunca pode criar/editar/desativar — evita que um
 // Gerente crie outro Gerente (ou se promova a Administrativo/Proprietário)
@@ -88,6 +89,20 @@ export class UsersService {
             });
         }
 
+        const phone = dto.phone?.trim() ? normalizePhone(dto.phone) : null;
+
+        if (phone) {
+            const phoneExists = await this.prisma.user.findUnique({
+                where: { phone },
+            });
+
+            if (phoneExists) {
+                throw new ConflictException(
+                    'Esse telefone já está cadastrado em outro usuário.',
+                );
+            }
+        }
+
         const password = await bcrypt.hash(dto.password, 10);
 
         return this.prisma.user.create({
@@ -96,6 +111,7 @@ export class UsersService {
                 email: dto.email,
                 password,
                 role: dto.role,
+                phone,
                 active: true,
                 userStores: {
                     create:
@@ -219,6 +235,24 @@ export class UsersService {
             }
         }
 
+        let normalizedPhone: string | null | undefined;
+
+        if (dto.phone !== undefined) {
+            normalizedPhone = dto.phone?.trim() ? normalizePhone(dto.phone) : null;
+
+            if (normalizedPhone) {
+                const phoneExists = await this.prisma.user.findFirst({
+                    where: { phone: normalizedPhone, id: { not: id } },
+                });
+
+                if (phoneExists) {
+                    throw new ConflictException(
+                        'Esse telefone já está cadastrado em outro usuário.',
+                    );
+                }
+            }
+        }
+
         let hashedPassword: string | undefined;
 
         if (dto.password) {
@@ -233,6 +267,7 @@ export class UsersService {
                     email: dto.email,
                     password: hashedPassword,
                     role: dto.role,
+                    phone: normalizedPhone,
                     active: dto.active,
                 },
             });

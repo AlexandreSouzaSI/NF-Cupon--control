@@ -20,4 +20,36 @@ export class UpdateStoreDto {
     @IsOptional()
     @IsString()
     uf?: string;
+
+    @IsOptional()
+    @IsString()
+    logradouro?: string;
+
+    @IsOptional()
+    @IsString()
+    numero?: string;
+
+    @IsOptional()
+    @IsString()
+    complemento?: string;
+
+    @IsOptional()
+    @IsString()
+    bairro?: string;
+
+    @IsOptional()
+    @IsString()
+    municipio?: string;
+
+    @IsOptional()
+    @IsString()
+    codigoMunicipioIbge?: string;
+
+    @IsOptional()
+    @IsString()
+    cep?: string;
+
+    @IsOptional()
+    @IsString()
+    inscricaoEstadual?: string;
 }

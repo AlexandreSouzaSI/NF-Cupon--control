@@ -30,6 +30,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
+import { AcceptIncomingNfDto } from './dto/accept-incoming-nf.dto';
 
 const uploadPath = join(process.cwd(), 'uploads', 'services');
 
@@ -79,6 +80,17 @@ export class ServicesController {
     }
 
     // Precisa vir antes de ":id" pra não ser interpretada como um id.
+    // Lista combinada usada na tela "NF de serviços": Service com NF anexada
+    // + IncomingServiceNf aceita direto (sem passar por um Service).
+    @Get('confirmed-nf')
+    async findConfirmedNf(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId?: string,
+    ) {
+        return this.servicesService.findConfirmedNf(user, storeId);
+    }
+
+    // Precisa vir antes de ":id" pra não ser interpretada como um id.
     @Get('download/zip')
     async downloadZip(
         @CurrentUser() user: any,
@@ -112,12 +124,12 @@ export class ServicesController {
 
         const usedNames = new Set<string>();
 
-        for (const service of services) {
-            if (!service.nfFileUrl) {
+        for (const item of services) {
+            if (!item.fileUrl) {
                 continue;
             }
 
-            const relativePath = service.nfFileUrl.replace(
+            const relativePath = item.fileUrl.replace(
                 /^\/uploads\//,
                 '',
             );
@@ -133,12 +145,12 @@ export class ServicesController {
             }
 
             const ext = extname(
-                service.nfOriginalName || filePath,
+                item.originalName || filePath,
             );
 
-            let baseName = `${service.serviceDate
+            let baseName = `${item.date
                 .toISOString()
-                .slice(0, 10)}-${service.providerName}`
+                .slice(0, 10)}-${item.providerName}`
                 .replace(/[^a-zA-Z0-9-_ ]/g, '')
                 .trim();
 
@@ -173,8 +185,16 @@ export class ServicesController {
     async findIncomingNf(
         @CurrentUser() user: any,
         @Query('storeId') storeId?: string,
+        @Query('page') page?: string,
+        @Query('pageSize') pageSize?: string,
+        @Query('accepted') accepted?: string,
     ) {
-        return this.servicesService.findIncomingNf(user, { storeId });
+        return this.servicesService.findIncomingNf(user, {
+            storeId,
+            page: page ? Number(page) : undefined,
+            pageSize: pageSize ? Number(pageSize) : undefined,
+            accepted: accepted === 'true',
+        });
     }
 
     @Post('incoming-nf/:id/reconcile')
@@ -188,6 +208,39 @@ export class ServicesController {
             serviceId,
             user,
         );
+    }
+
+    @Post('incoming-nf/:id/ignore')
+    async ignoreIncomingNf(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.servicesService.ignoreIncomingNf(id, user);
+    }
+
+    @Post('incoming-nf/:id/accept')
+    async acceptIncomingNf(
+        @Param('id') id: string,
+        @Body() body: AcceptIncomingNfDto,
+        @CurrentUser() user: any,
+    ) {
+        return this.servicesService.acceptIncomingNf(id, body, user);
+    }
+
+    @Get('incoming-nf/:id/view')
+    async viewIncomingNf(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.servicesService.viewIncomingNf(id, user);
+    }
+
+    @Get(':id/view')
+    async viewService(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.servicesService.viewService(id, user);
     }
 
     @Get(':id')

@@ -48,26 +48,29 @@ export class TaxCalculationService {
         }
 
         if (config.regime === TaxRegimeType.PRESUMIDO) {
-            const { monthPurchasesCost, result } = await get.presumido();
+            const { monthPurchasesCost, monthCostBreakdown, result } =
+                await get.presumido();
 
             return {
                 regime: TaxRegimeType.PRESUMIDO,
                 referenceMonth,
                 monthRevenue,
                 monthPurchasesCost,
+                monthCostBreakdown,
                 presumido: result,
                 total: result.total,
                 configId: config.id,
             };
         }
 
-        const { monthPurchasesCost, result } = await get.real();
+        const { monthPurchasesCost, monthCostBreakdown, result } = await get.real();
 
         return {
             regime: TaxRegimeType.REAL,
             referenceMonth,
             monthRevenue,
             monthPurchasesCost,
+            monthCostBreakdown,
             real: result,
             total: result.total,
             configId: config.id,
@@ -89,12 +92,14 @@ export class TaxCalculationService {
 
         const { rbt12, result: simples } = await get.simples();
         const { result: presumido } = await get.presumido();
-        const { monthPurchasesCost, result: real } = await get.real();
+        const { monthPurchasesCost, monthCostBreakdown, result: real } =
+            await get.real();
 
         return {
             referenceMonth,
             monthRevenue,
             monthPurchasesCost,
+            monthCostBreakdown,
             rbt12,
             currentRegime: config.regime,
             simples: { total: simples.dasValue, elegivel: !simples.excedeuLimite, detail: simples },
@@ -147,17 +152,14 @@ export class TaxCalculationService {
         };
 
         let rbt12Cache: number | null = null;
-        let purchasesCache: number | null = null;
+        let costCache: MonthCostBreakdown | null = null;
 
-        const getPurchasesCost = async () => {
-            if (purchasesCache === null) {
-                purchasesCache = await this.getMonthPurchasesCost(
-                    storeId,
-                    referenceMonth,
-                );
+        const getMonthCost = async () => {
+            if (costCache === null) {
+                costCache = await this.getMonthCost(storeId, referenceMonth);
             }
 
-            return purchasesCache;
+            return costCache;
         };
 
         return {
@@ -179,15 +181,19 @@ export class TaxCalculationService {
                         result: calculateSimplesNacional(rbt12Cache, monthRevenue),
                     };
                 },
-                // Presumido também recebe o custo de compras: o IRPJ/CSLL
-                // (base presumida) não usa isso, mas o crédito de ICMS (quando
-                // a loja não está no regime especial MG) depende das compras
-                // do mês, igual no Real.
+                // Presumido também recebe o custo do mês: o IRPJ/CSLL (base
+                // presumida) não usa isso, mas o crédito de ICMS (quando a
+                // loja não está no regime especial MG) depende do custo do
+                // mês, igual no Real. O custo soma Compras cadastradas + NF
+                // de Entrada ainda não vinculada a nenhuma compra (pra não
+                // perder crédito de quem só sincronizou/importou a NF e
+                // ainda não conciliou) + Serviços contratados no mês.
                 presumido: async () => {
-                    const monthPurchasesCost = await getPurchasesCost();
+                    const cost = await getMonthCost();
 
                     return {
-                        monthPurchasesCost,
+                        monthPurchasesCost: cost.total,
+                        monthCostBreakdown: cost,
                         result: calculateLucroPresumido(
                             {
                                 presumidoIrpjPercent: Number(
@@ -202,15 +208,16 @@ export class TaxCalculationService {
                                 ...icmsConfig,
                             },
                             monthRevenue,
-                            monthPurchasesCost,
+                            cost.total,
                         ),
                     };
                 },
                 real: async () => {
-                    const monthPurchasesCost = await getPurchasesCost();
+                    const cost = await getMonthCost();
 
                     return {
-                        monthPurchasesCost,
+                        monthPurchasesCost: cost.total,
+                        monthCostBreakdown: cost,
                         result: calculateLucroReal(
                             {
                                 realPisCofinsPercent: Number(
@@ -219,7 +226,7 @@ export class TaxCalculationService {
                                 ...icmsConfig,
                             },
                             monthRevenue,
-                            monthPurchasesCost,
+                            cost.total,
                         ),
                     };
                 },
@@ -227,32 +234,89 @@ export class TaxCalculationService {
         };
     }
 
-    // Soma o valor das compras da loja no mês, usando purchasedAt quando
-    // existe (data real da compra) e caindo pra createdAt quando a compra
-    // ainda não tem data de compra informada. Ignora rascunho, rejeitada e
-    // cancelada — mesma regra usada na tela de Cupons e NF.
-    private async getMonthPurchasesCost(
+    // Custo do mês pra fins de crédito de ICMS/PIS-COFINS e base do Lucro
+    // Real: soma três fontes, sem duplicar quem já foi conciliado.
+    // 1) Compras cadastradas no mês (purchasedAt, caindo pra createdAt sem
+    //    data) — mesma regra da tela de Cupons e NF, ignora rascunho,
+    //    rejeitada e cancelada.
+    // 2) NF de Entrada (Sefaz ou XML importado) que ainda NÃO foi vinculada
+    //    a nenhuma Compra cadastrada — sem isso, quem só sincroniza a NF e
+    //    esquece de conciliar perdia o crédito de imposto daquela compra.
+    //    As que já têm purchaseId ficam de fora daqui pra não contar duas
+    //    vezes (o valor delas já está em (1) via a Compra vinculada).
+    // 3) Serviços contratados no mês — despesa dedutível igual compra de
+    //    mercadoria, mas que não passava pelo cálculo antes.
+    private async getMonthCost(
         storeId: string,
         referenceMonth: string,
-    ): Promise<number> {
+    ): Promise<MonthCostBreakdown> {
         const monthStart = monthToDate(referenceMonth);
         const monthEnd = monthEndDate(referenceMonth);
 
-        const purchases = await this.prisma.purchase.findMany({
-            where: {
-                storeId,
-                status: { notIn: EXCLUDED_PURCHASE_STATUSES },
-                OR: [
-                    { purchasedAt: { gte: monthStart, lte: monthEnd } },
-                    {
-                        purchasedAt: null,
-                        createdAt: { gte: monthStart, lte: monthEnd },
-                    },
-                ],
-            },
-            select: { value: true },
-        });
+        const [purchases, unlinkedIncomingNfs, services] = await Promise.all([
+            this.prisma.purchase.findMany({
+                where: {
+                    storeId,
+                    status: { notIn: EXCLUDED_PURCHASE_STATUSES },
+                    OR: [
+                        { purchasedAt: { gte: monthStart, lte: monthEnd } },
+                        {
+                            purchasedAt: null,
+                            createdAt: { gte: monthStart, lte: monthEnd },
+                        },
+                    ],
+                },
+                select: { value: true },
+            }),
+            this.prisma.incomingGoodsNf.findMany({
+                where: {
+                    storeId,
+                    purchaseId: null,
+                    ignored: false,
+                    OR: [
+                        { issueDate: { gte: monthStart, lte: monthEnd } },
+                        {
+                            issueDate: null,
+                            fetchedAt: { gte: monthStart, lte: monthEnd },
+                        },
+                    ],
+                },
+                select: { value: true },
+            }),
+            this.prisma.service.findMany({
+                where: {
+                    storeId,
+                    serviceDate: { gte: monthStart, lte: monthEnd },
+                },
+                select: { value: true },
+            }),
+        ]);
 
-        return purchases.reduce((sum, p) => sum + Number(p.value), 0);
+        const purchasesCost = purchases.reduce(
+            (sum, p) => sum + Number(p.value),
+            0,
+        );
+        const unlinkedIncomingNfCost = unlinkedIncomingNfs.reduce(
+            (sum, nf) => sum + Number(nf.value || 0),
+            0,
+        );
+        const servicesCost = services.reduce(
+            (sum, s) => sum + Number(s.value),
+            0,
+        );
+
+        return {
+            total: purchasesCost + unlinkedIncomingNfCost + servicesCost,
+            purchases: purchasesCost,
+            unlinkedIncomingNf: unlinkedIncomingNfCost,
+            services: servicesCost,
+        };
     }
 }
+
+export type MonthCostBreakdown = {
+    total: number;
+    purchases: number;
+    unlinkedIncomingNf: number;
+    services: number;
+};

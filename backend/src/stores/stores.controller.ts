@@ -152,4 +152,13 @@ export class StoresController {
     async testGoodsConnection(@Param('id') id: string, @Req() req: any) {
         return this.storesService.testGoodsConnection(id, req.user);
     }
+
+    // Histórico das últimas tentativas de busca na Sefaz/ADN (manuais e
+    // automáticas), pra dar visibilidade a erros que aconteceram sem
+    // ninguém olhando — ex: a busca automática de madrugada.
+    @Get(':id/sefaz-sync-logs')
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async getSefazSyncLogs(@Param('id') id: string, @Req() req: any) {
+        return this.storesService.getSefazSyncLogs(id, req.user);
+    }
 }

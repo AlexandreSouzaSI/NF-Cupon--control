@@ -155,6 +155,7 @@ export class BillsService {
                 storeId: dto.storeId,
                 purchaseId: dto.purchaseId,
                 supplierId: dto.supplierId,
+                categoryId: dto.categoryId,
                 launchedById: user.id,
 
                 fileUrl: dto.fileUrl,
@@ -336,6 +337,9 @@ export class BillsService {
 
                 supplierId:
                     dto.supplierId,
+
+                categoryId:
+                    dto.categoryId,
 
                 fileUrl:
                     dto.fileUrl,
@@ -541,6 +545,7 @@ export class BillsService {
         return {
             store: true,
             supplier: true,
+            category: true,
             purchase: {
                 include: {
                     store: true,

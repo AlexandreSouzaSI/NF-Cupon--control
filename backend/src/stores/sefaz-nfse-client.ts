@@ -2,6 +2,7 @@ import { request } from 'https';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { gunzipSync } from 'zlib';
+import { XMLParser } from 'fast-xml-parser';
 
 import { decryptSecret, type EncryptedSecret } from './certificate-crypto.util';
 
@@ -13,11 +14,20 @@ if (!existsSync(diagnosticsPath)) {
     mkdirSync(diagnosticsPath, { recursive: true });
 }
 
-// Ambiente de homologação (chamado de "produção restrita" pela Sefaz) do
-// Ambiente de Dados Nacional da NFS-e. Usado enquanto validamos a conexão
-// antes de ir pra produção de verdade.
+// A API de produção do ADN (NFS-e nacional) só foi liberada em 01/10/2025 —
+// antes disso só existia o ambiente de homologação (chamado de "produção
+// restrita" pela Sefaz), e é o que ficou fixo aqui por um tempo. Confirmado
+// em gov.br/nfse (biblioteca > documentação técnica > APIs - Prod. Restrita
+// e Produção) que o endereço de produção é o abaixo.
+const PRODUCAO_BASE_URL = 'https://adn.nfse.gov.br';
 const HOMOLOGACAO_BASE_URL =
     'https://adn.producaorestrita.nfse.gov.br';
+
+export type Ambiente = 'PRODUCAO' | 'HOMOLOGACAO';
+
+function baseUrlFor(ambiente: Ambiente = 'PRODUCAO'): string {
+    return ambiente === 'HOMOLOGACAO' ? HOMOLOGACAO_BASE_URL : PRODUCAO_BASE_URL;
+}
 
 export type ConnectionTestResult = {
     success: boolean;
@@ -102,12 +112,18 @@ function mtlsGet(
     });
 }
 
-// Tenta ler o NSU 0 (Número Sequencial Único) — o primeiro método da API de
-// distribuição do ADN. Não baixa nem grava nada; só confirma que o
-// certificado autentica e a Sefaz responde.
+// Confirma que o certificado autentica e a Sefaz/ADN responde. Não baixa
+// nem grava nada de verdade — mas ainda assim consulta um NSU real, então
+// SEMPRE recebe o cursor já salvo do certificado (nunca fixo em 0). Repetir
+// NSU=0 a cada clique é exatamente o padrão "consulta fora de sequência"
+// que a Sefaz pune com bloqueio de 1h por "consumo indevido" — ainda mais
+// arriscado agora que outro sistema (contabilidade/Omie) também consulta
+// esse mesmo CNPJ.
 export async function testCertificateConnection(
     pfxPath: string,
     encryptedPassword: EncryptedSecret,
+    ambiente: Ambiente = 'PRODUCAO',
+    nsu: number | bigint = 0,
 ): Promise<ConnectionTestResult> {
     let pfx: Buffer;
 
@@ -137,7 +153,7 @@ export async function testCertificateConnection(
 
     try {
         const response = await mtlsGet(
-            `${HOMOLOGACAO_BASE_URL}/contribuintes/DFe/0`,
+            `${baseUrlFor(ambiente)}/contribuintes/DFe/${nsu}`,
             cert,
         );
 
@@ -185,9 +201,10 @@ export type LoteDistribuicaoNSUResponse = {
 export async function fetchDistribution(
     cert: LoadedCertificate,
     nsu: number | bigint,
+    ambiente: Ambiente = 'PRODUCAO',
 ): Promise<LoteDistribuicaoNSUResponse> {
     const response = await mtlsGet(
-        `${HOMOLOGACAO_BASE_URL}/contribuintes/DFe/${nsu}?lote=true`,
+        `${baseUrlFor(ambiente)}/contribuintes/DFe/${nsu}?lote=true`,
         cert,
     );
 
@@ -233,6 +250,280 @@ export function decodeArquivoXml(base64Content: string): string {
     } catch {
         return buffer.toString('utf-8');
     }
+}
+
+const nfseXmlParser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '@_',
+    textNodeName: '#text',
+});
+
+export type ParsedNfse = {
+    numeroNf?: string;
+    issuerName?: string;
+    issuerDoc?: string;
+    value?: number;
+    issueDate?: string;
+};
+
+function extractText(value: any): string {
+    if (value == null) return '';
+    if (typeof value === 'string' || typeof value === 'number') return String(value);
+    if (typeof value === 'object' && '#text' in value) return String(value['#text']);
+    return '';
+}
+
+// Acha o primeiro nó com esse nome em qualquer profundidade da árvore —
+// necessário porque o schema do NFS-e nacional (lançado em out/2025) não
+// tem documentação pública campo-a-campo, e a estrutura exata (se o valor
+// vem direto em <prest>/<xNome> ou aninhado dentro de <DPS>/<infDPS>) pode
+// variar. Procurar por nome em vez de caminho fixo é tolerante a isso.
+function findNodeByName(parsed: any, key: string): any | null {
+    const stack = [parsed];
+
+    while (stack.length > 0) {
+        const node = stack.pop();
+
+        if (!node || typeof node !== 'object') continue;
+        if (node[key] !== undefined) return node[key];
+
+        for (const nodeKey of Object.keys(node)) {
+            const value = node[nodeKey];
+            if (value && typeof value === 'object') stack.push(value);
+        }
+    }
+
+    return null;
+}
+
+// Extrai os dados que aparecem no card de conciliação (número, prestador,
+// valor, data) do XML completo da NFS-e. Tolerante a schema — se algum
+// campo não for encontrado, fica undefined em vez de derrubar a captura (a
+// nota continua sendo salva, só sem aquele dado pra mostrar).
+export function parseNfseXml(xml: string): ParsedNfse | null {
+    let parsed: any;
+
+    try {
+        parsed = nfseXmlParser.parse(xml);
+    } catch {
+        return null;
+    }
+
+    // Número da nota: nDFSe (número do DFe) ou nNFSe, conforme a versão do
+    // schema.
+    const numeroNfRaw =
+        extractText(findNodeByName(parsed, 'nDFSe')) ||
+        extractText(findNodeByName(parsed, 'nNFSe'));
+
+    // Prestador (quem prestou o serviço pra gente, o "fornecedor" desse
+    // gasto). Tem dois lugares possíveis: <prest> (dentro de DPS/infDPS) e
+    // <emit> (direto em infNFSe, o emissor do documento — quase sempre o
+    // mesmo prestador). IMPORTANTE: <prest> às vezes vem "resumido" — só
+    // CNPJ/IM/email, sem <xNome> — porque o nome completo já está no
+    // <emit>. Por isso não dá pra escolher um nó inteiro e usar só ele
+    // (se <prest> existir mas não tiver xNome, ia mostrar em branco); cada
+    // campo busca no <prest> primeiro e cai pro <emit> independentemente.
+    const prestNode = findNodeByName(parsed, 'prest');
+    const emitNode = findNodeByName(parsed, 'emit');
+
+    const issuerName =
+        extractText(prestNode?.xNome) || extractText(emitNode?.xNome);
+    const issuerDoc =
+        extractText(prestNode?.CNPJ) ||
+        extractText(prestNode?.CPF) ||
+        extractText(emitNode?.CNPJ) ||
+        extractText(emitNode?.CPF);
+
+    // Valor: prioriza o valor bruto do serviço (vServ, dentro de
+    // valores/vServPrest); se não achar, tenta o valor líquido (vLiq).
+    const vServPrest = findNodeByName(parsed, 'vServPrest');
+    const vServRaw =
+        typeof vServPrest === 'object'
+            ? extractText(vServPrest?.vServ)
+            : extractText(vServPrest);
+    const valueRaw = vServRaw || extractText(findNodeByName(parsed, 'vLiq'));
+
+    // Data de emissão: dhEmi (data/hora de emissão da DPS) é a mais
+    // confiável; dhProc (processamento no ambiente nacional) e dCompet
+    // (competência) como alternativas.
+    const issueDateRaw =
+        extractText(findNodeByName(parsed, 'dhEmi')) ||
+        extractText(findNodeByName(parsed, 'dhProc')) ||
+        extractText(findNodeByName(parsed, 'dCompet'));
+
+    return {
+        numeroNf: numeroNfRaw || undefined,
+        issuerName: issuerName || undefined,
+        issuerDoc: issuerDoc || undefined,
+        value: valueRaw ? Number(valueRaw) : undefined,
+        issueDate: issueDateRaw || undefined,
+    };
+}
+
+// Igual a findNodeByName, mas começa a busca a partir de um nó específico
+// em vez da árvore inteira — necessário pra pegar o endereço/e-mail/etc. de
+// UMA parte (prestador OU tomador) sem arriscar pegar o valor da outra
+// parte (já que os dois têm campos com o mesmo nome, tipo <email> ou
+// <endNac>, em pontos diferentes do XML).
+function findWithin(node: any, key: string): any | null {
+    return findNodeByName(node, key);
+}
+
+type NfseAddress = {
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    municipio?: string;
+    uf?: string;
+    cep?: string;
+};
+
+// Endereço nacional (endNac) pode aparecer direto no nó da parte (emit) ou
+// aninhado em <end><endNac> (toma) — schema não é 100% padronizado entre as
+// partes, então tenta os dois formatos.
+function extractNfseAddress(partyNode: any): NfseAddress | undefined {
+    if (!partyNode) return undefined;
+
+    const endNac =
+        findWithin(partyNode, 'endNac') || findWithin(partyNode, 'enderNac');
+
+    if (!endNac) return undefined;
+
+    const address: NfseAddress = {
+        logradouro: extractText(endNac.xLgr) || undefined,
+        numero: extractText(endNac.nro) || undefined,
+        bairro: extractText(endNac.xBairro) || undefined,
+        municipio: extractText(endNac.xMun) || undefined,
+        uf: extractText(endNac.UF) || undefined,
+        cep: extractText(endNac.CEP) || undefined,
+    };
+
+    const hasAnyField = Object.values(address).some((value) => value !== undefined);
+
+    return hasAnyField ? address : undefined;
+}
+
+export type NfseViewParty = {
+    nome?: string;
+    cnpj?: string;
+    cpf?: string;
+    inscricaoMunicipal?: string;
+    email?: string;
+    endereco?: NfseAddress;
+};
+
+export type NfseView = {
+    numeroNf?: string;
+    issueDate?: string;
+    competencia?: string;
+    prestador: NfseViewParty;
+    tomador: NfseViewParty;
+    servico: {
+        descricao?: string;
+        codigoTributacaoNacional?: string;
+        codigoTributacaoMunicipal?: string;
+    };
+    valores: {
+        valorServico?: number;
+        baseCalculo?: number;
+        aliquota?: number;
+        valorISS?: number;
+        valorLiquido?: number;
+        issRetido?: boolean;
+    };
+    // Quando não dá pra achar nem o nó de serviço nem o de valores, o XML
+    // provavelmente é só um evento/resumo, não o documento completo — sinaliza
+    // pro front mostrar um aviso em vez de uma tela vazia.
+    detalhamentoCompleto: boolean;
+};
+
+// Extrai bem mais detalhe que parseNfseXml (tomador, endereços, descrição do
+// serviço, tributos) — usado só pra tela de visualização legível da NF, não
+// pro fluxo de conciliação em si.
+export function parseNfseForView(xml: string): NfseView | null {
+    let parsed: any;
+
+    try {
+        parsed = nfseXmlParser.parse(xml);
+    } catch {
+        return null;
+    }
+
+    const numeroNf =
+        extractText(findNodeByName(parsed, 'nDFSe')) ||
+        extractText(findNodeByName(parsed, 'nNFSe'));
+
+    const prestNode = findNodeByName(parsed, 'prest');
+    const emitNode = findNodeByName(parsed, 'emit');
+    const tomaNode = findNodeByName(parsed, 'toma');
+
+    const prestador: NfseViewParty = {
+        nome: extractText(prestNode?.xNome) || extractText(emitNode?.xNome) || undefined,
+        cnpj: extractText(prestNode?.CNPJ) || extractText(emitNode?.CNPJ) || undefined,
+        cpf: extractText(prestNode?.CPF) || extractText(emitNode?.CPF) || undefined,
+        inscricaoMunicipal:
+            extractText(prestNode?.IM) || extractText(emitNode?.IM) || undefined,
+        email: extractText(prestNode?.email) || extractText(emitNode?.email) || undefined,
+        endereco: extractNfseAddress(emitNode) || extractNfseAddress(prestNode),
+    };
+
+    const tomador: NfseViewParty = {
+        nome: extractText(tomaNode?.xNome) || undefined,
+        cnpj: extractText(tomaNode?.CNPJ) || undefined,
+        cpf: extractText(tomaNode?.CPF) || undefined,
+        inscricaoMunicipal: extractText(tomaNode?.IM) || undefined,
+        email: extractText(tomaNode?.email) || undefined,
+        endereco: extractNfseAddress(tomaNode),
+    };
+
+    const cServNode = findNodeByName(parsed, 'cServ');
+
+    const servico = {
+        descricao: extractText(cServNode?.xDescServ) || undefined,
+        codigoTributacaoNacional: extractText(cServNode?.cTribNac) || undefined,
+        codigoTributacaoMunicipal: extractText(cServNode?.cTribMun) || undefined,
+    };
+
+    const vServPrest = findNodeByName(parsed, 'vServPrest');
+    const valorServicoRaw =
+        typeof vServPrest === 'object' ? extractText(vServPrest?.vServ) : extractText(vServPrest);
+
+    const tribMunNode = findNodeByName(parsed, 'tribMun');
+    const vLiqRaw = extractText(findNodeByName(parsed, 'vLiq'));
+    const vBCRaw = extractText(findNodeByName(parsed, 'vBC'));
+    const vISSRaw =
+        extractText(tribMunNode?.vISSQN) || extractText(findNodeByName(parsed, 'vISSQN'));
+    const pAliqRaw = extractText(tribMunNode?.pAliq) || extractText(findNodeByName(parsed, 'pAliq'));
+    const tpRetISSQN = extractText(tribMunNode?.tpRetISSQN);
+
+    const issueDateRaw =
+        extractText(findNodeByName(parsed, 'dhEmi')) ||
+        extractText(findNodeByName(parsed, 'dhProc'));
+    const competenciaRaw = extractText(findNodeByName(parsed, 'dCompet'));
+
+    const detalhamentoCompleto = Boolean(
+        servico.descricao || valorServicoRaw || tomador.nome,
+    );
+
+    return {
+        numeroNf: numeroNf || undefined,
+        issueDate: issueDateRaw || undefined,
+        competencia: competenciaRaw || undefined,
+        prestador,
+        tomador,
+        servico,
+        valores: {
+            valorServico: valorServicoRaw ? Number(valorServicoRaw) : undefined,
+            baseCalculo: vBCRaw ? Number(vBCRaw) : undefined,
+            aliquota: pAliqRaw ? Number(pAliqRaw) : undefined,
+            valorISS: vISSRaw ? Number(vISSRaw) : undefined,
+            valorLiquido: vLiqRaw ? Number(vLiqRaw) : undefined,
+            // 1 = retido, 2 = não retido, conforme tabela do leiaute nacional —
+            // tolerante: se o schema divergir, fica undefined em vez de mentir.
+            issRetido: tpRetISSQN ? tpRetISSQN === '1' : undefined,
+        },
+        detalhamentoCompleto,
+    };
 }
 
 export type DiagnosticsResult = {

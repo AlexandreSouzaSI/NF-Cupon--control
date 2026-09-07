@@ -6,14 +6,18 @@ import {
     Param,
     Post,
     Query,
+    Res,
     UploadedFile,
+    UploadedFiles,
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage, memoryStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
 import { extname, join } from 'path';
+import type { Response } from 'express';
+import archiver from 'archiver';
 import { PurchaseCategory, PurchaseStatus } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -23,6 +27,7 @@ import { PurchaseVoiceService } from './purchase-voice.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { CreateFiscalDocumentDto } from './dto/create-fiscal-document.dto';
 import { ReceivePurchaseDto } from './dto/receive-purchase.dto';
+import { AcceptIncomingNfDto } from './dto/accept-incoming-nf.dto';
 
 const uploadPath = join(process.cwd(), 'uploads', 'fiscal-documents');
 
@@ -125,14 +130,94 @@ export class PurchasesController {
         return this.purchasesService.findPendingApprovals(user);
     }
 
-    // NF-e de mercadoria baixada automaticamente da Sefaz, ainda não
-    // conciliada com nenhuma compra cadastrada.
+    // NF-e de mercadoria baixada automaticamente da Sefaz. accepted=true
+    // devolve a aba "NFs Aceitas" (vinculada, aceita sem conta ou aceita
+    // com conta); por padrão (ou accepted=false) devolve só as pendentes.
     @Get('incoming-goods-nf')
     async findIncomingGoodsNf(
         @CurrentUser() user: any,
         @Query('storeId') storeId?: string,
+        @Query('page') page?: string,
+        @Query('pageSize') pageSize?: string,
+        @Query('accepted') accepted?: string,
     ) {
-        return this.purchasesService.findIncomingGoodsNf(user, { storeId });
+        return this.purchasesService.findIncomingGoodsNf(user, {
+            storeId,
+            page: page ? Number(page) : undefined,
+            pageSize: pageSize ? Number(pageSize) : undefined,
+            accepted: accepted === 'true',
+        });
+    }
+
+    // Precisa vir antes de qualquer rota "incoming-goods-nf/:id/..." pra não
+    // ser interpretada como um id.
+    @Get('incoming-goods-nf/download/zip')
+    async downloadIncomingGoodsNfZip(
+        @CurrentUser() user: any,
+        @Res() res: Response,
+        @Query('storeId') storeId?: string,
+        @Query('month') month?: string,
+        @Query('startDate') startDate?: string,
+        @Query('endDate') endDate?: string,
+    ) {
+        const items = await this.purchasesService.findGoodsForDownload(user, {
+            storeId,
+            month,
+            startDate,
+            endDate,
+        });
+
+        const zipName = month ? `nf-entrada-${month}.zip` : 'nf-entrada.zip';
+
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="${zipName}"`,
+        });
+
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        archive.on('error', (error) => {
+            res.status(500).end(String(error));
+        });
+
+        archive.pipe(res);
+
+        const usedNames = new Set<string>();
+
+        for (const item of items) {
+            if (!item.fileUrl) {
+                continue;
+            }
+
+            const relativePath = item.fileUrl.replace(/^\/uploads\//, '');
+            const filePath = join(process.cwd(), 'uploads', relativePath);
+
+            if (!existsSync(filePath)) {
+                continue;
+            }
+
+            const ext = extname(filePath) || '.xml';
+
+            let baseName = `${new Date(item.date)
+                .toISOString()
+                .slice(0, 10)}-${item.providerName}`
+                .replace(/[^a-zA-Z0-9-_ ]/g, '')
+                .trim();
+
+            let entryName = `${baseName}${ext}`;
+            let counter = 2;
+
+            while (usedNames.has(entryName)) {
+                entryName = `${baseName}-${counter}${ext}`;
+                counter += 1;
+            }
+
+            usedNames.add(entryName);
+
+            archive.file(filePath, { name: entryName });
+        }
+
+        await archive.finalize();
     }
 
     // Busca (produção Sefaz) as NF-e novas emitidas pro CNPJ da loja desde
@@ -143,6 +228,34 @@ export class PurchasesController {
         @Body('storeId') storeId: string,
     ) {
         return this.purchasesService.syncIncomingGoodsNf(storeId, user);
+    }
+
+    // Fallback manual: importa vários XMLs de NF-e de compra de uma vez só,
+    // pra quando a busca automática na Sefaz não estiver disponível.
+    @Post('incoming-goods-nf/import-xml')
+    @UseInterceptors(
+        FilesInterceptor('files', 50, {
+            storage: memoryStorage(),
+            limits: { fileSize: 5 * 1024 * 1024 },
+            fileFilter: (_req, file, callback) => {
+                if (
+                    !file.originalname.toLowerCase().endsWith('.xml') &&
+                    file.mimetype !== 'text/xml' &&
+                    file.mimetype !== 'application/xml'
+                ) {
+                    return callback(new Error('Envie apenas arquivos XML.'), false);
+                }
+
+                callback(null, true);
+            },
+        }),
+    )
+    async importGoodsNfXml(
+        @UploadedFiles() files: Express.Multer.File[],
+        @Body('storeId') storeId: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.importGoodsNfXml(storeId, files, user);
     }
 
     @Post('incoming-goods-nf/:id/link')
@@ -164,6 +277,23 @@ export class PurchasesController {
         @CurrentUser() user: any,
     ) {
         return this.purchasesService.ignoreIncomingGoodsNf(id, user);
+    }
+
+    @Post('incoming-goods-nf/:id/accept')
+    async acceptIncomingGoodsNf(
+        @Param('id') id: string,
+        @Body() body: AcceptIncomingNfDto,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.acceptIncomingGoodsNf(id, body, user);
+    }
+
+    @Get('incoming-goods-nf/:id/view')
+    async viewIncomingGoodsNf(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.viewIncomingGoodsNf(id, user);
     }
 
     @Get(':id')

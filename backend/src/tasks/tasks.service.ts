@@ -2,10 +2,12 @@ import {
     BadRequestException,
     ForbiddenException,
     Injectable,
+    Logger,
     NotFoundException,
     OnModuleInit,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import {
     NotificationType,
     Task,
@@ -19,6 +21,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { ConfirmOccurrenceDto } from './dto/confirm-occurrence.dto';
+import {
+    TASK_OCCURRENCE_CREATED_EVENT,
+    WHATSAPP_TASK_START_EVENT,
+} from '../common/events';
+import type { WhatsappTaskStartEvent } from '../common/events';
 
 // Quem pode criar/editar/remover tarefas e desfazer confirmações — a
 // própria tela é aberta pra todo mundo ver, mas só gestão pode atribuir.
@@ -44,13 +51,18 @@ const MANAGE_ROLES: UserRole[] = [
 
 // Precisa do nome do responsável pra montar a mensagem de notificação de
 // quem criou a tarefa ("atribuída a Fulano").
-type TaskWithAssignee = Task & { assignedTo: { name: string } };
+type TaskWithAssignee = Task & {
+    assignedTo: { name: string; phone: string | null };
+};
 
 @Injectable()
 export class TasksService implements OnModuleInit {
+    private readonly logger = new Logger(TasksService.name);
+
     constructor(
         private prisma: PrismaService,
         private notificationsService: NotificationsService,
+        private eventEmitter: EventEmitter2,
     ) { }
 
     // Roda uma vez quando o backend sobe — assim, toda vez que reiniciar
@@ -254,7 +266,7 @@ export class TasksService implements OnModuleInit {
     private defaultInclude() {
         return {
             store: { select: { id: true, name: true } },
-            assignedTo: { select: { id: true, name: true } },
+            assignedTo: { select: { id: true, name: true, phone: true } },
             createdBy: { select: { id: true, name: true } },
         };
     }
@@ -553,6 +565,19 @@ export class TasksService implements OnModuleInit {
             userId: task.assignedToId,
         });
 
+        // Quem estiver ouvindo decide o que fazer com isso — hoje só o
+        // WhatsappService, que manda a mensagem se a pessoa tiver telefone
+        // cadastrado (ver src/common/events.ts). TasksService não sabe
+        // nada sobre WhatsApp, de propósito.
+        this.eventEmitter.emit(TASK_OCCURRENCE_CREATED_EVENT, {
+            userId: task.assignedToId,
+            phone: task.assignedTo.phone,
+            taskOccurrenceId: occurrence.id,
+            title: task.title,
+            description: task.description,
+            dueDateLabel,
+        });
+
         if (task.createdById !== task.assignedToId) {
             await this.notificationsService.create({
                 title: 'Tarefa atribuída',
@@ -610,7 +635,7 @@ export class TasksService implements OnModuleInit {
                 active: true,
                 recurrence: { in: [TaskRecurrence.DAILY, TaskRecurrence.WEEKLY, TaskRecurrence.MONTHLY] },
             },
-            include: { assignedTo: { select: { name: true } } },
+            include: { assignedTo: { select: { name: true, phone: true } } },
         });
 
         for (const task of activeTasks) {
@@ -755,6 +780,33 @@ export class TasksService implements OnModuleInit {
         }
 
         return occurrence;
+    }
+
+    // Ouve o evento que o WhatsappService dispara quando a própria pessoa
+    // responde "iniciar" no WhatsApp — reaproveita o mesmo startOccurrence
+    // usado pelo botão no quadro, então a permissão e a validação de
+    // status são exatamente as mesmas dos dois jeitos de iniciar uma
+    // tarefa. TasksService não sabe nada sobre WhatsApp (ver
+    // src/common/events.ts) — só reage ao evento genérico.
+    @OnEvent(WHATSAPP_TASK_START_EVENT)
+    async handleWhatsappTaskStart(payload: WhatsappTaskStartEvent) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: payload.userId },
+            include: { userStores: true },
+        });
+
+        if (!user || !user.active) return;
+
+        try {
+            await this.startOccurrence(payload.taskOccurrenceId, user);
+        } catch (error: any) {
+            // Não deixa o listener derrubar nada — casos esperados (ex: a
+            // pessoa já tinha iniciado pelo app antes de responder o
+            // WhatsApp) só ficam sem efeito, não é um erro do sistema.
+            this.logger.warn(
+                `Não deu pra iniciar a tarefa ${payload.taskOccurrenceId} via WhatsApp: ${error?.message || error}`,
+            );
+        }
     }
 
     async startOccurrence(id: string, user: any) {

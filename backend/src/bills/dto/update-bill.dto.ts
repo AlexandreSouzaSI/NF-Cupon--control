@@ -59,6 +59,10 @@ export class UpdateBillDto {
     supplierId?: string;
 
     @IsOptional()
+    @IsString()
+    categoryId?: string;
+
+    @IsOptional()
     @IsEnum(ExternalLaunchStatus)
     externalLaunchStatus?: ExternalLaunchStatus;
 

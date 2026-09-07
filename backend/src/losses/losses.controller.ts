@@ -23,6 +23,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 
 import { LossesService } from './losses.service';
 import { CreateLossDto } from './dto/create-loss.dto';
+import { CreateLossNfeDto } from './dto/create-loss-nfe.dto';
 
 const uploadPath = join(process.cwd(), 'uploads', 'losses');
 
@@ -109,6 +110,37 @@ export class LossesController {
             month: Number(month),
             year: Number(year),
         });
+    }
+
+    @Get('nfe/eligible')
+    async findEligibleLossesForNfe(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+    ) {
+        return this.lossesService.findEligibleLosses(user, storeId);
+    }
+
+    @Post('nfe')
+    async createLossNfe(@Body() body: CreateLossNfeDto, @CurrentUser() user: any) {
+        return this.lossesService.createLossNfeDraft(body, user);
+    }
+
+    @Get('nfe')
+    async findLossNfes(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId?: string,
+    ) {
+        return this.lossesService.findLossNfes(user, storeId);
+    }
+
+    @Get('nfe/:id/view')
+    async viewLossNfe(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.lossesService.viewLossNfe(id, user);
+    }
+
+    @Get('nfe/:id')
+    async findLossNfeById(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.lossesService.findLossNfeById(id, user);
     }
 
     @Delete(':id')

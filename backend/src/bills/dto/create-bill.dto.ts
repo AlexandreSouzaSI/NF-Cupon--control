@@ -44,6 +44,10 @@ export class CreateBillDto {
     supplierId?: string;
 
     @IsOptional()
+    @IsString()
+    categoryId?: string;
+
+    @IsOptional()
     @IsEnum(ExternalLaunchStatus)
     externalLaunchStatus?: ExternalLaunchStatus;
 

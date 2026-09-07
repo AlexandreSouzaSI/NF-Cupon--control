@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { NotificationType, UserRole } from '@prisma/client';
+import * as webpush from 'web-push';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // Perfis com acesso global (Administrativo/Proprietário) sempre recebem
@@ -12,7 +13,78 @@ const GLOBAL_ACCESS_ROLES: UserRole[] = [
 
 @Injectable()
 export class NotificationsService {
-    constructor(private prisma: PrismaService) { }
+    private readonly logger = new Logger(NotificationsService.name);
+    private readonly webPushConfigured: boolean;
+
+    constructor(private prisma: PrismaService) {
+        const publicKey = process.env.VAPID_PUBLIC_KEY;
+        const privateKey = process.env.VAPID_PRIVATE_KEY;
+        const subject = process.env.VAPID_SUBJECT;
+
+        this.webPushConfigured = Boolean(publicKey && privateKey && subject);
+
+        if (this.webPushConfigured) {
+            webpush.setVapidDetails(subject!, publicKey!, privateKey!);
+        } else {
+            this.logger.warn(
+                'VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/VAPID_SUBJECT não configuradas — ' +
+                'notificação push do navegador desativada (o sino dentro do app continua funcionando normal).',
+            );
+        }
+    }
+
+    // Manda o push de verdade (fora do navegador/app aberto) pras
+    // inscrições ativas dos usuários informados. Chamado depois que as
+    // notificações já foram gravadas no banco — se o push falhar, a
+    // notificação dentro do app já existe de qualquer forma.
+    private async sendWebPush(
+        userIds: string[],
+        payload: { title: string; message: string; type: NotificationType },
+    ) {
+        if (!this.webPushConfigured || userIds.length === 0) return;
+
+        const subscriptions = await this.prisma.pushSubscription.findMany({
+            where: { userId: { in: userIds } },
+        });
+
+        const body = JSON.stringify({
+            title: payload.title,
+            message: payload.message,
+            type: payload.type,
+            url: '/notifications',
+        });
+
+        await Promise.all(
+            subscriptions.map(async (subscription) => {
+                try {
+                    await webpush.sendNotification(
+                        {
+                            endpoint: subscription.endpoint,
+                            keys: {
+                                p256dh: subscription.p256dh,
+                                auth: subscription.auth,
+                            },
+                        },
+                        body,
+                    );
+                } catch (error: any) {
+                    // 404/410 = inscrição expirada ou revogada (usuário
+                    // desinstalou o PWA, limpou dados do site, etc.) — some
+                    // silenciosamente do banco em vez de ficar tentando de
+                    // novo em toda notificação futura.
+                    if (error?.statusCode === 404 || error?.statusCode === 410) {
+                        await this.prisma.pushSubscription
+                            .delete({ where: { endpoint: subscription.endpoint } })
+                            .catch(() => undefined);
+                    } else {
+                        this.logger.warn(
+                            `Falha ao enviar push (endpoint ${subscription.endpoint}): ${error?.message || error}`,
+                        );
+                    }
+                }
+            }),
+        );
+    }
 
     async create(data: {
         title: string;
@@ -65,6 +137,15 @@ export class NotificationsService {
                 userId: u.id,
             })),
         });
+
+        await this.sendWebPush(
+            users.map((u) => u.id),
+            {
+                title: options.title,
+                message: options.message,
+                type: options.type,
+            },
+        );
 
         return users;
     }
