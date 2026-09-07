@@ -6,6 +6,8 @@ import { api } from '@/lib/api';
 import {
     AlertTriangle,
     Bell,
+    BellOff,
+    BellRing,
     Briefcase,
     CheckCircle2,
     Clock,
@@ -15,6 +17,12 @@ import {
     Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+    getPushSubscriptionStatus,
+    isPushSupported,
+    subscribeToPush,
+    unsubscribeFromPush,
+} from '@/lib/push';
 
 type Notification = {
     id: string;
@@ -39,9 +47,50 @@ const typeIcon: Record<string, React.ElementType> = {
     SERVICE_ADDED: Briefcase,
 };
 
+type PushStatus = 'unsupported' | 'denied' | 'subscribed' | 'not-subscribed';
+
 export default function NotificationsPage() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
+    const [pushStatus, setPushStatus] = useState<PushStatus>('not-subscribed');
+    const [pushBusy, setPushBusy] = useState(false);
+
+    async function refreshPushStatus() {
+        if (!isPushSupported()) {
+            setPushStatus('unsupported');
+            return;
+        }
+
+        setPushStatus(await getPushSubscriptionStatus());
+    }
+
+    async function handleEnablePush() {
+        try {
+            setPushBusy(true);
+            await subscribeToPush();
+            toast.success('Notificações ativadas neste aparelho.');
+        } catch (error: any) {
+            toast.error(
+                error?.message || 'Não foi possível ativar as notificações.',
+            );
+        } finally {
+            setPushBusy(false);
+            await refreshPushStatus();
+        }
+    }
+
+    async function handleDisablePush() {
+        try {
+            setPushBusy(true);
+            await unsubscribeFromPush();
+            toast.success('Notificações desativadas neste aparelho.');
+        } catch {
+            toast.error('Não foi possível desativar as notificações.');
+        } finally {
+            setPushBusy(false);
+            await refreshPushStatus();
+        }
+    }
 
     async function loadNotifications() {
         try {
@@ -71,6 +120,7 @@ export default function NotificationsPage() {
 
     useEffect(() => {
         loadNotifications();
+        refreshPushStatus();
     }, []);
 
     const unreadCount = notifications.filter(
@@ -96,6 +146,58 @@ export default function NotificationsPage() {
                     </div>
                 </div>
             </div>
+
+            {pushStatus !== 'unsupported' && (
+                <div className="mb-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-950 p-3 text-green-400">
+                                {pushStatus === 'subscribed' ? (
+                                    <BellRing size={22} />
+                                ) : (
+                                    <BellOff size={22} />
+                                )}
+                            </div>
+
+                            <div>
+                                <h3 className="font-bold">
+                                    Notificações neste aparelho
+                                </h3>
+
+                                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                    {pushStatus === 'subscribed' &&
+                                        'Ativadas — você recebe avisos mesmo com o app fechado.'}
+                                    {pushStatus === 'not-subscribed' &&
+                                        'Desativadas — ative pra receber avisos mesmo com o app fechado.'}
+                                    {pushStatus === 'denied' &&
+                                        'Bloqueadas nas permissões do navegador. Pra ativar, libere notificação pra este site nas configurações do navegador.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {pushStatus !== 'denied' && (
+                            <button
+                                onClick={
+                                    pushStatus === 'subscribed'
+                                        ? handleDisablePush
+                                        : handleEnablePush
+                                }
+                                disabled={pushBusy}
+                                className={`shrink-0 rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-50 ${pushStatus === 'subscribed'
+                                    ? 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                                    : 'border-green-500/30 text-green-400 hover:bg-green-500/20'
+                                    }`}
+                            >
+                                {pushBusy
+                                    ? 'Aguarde...'
+                                    : pushStatus === 'subscribed'
+                                        ? 'Desativar'
+                                        : 'Ativar notificações'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {loading ? (
                 <p className="text-zinc-600 dark:text-zinc-400">Carregando notificações...</p>

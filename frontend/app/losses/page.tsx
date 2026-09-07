@@ -6,7 +6,9 @@ import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import {
     Camera,
+    CheckCircle2,
     FileDown,
+    FileText,
     ImageOff,
     Loader2,
     PackageX,
@@ -14,9 +16,14 @@ import {
     Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { NfViewerModal } from '../../src/components/ui/NfViewerModal';
 
 function photoSrc(photoUrl: string) {
     return `${API_URL}${photoUrl}`;
+}
+
+function fileSrc(fileUrl: string) {
+    return `${API_URL}${fileUrl}`;
 }
 
 type Loss = {
@@ -25,6 +32,7 @@ type Loss = {
     quantity: string;
     unit: string | null;
     reason: string | null;
+    unitValue?: string | null;
     photoUrl: string;
     occurredAt: string;
     store: { id: string; name: string };
@@ -35,6 +43,59 @@ type MonthlyReport = {
     losses: Loss[];
     totals: { description: string; unit: string | null; quantity: number }[];
 };
+
+type LossNfeStatus = 'RASCUNHO' | 'ENVIADA' | 'AUTORIZADA' | 'REJEITADA' | 'CANCELADA';
+
+type LossNfe = {
+    id: string;
+    status: LossNfeStatus;
+    ambiente: number;
+    serie: number | null;
+    numero: number | null;
+    chaveAcesso: string | null;
+    issueDate: string | null;
+    justificativa: string;
+    xmlFileUrl: string | null;
+    createdAt: string;
+    createdBy: { id: string; name: string };
+    losses: {
+        id: string;
+        description: string;
+        quantity: string;
+        unit: string | null;
+        unitValue: string | null;
+    }[];
+};
+
+function formatCurrency(value: number) {
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function statusLabel(status: LossNfeStatus) {
+    const labels: Record<LossNfeStatus, string> = {
+        RASCUNHO: 'Rascunho (assinada, ainda não enviada)',
+        ENVIADA: 'Enviada — aguardando retorno',
+        AUTORIZADA: 'Autorizada',
+        REJEITADA: 'Rejeitada',
+        CANCELADA: 'Cancelada',
+    };
+
+    return labels[status] || status;
+}
+
+function statusColor(status: LossNfeStatus) {
+    switch (status) {
+        case 'AUTORIZADA':
+            return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500';
+        case 'REJEITADA':
+        case 'CANCELADA':
+            return 'border-red-500/30 bg-red-500/10 text-red-400';
+        case 'ENVIADA':
+            return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-500';
+        default:
+            return 'border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400';
+    }
+}
 
 function formatDateTime(value: string) {
     return new Date(value).toLocaleString('pt-BR', {
@@ -53,7 +114,7 @@ function formatQuantity(value: number | string, unit: string | null) {
     return unit ? `${formatted} ${unit}` : formatted;
 }
 
-type TabKey = 'registrar' | 'relatorio';
+type TabKey = 'registrar' | 'relatorio' | 'nfe';
 
 export default function LossesPage() {
     const [tab, setTab] = useState<TabKey>('registrar');
@@ -90,9 +151,25 @@ export default function LossesPage() {
                         <FileDown size={16} />
                         Relatório mensal
                     </button>
+                    <button
+                        onClick={() => setTab('nfe')}
+                        className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${tab === 'nfe'
+                            ? 'bg-emerald-600 text-white'
+                            : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                            }`}
+                    >
+                        <FileText size={16} />
+                        NF de Perda
+                    </button>
                 </div>
 
-                {tab === 'registrar' ? <RegistrarTab /> : <RelatorioTab />}
+                {tab === 'registrar' ? (
+                    <RegistrarTab />
+                ) : tab === 'relatorio' ? (
+                    <RelatorioTab />
+                ) : (
+                    <NfPerdaTab />
+                )}
             </div>
         </AppLayout>
     );
@@ -109,6 +186,8 @@ function RegistrarTab() {
         quantity: '',
         unit: '',
         reason: '',
+        unitValue: '',
+        ncm: '',
     });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -154,7 +233,14 @@ function RegistrarTab() {
     }
 
     function resetForm() {
-        setForm({ description: '', quantity: '', unit: '', reason: '' });
+        setForm({
+            description: '',
+            quantity: '',
+            unit: '',
+            reason: '',
+            unitValue: '',
+            ncm: '',
+        });
         setPhotoFile(null);
         if (photoPreview) URL.revokeObjectURL(photoPreview);
         setPhotoPreview(null);
@@ -192,6 +278,8 @@ function RegistrarTab() {
         formData.append('quantity', form.quantity);
         if (form.unit.trim()) formData.append('unit', form.unit.trim());
         if (form.reason.trim()) formData.append('reason', form.reason.trim());
+        if (form.unitValue.trim()) formData.append('unitValue', form.unitValue.trim());
+        if (form.ncm.trim()) formData.append('ncm', form.ncm.trim());
         formData.append('photo', photoFile);
 
         try {
@@ -346,6 +434,43 @@ function RegistrarTab() {
                     />
                 </div>
 
+                <div>
+                    <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                        Valor unitário (opcional)
+                    </label>
+                    <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={form.unitValue}
+                        onChange={(e) => setForm({ ...form, unitValue: e.target.value })}
+                        placeholder="Só preencha se for entrar numa NF de perda"
+                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                    />
+                    <p className="mt-1 text-xs text-zinc-500">
+                        Preenchendo isso, essa perda fica disponível na aba
+                        &quot;NF de Perda&quot; pra entrar numa nota fiscal de
+                        baixa de estoque.
+                    </p>
+                </div>
+
+                <div>
+                    <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                        NCM (opcional)
+                    </label>
+                    <input
+                        value={form.ncm}
+                        onChange={(e) => setForm({ ...form, ncm: e.target.value })}
+                        placeholder="Ex: 22030000 — se não souber, deixe em branco"
+                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                    />
+                    <p className="mt-1 text-xs text-zinc-500">
+                        Se não informar, a NF de perda sai com um NCM
+                        genérico — só corrija aqui se souber o código certo
+                        do produto.
+                    </p>
+                </div>
+
                 <button
                     disabled={saving}
                     className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
@@ -398,6 +523,12 @@ function RegistrarTab() {
                                         {formatDateTime(loss.occurredAt)} —{' '}
                                         {loss.reportedBy.name}
                                     </p>
+                                    {loss.unitValue && (
+                                        <p className="text-xs text-emerald-500">
+                                            {formatCurrency(Number(loss.unitValue))} /
+                                            un. — pronta pra NF de perda
+                                        </p>
+                                    )}
 
                                     <button
                                         onClick={() => handleRemove(loss)}
@@ -579,6 +710,333 @@ function RelatorioTab() {
                         </div>
                     </div>
                 </>
+            )}
+        </div>
+    );
+}
+
+function NfPerdaTab() {
+    const [eligible, setEligible] = useState<Loss[]>([]);
+    const [selected, setSelected] = useState<Record<string, boolean>>({});
+    const [justificativa, setJustificativa] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [emitting, setEmitting] = useState(false);
+    const [nfes, setNfes] = useState<LossNfe[]>([]);
+    const [loadingNfes, setLoadingNfes] = useState(true);
+    const [viewingNfeId, setViewingNfeId] = useState<string | null>(null);
+
+    const store = getActiveStore();
+
+    async function loadEligible() {
+        if (!store) {
+            setLoading(false);
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const response = await api.get('/losses/nfe/eligible', {
+                params: { storeId: store.id },
+            });
+            setEligible(response.data);
+        } catch {
+            toast.error('Erro ao carregar perdas com valor definido.');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function loadNfes() {
+        if (!store) {
+            setLoadingNfes(false);
+            return;
+        }
+
+        try {
+            setLoadingNfes(true);
+            const response = await api.get('/losses/nfe', {
+                params: { storeId: store.id },
+            });
+            setNfes(response.data);
+        } catch {
+            toast.error('Erro ao carregar NFs de perda já geradas.');
+        } finally {
+            setLoadingNfes(false);
+        }
+    }
+
+    useEffect(() => {
+        loadEligible();
+        loadNfes();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    function toggleSelected(id: string) {
+        setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+    }
+
+    const selectedIds = Object.keys(selected).filter((id) => selected[id]);
+    const selectedLosses = eligible.filter((loss) => selected[loss.id]);
+    const selectedTotal = selectedLosses.reduce(
+        (sum, loss) => sum + Number(loss.quantity) * Number(loss.unitValue || 0),
+        0,
+    );
+
+    async function handleEmit() {
+        if (!store) {
+            toast.error('Selecione uma loja ativa no topo do sistema.');
+            return;
+        }
+
+        if (selectedIds.length === 0) {
+            toast.error('Selecione ao menos uma perda.');
+            return;
+        }
+
+        if (!justificativa.trim()) {
+            toast.error('Descreva o motivo da baixa (justificativa).');
+            return;
+        }
+
+        const confirmed = confirm(
+            `Gerar NF de perda em ambiente de homologação (teste, sem valor fiscal) com ${selectedIds.length} item(ns), totalizando ${formatCurrency(selectedTotal)}?`,
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setEmitting(true);
+
+            await api.post('/losses/nfe', {
+                storeId: store.id,
+                lossIds: selectedIds,
+                justificativa: justificativa.trim(),
+            });
+
+            toast.success('NF de perda gerada e assinada (homologação).');
+            setSelected({});
+            setJustificativa('');
+            await loadEligible();
+            await loadNfes();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao gerar a NF de perda.';
+
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setEmitting(false);
+        }
+    }
+
+    return (
+        <div className="space-y-5">
+            <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-700 dark:text-yellow-400">
+                Essa NF de perda ainda é gerada só em ambiente de{' '}
+                <strong>homologação</strong> (teste, sem valor fiscal) — ainda
+                não é enviada pra Sefaz nem substitui nenhum controle contábil
+                atual. Confirme com o contador antes de usar isso pra valer.
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_420px]">
+                <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                    <div className="mb-4">
+                        <h2 className="text-lg font-bold">Perdas prontas pra NF</h2>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                            Só aparecem aqui perdas com valor unitário
+                            preenchido e que ainda não entraram em nenhuma NF.
+                        </p>
+                    </div>
+
+                    {loading ? (
+                        <p className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                            <Loader2 size={14} className="animate-spin" />
+                            Carregando...
+                        </p>
+                    ) : eligible.length === 0 ? (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                            Nenhuma perda disponível. Preencha o valor
+                            unitário na aba &quot;Registrar&quot; pra uma
+                            perda aparecer aqui.
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            {eligible.map((loss) => {
+                                const lineTotal =
+                                    Number(loss.quantity) * Number(loss.unitValue || 0);
+
+                                return (
+                                    <label
+                                        key={loss.id}
+                                        className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm ${selected[loss.id]
+                                            ? 'border-emerald-500 bg-emerald-500/5'
+                                            : 'border-zinc-200 dark:border-zinc-800'
+                                            }`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={!!selected[loss.id]}
+                                            onChange={() => toggleSelected(loss.id)}
+                                            className="h-4 w-4"
+                                        />
+
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-medium leading-snug">
+                                                {loss.description}
+                                            </p>
+                                            <p className="text-xs text-zinc-500">
+                                                {formatQuantity(loss.quantity, loss.unit)} ×{' '}
+                                                {formatCurrency(Number(loss.unitValue || 0))} —{' '}
+                                                {formatDateTime(loss.occurredAt)}
+                                            </p>
+                                        </div>
+
+                                        <p className="shrink-0 font-semibold">
+                                            {formatCurrency(lineTotal)}
+                                        </p>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    )}
+                </section>
+
+                <section className="h-fit rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                    <h2 className="mb-4 text-lg font-bold">Gerar NF de perda</h2>
+
+                    <div className="space-y-4">
+                        <div className="rounded-xl bg-zinc-50 dark:bg-zinc-950 p-3 text-sm">
+                            <p className="text-zinc-600 dark:text-zinc-400">
+                                {selectedIds.length} item(ns) selecionado(s)
+                            </p>
+                            <p className="text-lg font-bold">
+                                {formatCurrency(selectedTotal)}
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                Justificativa (motivo da baixa)
+                            </label>
+                            <textarea
+                                value={justificativa}
+                                onChange={(e) => setJustificativa(e.target.value)}
+                                placeholder="Ex: Quebra de garrafas no estoque, produtos vencidos descartados em 05/09..."
+                                rows={4}
+                                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-emerald-500"
+                            />
+                            <p className="mt-1 text-xs text-zinc-500">
+                                Vai pro texto oficial da nota (infAdFisco). Se
+                                for roubo/furto, inclua o número do B.O.
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={handleEmit}
+                            disabled={emitting || selectedIds.length === 0}
+                            className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                            {emitting ? 'Gerando...' : 'Gerar NF de perda (teste)'}
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                <h2 className="mb-4 text-lg font-bold">NFs de perda geradas</h2>
+
+                {loadingNfes ? (
+                    <p className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                        <Loader2 size={14} className="animate-spin" />
+                        Carregando...
+                    </p>
+                ) : nfes.length === 0 ? (
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                        Nenhuma NF de perda gerada ainda.
+                    </p>
+                ) : (
+                    <div className="space-y-3">
+                        {nfes.map((nfe) => {
+                            const total = nfe.losses.reduce(
+                                (sum, loss) =>
+                                    sum + Number(loss.quantity) * Number(loss.unitValue || 0),
+                                0,
+                            );
+
+                            return (
+                                <div
+                                    key={nfe.id}
+                                    className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4"
+                                >
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span
+                                                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-xs font-medium ${statusColor(nfe.status)}`}
+                                                >
+                                                    <CheckCircle2 size={12} />
+                                                    {statusLabel(nfe.status)}
+                                                </span>
+                                                <span className="text-xs text-zinc-500">
+                                                    Série {nfe.serie} · Número {nfe.numero} ·{' '}
+                                                    {nfe.ambiente === 1
+                                                        ? 'Produção'
+                                                        : 'Homologação'}
+                                                </span>
+                                            </div>
+
+                                            <p className="mt-1 text-sm font-mono text-zinc-600 dark:text-zinc-400 break-all">
+                                                {nfe.chaveAcesso}
+                                            </p>
+
+                                            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                                                {nfe.justificativa}
+                                            </p>
+
+                                            <p className="mt-1 text-xs text-zinc-500">
+                                                {nfe.losses.length} item(ns) —{' '}
+                                                {formatCurrency(total)} —{' '}
+                                                {nfe.issueDate
+                                                    ? formatDateTime(nfe.issueDate)
+                                                    : ''}{' '}
+                                                — {nfe.createdBy.name}
+                                            </p>
+                                        </div>
+
+                                        <div className="flex shrink-0 gap-2">
+                                            <button
+                                                onClick={() => setViewingNfeId(nfe.id)}
+                                                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-500 hover:bg-emerald-500/20"
+                                            >
+                                                <CheckCircle2 size={14} />
+                                                Visualizar
+                                            </button>
+
+                                            {nfe.xmlFileUrl && (
+                                                <a
+                                                    href={fileSrc(nfe.xmlFileUrl)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                                >
+                                                    <FileText size={14} />
+                                                    Ver XML
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
+
+            {viewingNfeId && (
+                <NfViewerModal
+                    title="NF de perda"
+                    viewUrl={`/losses/nfe/${viewingNfeId}/view`}
+                    onClose={() => setViewingNfeId(null)}
+                />
             )}
         </div>
     );

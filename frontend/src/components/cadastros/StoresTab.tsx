@@ -5,7 +5,9 @@ import { api } from '@/lib/api';
 import { getUser, hasGlobalStoreAccess } from '@/lib/auth';
 import {
     Building2,
+    CheckCircle2,
     FileSearch,
+    History,
     KeyRound,
     Loader2,
     Pencil,
@@ -14,6 +16,7 @@ import {
     Store as StoreIcon,
     Trash2,
     Upload,
+    XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -25,6 +28,14 @@ type Store = {
     phone?: string | null;
     uf?: string | null;
     active: boolean;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    municipio?: string | null;
+    codigoMunicipioIbge?: string | null;
+    cep?: string | null;
+    inscricaoEstadual?: string | null;
 };
 
 type CertificateStatus = {
@@ -33,8 +44,30 @@ type CertificateStatus = {
     uploadedAt: string | null;
 };
 
+type SyncLog = {
+    id: string;
+    source: 'NFE_COMPRA' | 'NFSE_SERVICO';
+    success: boolean;
+    message: string;
+    fetchedTotal: number;
+    createdAt: string;
+};
+
 function formatDate(value: string) {
     return new Date(value).toLocaleDateString('pt-BR');
+}
+
+function formatDateTime(value: string) {
+    return new Date(value).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function sourceLabel(source: SyncLog['source']) {
+    return source === 'NFE_COMPRA' ? 'NF-e (mercadoria)' : 'NFS-e (serviço)';
 }
 
 export function StoresTab() {
@@ -52,7 +85,17 @@ export function StoresTab() {
         address: '',
         phone: '',
         uf: '',
+        logradouro: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        municipio: '',
+        codigoMunicipioIbge: '',
+        cep: '',
+        inscricaoEstadual: '',
     });
+
+    const [showFiscalFields, setShowFiscalFields] = useState(false);
 
     const [certStatus, setCertStatus] = useState<
         Record<string, CertificateStatus>
@@ -70,6 +113,14 @@ export function StoresTab() {
         string | null
     >(null);
     const [testingGoodsStoreId, setTestingGoodsStoreId] = useState<
+        string | null
+    >(null);
+
+    const [syncLogs, setSyncLogs] = useState<Record<string, SyncLog[]>>({});
+    const [logsOpenStoreId, setLogsOpenStoreId] = useState<string | null>(
+        null,
+    );
+    const [loadingLogsStoreId, setLoadingLogsStoreId] = useState<
         string | null
     >(null);
 
@@ -265,6 +316,29 @@ export function StoresTab() {
         }
     }
 
+    async function toggleLogs(store: Store) {
+        if (logsOpenStoreId === store.id) {
+            setLogsOpenStoreId(null);
+            return;
+        }
+
+        setLogsOpenStoreId(store.id);
+
+        try {
+            setLoadingLogsStoreId(store.id);
+
+            const response = await api.get(
+                `/stores/${store.id}/sefaz-sync-logs`,
+            );
+
+            setSyncLogs((prev) => ({ ...prev, [store.id]: response.data }));
+        } catch {
+            toast.error('Erro ao carregar histórico de busca.');
+        } finally {
+            setLoadingLogsStoreId(null);
+        }
+    }
+
     async function handleRemoveCertificate(store: Store) {
         const confirmed = confirm(
             `Remover o certificado digital da loja "${store.name}"?`,
@@ -282,8 +356,23 @@ export function StoresTab() {
     }
 
     function resetForm() {
-        setForm({ name: '', cnpj: '', address: '', phone: '', uf: '' });
+        setForm({
+            name: '',
+            cnpj: '',
+            address: '',
+            phone: '',
+            uf: '',
+            logradouro: '',
+            numero: '',
+            complemento: '',
+            bairro: '',
+            municipio: '',
+            codigoMunicipioIbge: '',
+            cep: '',
+            inscricaoEstadual: '',
+        });
         setEditingStore(null);
+        setShowFiscalFields(false);
     }
 
     function startEdit(store: Store) {
@@ -294,6 +383,14 @@ export function StoresTab() {
             address: store.address || '',
             phone: store.phone || '',
             uf: store.uf || '',
+            logradouro: store.logradouro || '',
+            numero: store.numero || '',
+            complemento: store.complemento || '',
+            bairro: store.bairro || '',
+            municipio: store.municipio || '',
+            codigoMunicipioIbge: store.codigoMunicipioIbge || '',
+            cep: store.cep || '',
+            inscricaoEstadual: store.inscricaoEstadual || '',
         });
     }
 
@@ -350,6 +447,7 @@ export function StoresTab() {
             {isAdmin && (
                 <form
                     onSubmit={handleSubmit}
+                    autoComplete="off"
                     className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
                 >
                     <div className="mb-5 flex items-center gap-3">
@@ -440,6 +538,163 @@ export function StoresTab() {
                                 Necessário pra buscar as NF-e de mercadoria
                                 automaticamente na Sefaz.
                             </p>
+                        </div>
+
+                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowFiscalFields((v) => !v)}
+                                className="flex w-full items-center justify-between text-left text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                                Dados fiscais (pra emitir NF-e própria)
+                                <span className="text-xs text-zinc-500">
+                                    {showFiscalFields ? 'Ocultar' : 'Mostrar'}
+                                </span>
+                            </button>
+
+                            {showFiscalFields && (
+                                <div
+                                    key={editingStore?.id || 'new'}
+                                    className="mt-3 space-y-3"
+                                >
+                                    <p className="text-xs text-zinc-500">
+                                        Endereço estruturado + Inscrição Estadual —
+                                        só usados pra montar a NF de Perda (baixa
+                                        de estoque). Não precisa preencher se a
+                                        loja não for emitir essa nota.
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="col-span-2">
+                                            <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
+                                                Logradouro
+                                            </label>
+                                            <input
+                                                value={form.logradouro}
+                                                onChange={(e) =>
+                                                    setForm({ ...form, logradouro: e.target.value })
+                                                }
+                                                autoComplete="off"
+                                                name="loss-nfe-logradouro"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
+                                                Número
+                                            </label>
+                                            <input
+                                                value={form.numero}
+                                                onChange={(e) =>
+                                                    setForm({ ...form, numero: e.target.value })
+                                                }
+                                                autoComplete="off"
+                                                name="loss-nfe-numero"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
+                                                Complemento
+                                            </label>
+                                            <input
+                                                value={form.complemento}
+                                                onChange={(e) =>
+                                                    setForm({ ...form, complemento: e.target.value })
+                                                }
+                                                autoComplete="off"
+                                                name="loss-nfe-complemento"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                            />
+                                        </div>
+
+                                        <div className="col-span-2">
+                                            <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
+                                                Bairro
+                                            </label>
+                                            <input
+                                                value={form.bairro}
+                                                onChange={(e) =>
+                                                    setForm({ ...form, bairro: e.target.value })
+                                                }
+                                                autoComplete="off"
+                                                name="loss-nfe-bairro"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
+                                                Município
+                                            </label>
+                                            <input
+                                                value={form.municipio}
+                                                onChange={(e) =>
+                                                    setForm({ ...form, municipio: e.target.value })
+                                                }
+                                                autoComplete="off"
+                                                name="loss-nfe-municipio"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
+                                                Código IBGE do município
+                                            </label>
+                                            <input
+                                                value={form.codigoMunicipioIbge}
+                                                onChange={(e) =>
+                                                    setForm({
+                                                        ...form,
+                                                        codigoMunicipioIbge: e.target.value,
+                                                    })
+                                                }
+                                                placeholder="Ex: 3106200"
+                                                autoComplete="off"
+                                                name="loss-nfe-codigo-ibge"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
+                                                CEP
+                                            </label>
+                                            <input
+                                                value={form.cep}
+                                                onChange={(e) =>
+                                                    setForm({ ...form, cep: e.target.value })
+                                                }
+                                                autoComplete="off"
+                                                name="loss-nfe-cep"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
+                                                Inscrição Estadual
+                                            </label>
+                                            <input
+                                                value={form.inscricaoEstadual}
+                                                onChange={(e) =>
+                                                    setForm({
+                                                        ...form,
+                                                        inscricaoEstadual: e.target.value,
+                                                    })
+                                                }
+                                                placeholder="Ou deixe em branco se isento"
+                                                autoComplete="off"
+                                                name="loss-nfe-ie"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex gap-3">
@@ -641,6 +896,28 @@ export function StoresTab() {
 
                                                     <button
                                                         onClick={() =>
+                                                            toggleLogs(store)
+                                                        }
+                                                        title="Histórico das últimas tentativas de busca (manuais e automáticas)"
+                                                        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${logsOpenStoreId === store.id
+                                                            ? 'border-zinc-400 bg-zinc-200 text-zinc-800 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100'
+                                                            : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                                                            }`}
+                                                    >
+                                                        {loadingLogsStoreId ===
+                                                            store.id ? (
+                                                            <Loader2
+                                                                size={14}
+                                                                className="animate-spin"
+                                                            />
+                                                        ) : (
+                                                            <History size={14} />
+                                                        )}
+                                                        Histórico
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() =>
                                                             openCertForm(store.id)
                                                         }
                                                         className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -730,6 +1007,74 @@ export function StoresTab() {
                                                         Cancelar
                                                     </button>
                                                 </div>
+                                            </div>
+                                        )}
+
+                                        {logsOpenStoreId === store.id && (
+                                            <div className="mt-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+                                                <p className="mb-2 text-xs font-semibold text-zinc-500">
+                                                    Últimas tentativas de busca
+                                                    (manuais e automáticas — a
+                                                    automática roda sozinha a
+                                                    cada ~10min, respeitando o
+                                                    tempo de espera da Sefaz)
+                                                </p>
+
+                                                {loadingLogsStoreId ===
+                                                    store.id ? (
+                                                    <p className="text-sm text-zinc-500">
+                                                        Carregando...
+                                                    </p>
+                                                ) : !syncLogs[store.id] ||
+                                                    syncLogs[store.id].length ===
+                                                    0 ? (
+                                                    <p className="text-sm text-zinc-500">
+                                                        Nenhuma tentativa
+                                                        registrada ainda.
+                                                    </p>
+                                                ) : (
+                                                    <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                                                        {syncLogs[store.id].map(
+                                                            (log) => (
+                                                                <div
+                                                                    key={log.id}
+                                                                    className="flex items-start gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-xs"
+                                                                >
+                                                                    {log.success ? (
+                                                                        <CheckCircle2
+                                                                            size={14}
+                                                                            className="mt-0.5 shrink-0 text-emerald-500"
+                                                                        />
+                                                                    ) : (
+                                                                        <XCircle
+                                                                            size={14}
+                                                                            className="mt-0.5 shrink-0 text-red-400"
+                                                                        />
+                                                                    )}
+
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-zinc-700 dark:text-zinc-300">
+                                                                            <span className="font-medium">
+                                                                                {formatDateTime(
+                                                                                    log.createdAt,
+                                                                                )}
+                                                                            </span>{' '}
+                                                                            ·{' '}
+                                                                            {sourceLabel(
+                                                                                log.source,
+                                                                            )}
+                                                                        </p>
+                                                                        <p className="text-zinc-500 dark:text-zinc-400">
+                                                                            {
+                                                                                log.message
+                                                                            }
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>

@@ -14,12 +14,31 @@ type User = {
     id: string;
     name: string;
     email: string;
+    phone?: string | null;
     role: string;
     active: boolean;
     userStores: {
         store: Store;
     }[];
 };
+
+// Só pra exibir na listagem — mostra como a pessoa digitou, sem o "55" na
+// frente que o backend guarda por baixo dos panos.
+function formatPhoneDisplay(phone?: string | null) {
+    if (!phone) return null;
+
+    const local = phone.startsWith('55') ? phone.slice(2) : phone;
+
+    if (local.length === 11) {
+        return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+    }
+
+    if (local.length === 10) {
+        return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+    }
+
+    return phone;
+}
 
 const roles = [
     {
@@ -84,6 +103,7 @@ export function UsersTab() {
     const [form, setForm] = useState({
         name: '',
         email: '',
+        phone: '',
         password: '',
         role: 'FUNCIONARIO',
         active: true,
@@ -124,6 +144,7 @@ export function UsersTab() {
         setForm({
             name: '',
             email: '',
+            phone: '',
             password: '',
             role: 'FUNCIONARIO',
             active: true,
@@ -137,6 +158,7 @@ export function UsersTab() {
         setForm({
             name: user.name,
             email: user.email,
+            phone: formatPhoneDisplay(user.phone) || '',
             password: '',
             role: user.role,
             active: user.active,
@@ -190,6 +212,7 @@ export function UsersTab() {
             const payload: any = {
                 name: form.name,
                 email: form.email,
+                phone: form.phone.trim() || undefined,
                 role: form.role,
                 active: form.active,
                 storeIds: form.storeIds,
@@ -283,6 +306,24 @@ export function UsersTab() {
                             }
                             className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
                         />
+                    </div>
+
+                    <div>
+                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                            Telefone (WhatsApp)
+                        </label>
+                        <input
+                            value={form.phone}
+                            onChange={(e) =>
+                                setForm({ ...form, phone: e.target.value })
+                            }
+                            placeholder="(31) 99999-8888"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                        />
+                        <p className="mt-1 text-xs text-zinc-500">
+                            Opcional — usado só pra mandar aviso de tarefa no
+                            WhatsApp. Login continua sendo por e-mail.
+                        </p>
                     </div>
 
                     <div>
@@ -436,6 +477,8 @@ export function UsersTab() {
                                             {user.email} •{' '}
                                             {roles.find((role) => role.value === user.role)
                                                 ?.label || user.role}
+                                            {user.phone &&
+                                                ` • ${formatPhoneDisplay(user.phone)}`}
                                         </p>
 
                                         <p className="mt-1 text-sm text-zinc-500">

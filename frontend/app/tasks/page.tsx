@@ -369,17 +369,17 @@ function QuadroTab({
         return (
             <div
                 key={occurrence.id}
-                className="flex flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4"
+                className="flex flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 lg:gap-3.5 lg:p-5"
             >
                 <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-sm font-semibold leading-snug">
+                    <h3 className="text-sm font-semibold leading-snug lg:text-base xl:text-[17px]">
                         {occurrence.task.title}
                     </h3>
                     <StatusBadge status={occurrence.status} />
                 </div>
 
                 {occurrence.task.description && (
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400 lg:text-[15px]">
                         {occurrence.task.description}
                     </p>
                 )}
@@ -396,7 +396,7 @@ function QuadroTab({
                     </a>
                 )}
 
-                <div className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+                <div className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400 lg:text-sm">
                     <p>
                         Responsável:{' '}
                         <span className="font-medium text-zinc-900 dark:text-zinc-100">
@@ -537,7 +537,7 @@ function QuadroTab({
                                             handleMove(occurrence, 'start', 'Tarefa iniciada.')
                                         }
                                         disabled={acting}
-                                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 lg:py-2.5 lg:text-[15px]"
                                     >
                                         <PlayCircle size={16} />
                                         Iniciar
@@ -550,7 +550,7 @@ function QuadroTab({
                                         handleMove(occurrence, 'pause', 'Tarefa pausada.')
                                     }
                                     disabled={acting}
-                                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 lg:py-2.5 lg:text-[15px]"
                                 >
                                     <PauseCircle size={16} />
                                     Pausar
@@ -563,7 +563,7 @@ function QuadroTab({
                                         handleMove(occurrence, 'resume', 'Tarefa retomada.')
                                     }
                                     disabled={acting}
-                                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+                                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 lg:py-2.5 lg:text-[15px]"
                                 >
                                     <PauseCircle size={16} />
                                     Pausada
@@ -574,7 +574,7 @@ function QuadroTab({
                                 onClick={() => openConfirmForm(occurrence.id)}
                                 disabled={acting}
                                 title="Concluir"
-                                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 lg:py-2.5"
                             >
                                 <CheckCircle2 size={16} />
                             </button>
@@ -639,7 +639,7 @@ function QuadroTab({
                         })}
                     </div>
 
-                    <div className="flex flex-col gap-4 md:flex-row md:gap-4 md:overflow-x-auto md:pb-2">
+                    <div className="flex flex-col gap-4 md:grid md:grid-cols-3 md:gap-5 lg:gap-6 2xl:mx-auto 2xl:max-w-[1700px]">
                         {BOARD_COLUMNS.map((column) => {
                             const columnItems = occurrences.filter((occurrence) =>
                                 column.statuses.includes(occurrence.status),
@@ -649,20 +649,20 @@ function QuadroTab({
                                 <div
                                     key={column.key}
                                     className={`${activeColumn === column.key ? 'flex' : 'hidden'
-                                        } w-full flex-col gap-3 rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/50 p-3 md:flex md:w-[280px] md:shrink-0`}
+                                        } w-full flex-col gap-3 rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/50 p-3 md:flex md:w-full lg:gap-4 lg:p-4 xl:p-5`}
                                 >
                                     <div className="hidden items-center justify-between px-1 md:flex">
-                                        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                                        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 lg:text-base xl:text-lg">
                                             {column.label}
                                         </h3>
-                                        <span className="rounded-full bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+                                        <span className="rounded-full bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-xs text-zinc-600 dark:text-zinc-400 lg:px-2.5 lg:py-1 lg:text-sm">
                                             {columnItems.length}
                                         </span>
                                     </div>
 
-                                    <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-1">
+                                    <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-1 lg:max-h-[76vh] lg:gap-4">
                                         {columnItems.length === 0 ? (
-                                            <p className="px-1 text-xs text-zinc-500">
+                                            <p className="px-1 text-xs text-zinc-500 lg:text-sm">
                                                 Nada por aqui.
                                             </p>
                                         ) : (

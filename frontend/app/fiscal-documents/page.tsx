@@ -332,6 +332,14 @@ export default function FiscalDocumentsPage() {
                                     Confirme se cada NF corresponde a uma compra já
                                     cadastrada. Se não for sua, marque como ignorada.
                                 </p>
+                                <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                                    Evite clicar várias vezes seguidas: a Sefaz
+                                    bloqueia o CNPJ por 1 hora se detectar
+                                    consultas repetidas — e como a
+                                    contabilidade/Omie também consulta esse
+                                    CNPJ, um clique aqui pode atrapalhar a
+                                    busca automática deles também.
+                                </p>
                             </div>
 
                             <button

@@ -53,6 +53,12 @@ type CalculationResult = {
     referenceMonth: string;
     monthRevenue: number;
     monthPurchasesCost?: number;
+    monthCostBreakdown?: {
+        total: number;
+        purchases: number;
+        unlinkedIncomingNf: number;
+        services: number;
+    };
     rbt12?: number;
     total: number;
     simples?: {
@@ -552,7 +558,7 @@ function ApurationChart({ result }: { result: CalculationResult }) {
                     temCredito={p.icmsTemCredito}
                     note={
                         p.icmsTemCredito
-                            ? 'Crédito aproximado aplicando a alíquota padrão sobre o custo de compras do mês.'
+                            ? 'Crédito aproximado aplicando a alíquota padrão sobre o custo do mês (compras + NF de entrada + serviços).'
                             : 'Regime especial de ICMS de MG (alíquota reduzida substitutiva) — não gera crédito.'
                     }
                 />
@@ -580,9 +586,33 @@ function ApurationChart({ result }: { result: CalculationResult }) {
                         <span>{formatCurrency(result.monthRevenue)}</span>
                     </div>
                     <div className="flex justify-between">
-                        <span>− Custo de compras do mês</span>
+                        <span>− Custo do mês (compras + NF de entrada + serviços)</span>
                         <span>{formatCurrency(result.monthPurchasesCost)}</span>
                     </div>
+                    {result.monthCostBreakdown && (
+                        <div className="ml-3 space-y-0.5 text-xs text-zinc-500">
+                            <div className="flex justify-between">
+                                <span>Compras cadastradas</span>
+                                <span>
+                                    {formatCurrency(result.monthCostBreakdown.purchases)}
+                                </span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span>NF de entrada sem vínculo</span>
+                                <span>
+                                    {formatCurrency(
+                                        result.monthCostBreakdown.unlinkedIncomingNf,
+                                    )}
+                                </span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span>Serviços contratados</span>
+                                <span>
+                                    {formatCurrency(result.monthCostBreakdown.services)}
+                                </span>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex justify-between border-t border-zinc-200 dark:border-zinc-700 pt-1 font-semibold text-zinc-800 dark:text-zinc-200">
                         <span>= Lucro estimado (base de IRPJ/CSLL)</span>
                         <span>{formatCurrency(r.lucroEstimado)}</span>
@@ -595,7 +625,7 @@ function ApurationChart({ result }: { result: CalculationResult }) {
                     credito={r.pisCofinsCredito}
                     valor={r.pisCofins}
                     temCredito
-                    note="Crédito aproximado aplicando a mesma alíquota sobre o custo de compras do mês."
+                    note="Crédito aproximado aplicando a mesma alíquota sobre o custo do mês (compras + NF de entrada + serviços)."
                 />
 
                 <CreditApurationRow
@@ -606,7 +636,7 @@ function ApurationChart({ result }: { result: CalculationResult }) {
                     temCredito={r.icmsTemCredito}
                     note={
                         r.icmsTemCredito
-                            ? 'Crédito aproximado aplicando a alíquota padrão sobre o custo de compras do mês.'
+                            ? 'Crédito aproximado aplicando a alíquota padrão sobre o custo do mês (compras + NF de entrada + serviços).'
                             : 'Regime especial de ICMS de MG (alíquota reduzida substitutiva) — não gera crédito.'
                     }
                 />
@@ -1100,11 +1130,11 @@ function CalculationBreakdown({ result }: { result: CalculationResult }) {
             {result.regime === 'REAL' && result.real && (
                 <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                     <p>
-                        Custo de compras no mês:{' '}
+                        Custo do mês (compras + NF de entrada + serviços):{' '}
                         {formatCurrency(result.monthPurchasesCost)}
                     </p>
                     <p>
-                        Lucro estimado (receita − compras):{' '}
+                        Lucro estimado (receita − custo do mês):{' '}
                         {formatCurrency(result.real.lucroEstimado)}
                     </p>
                     <div className="flex justify-between">

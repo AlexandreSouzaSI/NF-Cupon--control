@@ -16,6 +16,7 @@ import {
     ListChecks,
     PackageX,
     LayoutDashboard,
+    FileStack,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -162,6 +163,24 @@ export const menu: MenuGroup[] = [
                 hidden: true,
             },
             {
+                label: 'Notas Fiscais',
+                href: '/fiscal-notes',
+                icon: FileStack,
+                // Mesmo grupo de perfis que já mexe com compra/venda —
+                // Saída também toca Faturamento, então Financeiro entra
+                // aqui mas Estoquista continua de fora dela (a própria
+                // aba já restringe por dentro).
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'ESTOQUISTA',
+                    'FINANCEIRO',
+                ],
+                color: 'purple',
+            },
+            {
                 label: 'Serviços',
                 href: '/services',
                 icon: Briefcase,
@@ -176,6 +195,19 @@ export const menu: MenuGroup[] = [
                     'FINANCEIRO',
                 ],
                 color: 'purple',
+            },
+            {
+                label: 'Tributos',
+                href: '/revenue',
+                icon: TrendingUp,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'FINANCEIRO',
+                ],
+                color: 'cyan',
             },
             {
                 label: 'Perdas',
@@ -202,7 +234,6 @@ export const menu: MenuGroup[] = [
                 icon: Wallet,
                 roles: ALL_ROLES,
                 color: 'teal',
-                hidden: true,
             },
         ],
     },
@@ -260,25 +291,6 @@ export const menu: MenuGroup[] = [
                 icon: UserPlus,
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
                 color: 'pink',
-                hidden: true,
-            },
-        ],
-    },
-    {
-        group: 'Tributos',
-        items: [
-            {
-                label: 'Tributos',
-                href: '/revenue',
-                icon: TrendingUp,
-                roles: [
-                    'ADMINISTRATIVO',
-                    'PROPRIETARIO',
-                    'GERENTE',
-                    'COMPRADOR',
-                    'FINANCEIRO',
-                ],
-                color: 'cyan',
                 hidden: true,
             },
         ],
