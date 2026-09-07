@@ -1,0 +1,23 @@
+[
+    {
+        "nome": "I wanna sleep - Matriz",
+        "cnpj": "00000000000000",
+        "uf_codigo": "31",
+        "certificado_pfx_path": "C:\\caminho\\para\\certificado-matriz.pfx",
+        "certificado_pfx_senha": "senha_do_certificado_1"
+    },
+    {
+        "nome": "I wanna sleep - Filial 2",
+        "cnpj": "00000000000000",
+        "uf_codigo": "31",
+        "certificado_pfx_path": "C:\\caminho\\para\\certificado-filial2.pfx",
+        "certificado_pfx_senha": "senha_do_certificado_2"
+    },
+    {
+        "nome": "I wanna sleep - Filial 3",
+        "cnpj": "00000000000000",
+        "uf_codigo": "31",
+        "certificado_pfx_path": "C:\\caminho\\para\\certificado-filial3.pfx",
+        "certificado_pfx_senha": "senha_do_certificado_3"
+    }
+]

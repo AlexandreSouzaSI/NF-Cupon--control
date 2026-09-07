@@ -1,0 +1,79 @@
+# render.yaml — Blueprint de deploy no Render (plano free).
+#
+# IMPORTANTE: este arquivo precisa ficar na RAIZ do repositório (ao lado de
+# "backend" e "frontend"), porque o Render procura "render.yaml" na raiz por
+# padrão. Se vocês já subiram uma versão anterior deste arquivo, substituam
+# pelo conteúdo abaixo (adicionei as variáveis de push notification).
+#
+# Como usar:
+#   1. Suba este arquivo pro GitHub junto com o resto do repo.
+#   2. No painel do Render: New > Blueprint > selecione o repositório.
+#   3. O Render lê este arquivo e cria os 2 serviços web + o banco Postgres
+#      automaticamente. Variáveis marcadas com "sync: false" vão pedir pra
+#      você preencher o valor na hora da criação (ver DEPLOY.md).
+#   4. Depois que o backend estiver no ar, copie a URL dele (ex:
+#      https://nugalho-backend.onrender.com) e cole em NEXT_PUBLIC_API_URL
+#      no serviço do frontend — como essa variável é "gravada" dentro do
+#      bundle JS no build, é preciso um redeploy do frontend depois de
+#      preenchê-la (Manual Deploy > Deploy latest commit). O mesmo vale pra
+#      NEXT_PUBLIC_VAPID_PUBLIC_KEY.
+
+databases:
+  - name: nugalho-db
+    databaseName: compras_db
+    plan: free
+    postgresMajorVersion: '16'
+
+services:
+  - type: web
+    name: nugalho-backend
+    runtime: docker
+    plan: free
+    # dockerfilePath e dockerContext são relativos à raiz do repositório
+    # (não à pasta do serviço) — por isso o prefixo "./backend".
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nugalho-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      # CERT_ENCRYPTION_KEY precisa ser hexadecimal de 32 bytes (64
+      # caracteres) — o gerador automático do Render usa base64, então essa
+      # aqui é sempre manual. Gere localmente com: openssl rand -hex 32
+      - key: CERT_ENCRYPTION_KEY
+        sync: false
+      # Opcional — só necessário se for usar o lançamento de despesa por voz.
+      - key: OPENAI_API_KEY
+        sync: false
+      # Push notification (Web Push) — gere o par com:
+      #   npx web-push generate-vapid-keys
+      # VAPID_PUBLIC_KEY é a mesma chave que vai em NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      # no serviço do frontend. Deixe as 3 em branco pra rodar sem push (o
+      # sino dentro do app continua funcionando normal).
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+
+  - type: web
+    name: nugalho-frontend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    autoDeployTrigger: commit
+    envVars:
+      # Preencha depois que o nugalho-backend tiver uma URL pública (ver
+      # passo 4 acima). Precisa ser a URL completa, com https://.
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      # Mesma chave pública gerada acima pro VAPID_PUBLIC_KEY do backend.
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false

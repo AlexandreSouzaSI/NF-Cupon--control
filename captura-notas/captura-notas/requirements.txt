@@ -1,0 +1,4 @@
+requests
+requests-pkcs12
+python-dotenv
+lxml

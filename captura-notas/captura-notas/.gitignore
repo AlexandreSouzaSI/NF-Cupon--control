@@ -1,0 +1,7 @@
+.env
+empresas.json
+*.pfx
+*.p12
+dados/
+__pycache__/
+*.pyc

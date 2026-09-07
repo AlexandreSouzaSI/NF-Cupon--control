@@ -1,16 +1,73 @@
+# docker-compose.yml — ambiente de desenvolvimento local completo.
+#
+# IMPORTANTE: este arquivo precisa ficar na RAIZ do projeto, ao lado das
+# pastas "backend" e "frontend" (não dentro de nenhuma das duas), porque ele
+# referencia as duas como contexto de build. Se já existe uma versão
+# anterior aí, substituam pelo conteúdo abaixo (adicionei as variáveis de
+# push notification).
+#
+# Uso:
+#   1. Copie backend/.env.example para backend/.env e ajuste os valores.
+#   2. Copie frontend/.env.example para frontend/.env e ajuste os valores.
+#   3. docker compose up --build
+#   4. Backend em http://localhost:4000, frontend em http://localhost:3001
+#
+# O Postgres local usa um volume nomeado, então os dados sobrevivem a um
+# "docker compose down" (mas não a um "docker compose down -v").
+
 services:
-  postgres:
-    image: postgres:15
-    container_name: compras_postgres
-    restart: always
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: compras_db
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
-      - compras_postgres_data:/var/lib/postgresql/data
+      - nugalho_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/compras_db?schema=public
+      JWT_SECRET: ${JWT_SECRET:-dev_apenas_troque_em_producao}
+      CERT_ENCRYPTION_KEY: ${CERT_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:alemourasouza33@gmail.com}
+      PORT: 4000
+    ports:
+      - '4000:4000'
+    volumes:
+      - nugalho_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '3001:3001'
 
 volumes:
-  compras_postgres_data:
+  nugalho_pgdata:
+  nugalho_uploads:

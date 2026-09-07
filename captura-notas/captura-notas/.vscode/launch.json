@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Capturar notas (NFe + NFSe)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/capturar.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Teste offline (sem certificado)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/teste_offline.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
