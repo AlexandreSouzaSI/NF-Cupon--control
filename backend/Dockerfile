@@ -19,6 +19,14 @@ FROM node:20-bookworm-slim AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# "prisma generate" só monta o client (não conecta no banco de verdade),
+# mas o prisma.config.ts (Prisma 7) exige DATABASE_URL resolvível já pra
+# carregar a config. Nesse estágio de build ainda não existe o .env real
+# (só chega em runtime via docker-compose) — por isso um valor fictício só
+# pra essa etapa. O valor de verdade definido no docker-compose.yml
+# sobrescreve este em tempo de execução.
+ARG DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public"
+ENV DATABASE_URL=$DATABASE_URL
 RUN npx prisma generate
 RUN npm run build
 # Não faz "npm prune --omit=dev" aqui de propósito: o comando de seed
