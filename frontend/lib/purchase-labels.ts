@@ -1,13 +1,17 @@
 export const purchaseStatusLabel: Record<string, string> = {
     DRAFT: 'Rascunho',
-    PURCHASED: 'Aguardando aprovação',
-    PURCHASED: 'Aprovada',
-    CANCELED: 'Reprovada',
-    PURCHASED: 'Compra realizada',
-    WAITING_INVOICE: 'Aguardando nota fiscal',
-    HAS_INVOICE: 'Nota fiscal vinculada',
-    RECEIVED_OK: 'Conferida',
+    WAITING_APPROVAL: 'Aguardando aprovação',
+    APPROVED: 'Aprovada',
+    REJECTED: 'Reprovada',
+    WAITING_RECEIPT: 'Aguardando recebimento',
+    RECEIVED_OK: 'Recebida OK',
+    RECEIVED_WITH_DIFFERENCE: 'Recebida com diferença',
+    WAITING_INVOICE: 'Aguardando NF',
+    HAS_COUPON_ONLY: 'Apenas com cupom',
+    HAS_INVOICE: 'Com NF',
+    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar',
     CLOSED: 'Fechada',
+    CANCELED: 'Cancelada',
 };
 
 export const paymentMethodLabel: Record<string, string> = {
