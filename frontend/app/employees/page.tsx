@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { getUser, hasGlobalStoreAccess } from '@/lib/auth';
@@ -17,6 +17,14 @@ const tabs: { key: TabKey; label: string; icon: typeof Users }[] = [
 ];
 
 export default function EmployeesPage() {
+    return (
+        <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Carregando...</div>}>
+            <EmployeesPageInner />
+        </Suspense>
+    );
+}
+
+function EmployeesPageInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const user = getUser();

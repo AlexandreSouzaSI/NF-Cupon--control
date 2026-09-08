@@ -1,6 +1,7 @@
 'use client';
 
 import {
+    Suspense,
     useEffect,
     useMemo,
     useState,
@@ -174,6 +175,22 @@ function formatCurrency(
 }
 
 export default function NewBillPage() {
+    return (
+        <Suspense
+            fallback={
+                <AppLayout title="Nova conta">
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                        Carregando dados da conta...
+                    </p>
+                </AppLayout>
+            }
+        >
+            <NewBillPageInner />
+        </Suspense>
+    );
+}
+
+function NewBillPageInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
 

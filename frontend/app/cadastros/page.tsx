@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { getUser, type UserRole } from '@/lib/auth';
@@ -51,6 +51,14 @@ const tabs: {
 ];
 
 export default function CadastrosPage() {
+    return (
+        <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Carregando...</div>}>
+            <CadastrosPageInner />
+        </Suspense>
+    );
+}
+
+function CadastrosPageInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const user = getUser();

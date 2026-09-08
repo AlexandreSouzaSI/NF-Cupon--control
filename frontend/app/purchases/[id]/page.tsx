@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
     AlertTriangle,
@@ -295,6 +295,14 @@ function parseDecimal(value: string) {
 }
 
 export default function PurchaseDetailPage() {
+    return (
+        <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Carregando...</div>}>
+            <PurchaseDetailPageInner />
+        </Suspense>
+    );
+}
+
+function PurchaseDetailPageInner() {
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
