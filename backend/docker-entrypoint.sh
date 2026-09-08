@@ -12,4 +12,8 @@ echo "Rodando seed (idempotente)..."
 npx prisma db seed || echo "Seed falhou ou já não é necessário, seguindo."
 
 echo "Iniciando o servidor NestJS..."
-exec node dist/main.js
+# O tsc inclui o prisma.config.ts (que fica na raiz, fora de src/) no
+# projeto, então a raiz comum inferida pro build vira o próprio /app em vez
+# de /app/src — por isso o main.js compilado cai em dist/src/main.js, não
+# dist/main.js.
+exec node dist/src/main.js
