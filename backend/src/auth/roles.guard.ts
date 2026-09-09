@@ -29,6 +29,16 @@ export class RolesGuard implements CanActivate {
             throw new ForbiddenException('Usuário não autenticado.');
         }
 
+        // Conta de teste (autocadastro em /demo) passa por qualquer
+        // @Roles — o papel dela continua sendo Gerente, então o filtro
+        // por loja de cada módulo (ensureStoreAccess/getAllowedStoreIds,
+        // que só libera tudo pra Administrativo/Proprietário) continua
+        // isolando os dados dela na própria loja de teste. Isso só abre
+        // quais telas ela alcança, não muda o que ela enxerga nelas.
+        if (user.isDemo) {
+            return true;
+        }
+
         if (!requiredRoles.includes(user.role)) {
             throw new ForbiddenException('Você não tem permissão para acessar este recurso.');
         }

@@ -253,7 +253,9 @@ export default function DashboardPage() {
     // aponta — mesma matriz de permissões do menu lateral, pra ninguém ver
     // um atalho pra uma tela que depois não consegue abrir.
     const visibleCards = user
-        ? operationalCards.filter((card) => canAccessHref(user.role, card.href))
+        ? operationalCards.filter((card) =>
+            canAccessHref(user.role, card.href, user.isDemo),
+        )
         : operationalCards;
 
     return (

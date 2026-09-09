@@ -331,7 +331,17 @@ export const menu: MenuGroup[] = [
 // string) ou por prefixo, pra cobrir rotas com parâmetro (ex: uma tarefa
 // apontando pra "/purchases/123" cai no item de menu "/purchases").
 // Rotas que não existem no menu (não mapeadas) ficam liberadas por padrão.
-export function canAccessHref(role: MenuRole, href: string): boolean {
+// isDemo (conta criada em /demo) vê tudo que o menu mapeia — o papel dela
+// continua Gerente pra manter o isolamento por loja no back-end, então
+// liberar mais telas aqui não muda o que ela consegue enxergar, só evita
+// esbarrar num bloqueio de perfil pensado pra funcionário de verdade.
+export function canAccessHref(
+    role: MenuRole,
+    href: string,
+    isDemo?: boolean,
+): boolean {
+    if (isDemo) return true;
+
     const path = href.split('?')[0];
     const allItems = menu.flatMap((group) => group.items);
 

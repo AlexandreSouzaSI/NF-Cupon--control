@@ -279,11 +279,18 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         );
     }
 
+    // Conta de teste vê o menu inteiro (menos os módulos hidden, que são
+    // parados de propósito, não uma questão de permissão) — o back-end já
+    // segue isolando os dados dela só na loja de teste, então mostrar mais
+    // telas aqui não vaza nada, só evita ela esbarrar em bloqueio de perfil
+    // (ex: Contas a Pagar, que normalmente é só Administrativo/Financeiro).
     const visibleMenuGroups = menu
         .map((group) => ({
             ...group,
             items: group.items.filter(
-                (item) => item.roles.includes(user.role) && !item.hidden,
+                (item) =>
+                    (user.isDemo || item.roles.includes(user.role)) &&
+                    !item.hidden,
             ),
         }))
         .filter((group) => group.items.length > 0);
