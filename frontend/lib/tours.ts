@@ -204,6 +204,38 @@ export const tours: Tour[] = [
         ],
     },
     {
+        id: 'baixar-nf-servico-periodo',
+        title: 'Como baixar NF de serviço por período',
+        description: 'Baixar um .zip com todas as NFs de serviço de um mês ou intervalo de datas.',
+        category: 'Notas Fiscais',
+        href: '/services?tab=relatorios',
+        roles: [
+            'ADMINISTRATIVO',
+            'PROPRIETARIO',
+            'GERENTE',
+            'COMPRADOR',
+            'ESTOQUISTA',
+            'FINANCEIRO',
+        ],
+        steps: [
+            {
+                selector: '[data-tour="servico-download-mode"]',
+                title: 'Por mês ou por período',
+                text: 'Escolha se quer baixar as notas de um mês inteiro ou de um intervalo de datas específico.',
+            },
+            {
+                selector: '[data-tour="servico-download-period"]',
+                title: 'Escolha a data',
+                text: 'Selecione o mês (ou o período) que você quer baixar.',
+            },
+            {
+                selector: '[data-tour="servico-download-button"]',
+                title: 'Baixar todas as NFs',
+                text: 'Pronto! Clique aqui pra baixar um .zip com todas as notas de serviço desse período.',
+            },
+        ],
+    },
+    {
         id: 'criar-tarefa',
         title: 'Como criar uma tarefa',
         description: 'Cadastrar uma tarefa diária, semanal, mensal ou ocasional pra alguém da equipe.',

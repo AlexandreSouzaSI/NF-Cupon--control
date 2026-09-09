@@ -581,7 +581,10 @@ export function ServiceNfTab() {
                         Baixar NFs do período
                     </p>
 
-                    <div className="flex rounded-xl border border-zinc-300 dark:border-zinc-700 p-1">
+                    <div
+                        data-tour="servico-download-mode"
+                        className="flex rounded-xl border border-zinc-300 dark:border-zinc-700 p-1"
+                    >
                         <button
                             onClick={() => setMode('MONTH')}
                             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${mode === 'MONTH'
@@ -604,13 +607,17 @@ export function ServiceNfTab() {
 
                     {mode === 'MONTH' ? (
                         <input
+                            data-tour="servico-download-period"
                             type="month"
                             value={month}
                             onChange={(e) => setMonth(e.target.value)}
                             className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
                         />
                     ) : (
-                        <>
+                        <div
+                            data-tour="servico-download-period"
+                            className="flex items-center gap-2"
+                        >
                             <input
                                 type="date"
                                 value={startDate}
@@ -630,10 +637,11 @@ export function ServiceNfTab() {
                                 }
                                 className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
                             />
-                        </>
+                        </div>
                     )}
 
                     <button
+                        data-tour="servico-download-button"
                         onClick={handleDownload}
                         disabled={downloading}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
