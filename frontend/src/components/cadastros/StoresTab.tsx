@@ -483,22 +483,6 @@ export function StoresTab() {
                             />
                         </div>
 
-                        <label className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">
-                            <input
-                                type="checkbox"
-                                className="mt-0.5"
-                                checked={form.isDemo}
-                                onChange={(e) =>
-                                    setForm({ ...form, isDemo: e.target.checked })
-                                }
-                            />
-                            <span>
-                                <strong>Loja de demonstração</strong> — destino do
-                                autocadastro público de teste (/demo). Deixe
-                                marcada só numa loja, sem dados reais.
-                            </span>
-                        </label>
-
                         <div>
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                                 CNPJ

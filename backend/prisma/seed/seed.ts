@@ -71,17 +71,19 @@ async function main() {
         },
     });
 
-    // Loja de demonstração pública — destino de todo autocadastro em
-    // /demo (botão "Cadastre-se para teste" na tela de login). isDemo:
-    // true é o que o endpoint de signup usa pra achar essa loja; o dono
-    // não fica vinculado a ela (não é uma loja "de verdade" do negócio).
+    // Loja fixa de uma versão anterior do autocadastro de teste — hoje
+    // cada cadastro em /demo cria a própria loja isolada na hora (ver
+    // demo.service.ts), então essa aqui ficou sem uso. Só desativa, não
+    // apaga (mesmo padrão do resto do sistema), pra sumir de Cadastros →
+    // Lojas sem risco de derrubar algo que dependa dela.
     await prisma.store.upsert({
         where: { id: 'loja-demo-amsx' },
-        update: { isDemo: true },
+        update: { active: false },
         create: {
             id: 'loja-demo-amsx',
-            name: 'AMSX Teste',
+            name: 'AMSX Teste (desativada)',
             isDemo: true,
+            active: false,
         },
     });
 
