@@ -251,6 +251,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Marca o dono real do sistema (só ele, sempre true) — dá acesso total
+  // independente do perfil, e é o único que pode cadastrar/editar outro
+  // usuário com perfil Proprietário. Não é um perfil (UserRole), é uma
+  // flag à parte porque só uma pessoa deve ter isso, mesmo que existam
+  // vários Proprietários.
+  isAdminMaster Boolean @default(false)
+
+  // Conta criada pelo autocadastro público de teste (/demo/signup, loja
+  // isDemo=true). demoExpiresAt é o prazo (1h a partir do cadastro) —
+  // depois disso login e qualquer request autenticada passam a ser
+  // recusados (ver auth.service.ts e jwt.strategy.ts), mesmo relogando.
+  // signupIp guarda o IP de quem se cadastrou, só pra impedir que o mesmo
+  // IP fique criando conta nova pra ganhar teste de novo.
+  isDemo        Boolean   @default(false)
+  demoExpiresAt DateTime?
+  signupIp      String?
+
   // Só um canal a mais de notificação (WhatsApp) — login continua sendo
   // sempre por e-mail/senha. Formato livre no cadastro, mas é normalizado
   // (só dígitos, com DDI 55) antes de comparar/enviar. Único porque a
@@ -326,6 +343,13 @@ model Store {
   address String?
   phone   String?
   active  Boolean @default(true)
+
+  // Loja de demonstração pública (ex: AMS) — usada como destino do
+  // autocadastro de teste (/demo/signup). Só pode existir uma marcada
+  // assim por vez (o código sempre usa a primeira que achar); serve pra
+  // isolar quem está só testando o sistema dos dados reais das outras
+  // lojas.
+  isDemo Boolean @default(false)
 
   // Sigla da UF (ex: SP, MG) — exigida pelo webservice NFeDistribuicaoDFe
   // (campo cUFAutor) pra buscar as NF-e de mercadoria automaticamente.

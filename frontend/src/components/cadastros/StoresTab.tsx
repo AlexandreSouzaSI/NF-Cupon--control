@@ -28,6 +28,7 @@ type Store = {
     phone?: string | null;
     uf?: string | null;
     active: boolean;
+    isDemo?: boolean;
     logradouro?: string | null;
     numero?: string | null;
     complemento?: string | null;
@@ -93,6 +94,7 @@ export function StoresTab() {
         codigoMunicipioIbge: '',
         cep: '',
         inscricaoEstadual: '',
+        isDemo: false,
     });
 
     const [showFiscalFields, setShowFiscalFields] = useState(false);
@@ -370,6 +372,7 @@ export function StoresTab() {
             codigoMunicipioIbge: '',
             cep: '',
             inscricaoEstadual: '',
+            isDemo: false,
         });
         setEditingStore(null);
         setShowFiscalFields(false);
@@ -391,6 +394,7 @@ export function StoresTab() {
             codigoMunicipioIbge: store.codigoMunicipioIbge || '',
             cep: store.cep || '',
             inscricaoEstadual: store.inscricaoEstadual || '',
+            isDemo: !!store.isDemo,
         });
     }
 
@@ -478,6 +482,22 @@ export function StoresTab() {
                                 className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
                             />
                         </div>
+
+                        <label className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">
+                            <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={form.isDemo}
+                                onChange={(e) =>
+                                    setForm({ ...form, isDemo: e.target.checked })
+                                }
+                            />
+                            <span>
+                                <strong>Loja de demonstração</strong> — destino do
+                                autocadastro público de teste (/demo). Deixe
+                                marcada só numa loja, sem dados reais.
+                            </span>
+                        </label>
 
                         <div>
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
@@ -752,7 +772,15 @@ export function StoresTab() {
                             >
                                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <div>
-                                        <p className="font-semibold">{store.name}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-semibold">{store.name}</p>
+
+                                            {store.isDemo && (
+                                                <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                                    Demonstração
+                                                </span>
+                                            )}
+                                        </div>
 
                                         <div className="mt-1 space-y-0.5 text-sm text-zinc-600 dark:text-zinc-400">
                                             <p>CNPJ: {store.cnpj || 'Não informado'}</p>

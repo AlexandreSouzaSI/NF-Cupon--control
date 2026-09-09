@@ -27,6 +27,7 @@ import { PushModule } from './push/push.module';
 import { OutgoingSalesNfModule } from './outgoing-sales-nf/outgoing-sales-nf.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { BillCategoriesModule } from './bill-categories/bill-categories.module';
+import { DemoModule } from './demo/demo.module';
 
 @Module({
   imports: [
@@ -57,7 +58,8 @@ import { BillCategoriesModule } from './bill-categories/bill-categories.module';
     PushModule,
     OutgoingSalesNfModule,
     WhatsappModule,
-    BillCategoriesModule
+    BillCategoriesModule,
+    DemoModule
   ],
   controllers: [AppController],
   providers: [AppService],

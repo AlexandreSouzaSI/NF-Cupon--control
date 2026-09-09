@@ -45,7 +45,7 @@ export class StoresController {
     }
 
     @Put(':id')
-    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
     async update(
         @Param('id') id: string,
         @Body() body: UpdateStoreDto,

@@ -32,6 +32,7 @@ async function main() {
         update: {
             role: UserRole.PROPRIETARIO,
             phone: normalizePhone('31975805400'),
+            isAdminMaster: true,
         },
         create: {
             name: 'Alexandre',
@@ -39,6 +40,7 @@ async function main() {
             password: ownerPassword,
             phone: normalizePhone('31975805400'),
             role: UserRole.PROPRIETARIO,
+            isAdminMaster: true,
         },
     });
 
@@ -66,6 +68,20 @@ async function main() {
         create: {
             id: 'loja-contagem',
             name: 'Loja Contagem',
+        },
+    });
+
+    // Loja de demonstração pública — destino de todo autocadastro em
+    // /demo (botão "Cadastre-se para teste" na tela de login). isDemo:
+    // true é o que o endpoint de signup usa pra achar essa loja; o dono
+    // não fica vinculado a ela (não é uma loja "de verdade" do negócio).
+    await prisma.store.upsert({
+        where: { id: 'loja-demo-amsx' },
+        update: { isDemo: true },
+        create: {
+            id: 'loja-demo-amsx',
+            name: 'AMSX Teste',
+            isDemo: true,
         },
     });
 

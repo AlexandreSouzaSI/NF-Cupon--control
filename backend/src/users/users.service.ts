@@ -11,13 +11,29 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { normalizePhone } from '../common/phone.util';
 
-// Perfis que um Gerente nunca pode criar/editar/desativar — evita que um
-// Gerente crie outro Gerente (ou se promova a Administrativo/Proprietário)
-// pela tela de Usuários. Administrativo/Proprietário continuam sem essa
-// restrição (acesso global).
-const ELEVATED_ROLES: UserRole[] = [
-    UserRole.ADMINISTRATIVO,
+// Quem pode cadastrar/editar um usuário de cada perfil-alvo. Admin Master
+// (flag isAdminMaster, só o dono do sistema) sempre pode, além de quem
+// estiver listado aqui. Perfis não listados (legado: Comprador/Estoquista/
+// Financeiro, fora de foco no momento) caem no fallback abaixo, que mantém
+// o comportamento de antes (Proprietário/Administrativo/Gerente podem).
+const ROLE_ASSIGNERS: Partial<Record<UserRole, UserRole[]>> = {
+    // Só o próprio Proprietário (ou Admin Master) cria/edita outro Proprietário.
+    [UserRole.PROPRIETARIO]: [UserRole.PROPRIETARIO],
+    // Proprietário ou Administrativo cria/edita Administrativo ou Gerente.
+    [UserRole.ADMINISTRATIVO]: [UserRole.PROPRIETARIO, UserRole.ADMINISTRATIVO],
+    [UserRole.GERENTE]: [UserRole.PROPRIETARIO, UserRole.ADMINISTRATIVO],
+    [UserRole.FUNCIONARIO]: [
+        UserRole.PROPRIETARIO,
+        UserRole.ADMINISTRATIVO,
+        UserRole.GERENTE,
+    ],
+};
+
+// Perfis legados (módulo de Compras fora de foco) — mantém a regra antiga:
+// Proprietário, Administrativo e Gerente podem gerenciar.
+const DEFAULT_ROLE_ASSIGNERS: UserRole[] = [
     UserRole.PROPRIETARIO,
+    UserRole.ADMINISTRATIVO,
     UserRole.GERENTE,
 ];
 
@@ -40,23 +56,37 @@ export class UsersService {
         );
     }
 
-    // Gerente só cria/edita usuários de perfil não-elevado, e só se pelo
-    // menos uma das lojas envolvidas (do usuário alvo, ou informada no
-    // cadastro) for uma loja à qual o próprio Gerente tem acesso. Cada
-    // checagem (role/lojas) só roda se a chave correspondente foi
-    // explicitamente passada — permite chamar só pra revalidar o role, por
-    // exemplo, sem reexigir targetStoreIds nessa chamada específica.
+    // Admin Master (dono do sistema) sempre pode gerenciar qualquer
+    // perfil — é uma flag à parte do role, não um role em si.
+    private canAssignRole(actingUser: any, targetRole: UserRole): boolean {
+        if (actingUser.isAdminMaster) return true;
+
+        const allowed = ROLE_ASSIGNERS[targetRole] ?? DEFAULT_ROLE_ASSIGNERS;
+
+        return allowed.includes(actingUser.role);
+    }
+
+    // Duas checagens independentes:
+    // 1) Perfil-alvo — quem pode cadastrar/editar/desativar alguém com
+    //    aquele perfil (matriz ROLE_ASSIGNERS, roda pra todo mundo,
+    //    inclusive Proprietário/Administrativo, já que agora há perfis que
+    //    nem esses dois podem atribuir livremente).
+    // 2) Loja — só entra pra quem não tem acesso global (Gerente etc):
+    //    precisa ter pelo menos uma loja em comum com o usuário alvo.
+    // Cada checagem só roda se a chave correspondente foi explicitamente
+    // passada — permite chamar só pra revalidar o role, por exemplo, sem
+    // reexigir targetStoreIds nessa chamada específica.
     private ensureManagedUserAccess(
         actingUser: any,
         options: { targetRole?: UserRole; targetStoreIds?: string[] },
     ) {
-        if (this.hasGlobalStoreAccess(actingUser)) return;
-
-        if (options.targetRole && ELEVATED_ROLES.includes(options.targetRole)) {
+        if (options.targetRole && !this.canAssignRole(actingUser, options.targetRole)) {
             throw new ForbiddenException(
-                'Você não pode gerenciar um usuário com esse perfil.',
+                'Você não pode cadastrar ou editar um usuário com esse perfil.',
             );
         }
+
+        if (this.hasGlobalStoreAccess(actingUser)) return;
 
         if (options.targetStoreIds) {
             const allowedStoreIds = this.getAllowedStoreIds(actingUser);
@@ -203,7 +233,7 @@ export class UsersService {
     async update(id: string, dto: UpdateUserDto, actingUser?: any) {
         const existing = await this.findById(id);
 
-        if (actingUser && !this.hasGlobalStoreAccess(actingUser)) {
+        if (actingUser) {
             this.ensureManagedUserAccess(actingUser, {
                 targetRole: existing.role,
                 targetStoreIds: existing.userStores.map((us: any) => us.storeId),
@@ -306,7 +336,7 @@ export class UsersService {
     async remove(id: string, actingUser?: any) {
         const existing = await this.findById(id);
 
-        if (actingUser && !this.hasGlobalStoreAccess(actingUser)) {
+        if (actingUser) {
             this.ensureManagedUserAccess(actingUser, {
                 targetRole: existing.role,
                 targetStoreIds: existing.userStores.map((us: any) => us.storeId),

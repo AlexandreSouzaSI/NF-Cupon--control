@@ -30,6 +30,14 @@ export class AuthService {
             throw new UnauthorizedException('Usuário ou senha inválidos');
         }
 
+        // Conta de teste (autocadastro em /demo/signup) — depois de 1h a
+        // partir do cadastro, nem relogando dá pra continuar usando.
+        if (user.isDemo && user.demoExpiresAt && user.demoExpiresAt < new Date()) {
+            throw new UnauthorizedException(
+                'Seu teste grátis de 1h expirou. Cadastre um novo teste pra continuar explorando.',
+            );
+        }
+
         const stores = user.userStores
             .map((item) => item.store)
             .filter((store) => store.active)
@@ -51,6 +59,9 @@ export class AuthService {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                isAdminMaster: user.isAdminMaster,
+                isDemo: user.isDemo,
+                demoExpiresAt: user.demoExpiresAt,
                 stores,
             },
         };

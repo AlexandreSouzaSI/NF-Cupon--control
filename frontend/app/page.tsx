@@ -106,6 +106,14 @@ export default function LoginPage() {
               'Entrar'
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/demo')}
+            className="flex h-12 w-full items-center justify-center rounded-xl border border-zinc-300 dark:border-zinc-700 font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Cadastre-se para teste
+          </button>
         </form>
       </div>
     </main>

@@ -11,8 +11,11 @@ import {
     Menu,
     Moon,
     Sun,
+    TimerReset,
     X,
 } from 'lucide-react';
+
+import { toast } from 'sonner';
 
 import { api } from '@/lib/api';
 import { getToken, getUser, logout, roleLabels, type AuthUser } from '@/lib/auth';
@@ -53,6 +56,10 @@ export function AppLayout({ children, title }: AppLayoutProps) {
     const [storeSwitcherOpen, setStoreSwitcherOpen] = useState(false);
 
     const [theme, setThemeState] = useState<Theme>('dark');
+
+    // Contagem regressiva do teste grátis (conta criada em /demo). Null =
+    // não é conta de teste, então o banner nem aparece.
+    const [demoSecondsLeft, setDemoSecondsLeft] = useState<number | null>(null);
 
     function handleToggleTheme() {
         setThemeState(toggleTheme());
@@ -137,6 +144,39 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         logout();
         router.push('/');
     }
+
+    // Conta de teste (isDemo): mostra quanto falta e desloga sozinho
+    // quando zera — o backend já bloqueia a API depois do prazo (ver
+    // jwt.strategy.ts), isso aqui só evita deixar a pessoa "presa" numa
+    // tela sem nenhum aviso até a próxima chamada falhar.
+    useEffect(() => {
+        if (!user?.isDemo || !user.demoExpiresAt) {
+            setDemoSecondsLeft(null);
+            return;
+        }
+
+        const expiresAt = new Date(user.demoExpiresAt).getTime();
+
+        function tick() {
+            const secondsLeft = Math.max(
+                0,
+                Math.round((expiresAt - Date.now()) / 1000),
+            );
+
+            setDemoSecondsLeft(secondsLeft);
+
+            if (secondsLeft <= 0) {
+                toast.error('Seu teste grátis de 1h expirou.');
+                handleLogout();
+            }
+        }
+
+        tick();
+        const interval = setInterval(tick, 1000);
+
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.isDemo, user?.demoExpiresAt]);
 
     function handleSelectStore(store: StoreOption) {
         setActiveStore(store);
@@ -230,9 +270,24 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         }))
         .filter((group) => group.items.length > 0);
 
+    const demoTimeLabel =
+        demoSecondsLeft !== null
+            ? `${String(Math.floor(demoSecondsLeft / 60)).padStart(2, '0')}:${String(
+                demoSecondsLeft % 60,
+            ).padStart(2, '0')}`
+            : null;
+
     return (
         <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white">
-            <header className="sticky top-0 z-30 border-b border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 px-4 py-4 backdrop-blur">
+            <div className="sticky top-0 z-30">
+                {demoTimeLabel && (
+                    <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-center text-sm font-semibold text-zinc-900">
+                        <TimerReset size={16} />
+                        Você está no teste grátis — tempo restante: {demoTimeLabel}
+                    </div>
+                )}
+
+                <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 px-4 py-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                     <button
                         onClick={() => setMenuOpen(true)}
@@ -328,7 +383,8 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                         <LogOut size={20} />
                     </button>
                 </div>
-            </header>
+                </header>
+            </div>
 
             <div className="flex">
                 <aside className="hidden min-h-[calc(100vh-73px)] w-72 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 md:block">

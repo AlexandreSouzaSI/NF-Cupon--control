@@ -36,6 +36,7 @@ export class StoresService {
         return this.prisma.store.create({
             data: {
                 name: dto.name,
+                isDemo: dto.isDemo,
                 cnpj: dto.cnpj,
                 address: dto.address,
                 phone: dto.phone,
@@ -181,6 +182,7 @@ export class StoresService {
             where: { id },
             data: {
                 name: dto.name,
+                isDemo: dto.isDemo,
                 cnpj: dto.cnpj,
                 address: dto.address,
                 phone: dto.phone,

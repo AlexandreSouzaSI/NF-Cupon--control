@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { Pencil, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
 import { toast } from 'sonner';
+import { canAssignRole, getUser } from '@/lib/auth';
 
 type Store = {
     id: string;
@@ -110,12 +111,40 @@ export function UsersTab() {
         storeIds: [] as string[],
     });
 
-    // Some da lista de opções, exceto se for o perfil já selecionado (ex:
-    // editando um usuário Comprador antigo — continua aparecendo pra não
-    // sumir o valor do campo, mas não aparece como opção pra usuário novo).
-    const selectableRoles = roles.filter(
-        (role) => !role.hidden || role.value === form.role,
-    );
+    const loggedUser = getUser();
+
+    // Some da lista de opções quando: (a) é um perfil legado fora de foco
+    // (hidden) e não é o perfil já selecionado, ou (b) o usuário logado não
+    // tem permissão de atribuir esse perfil (ex: Administrativo não pode
+    // colocar ninguém como Proprietário). Na edição, mantém visível o
+    // perfil atual mesmo sem permissão de atribuí-lo de novo, só pra não
+    // sumir o valor do campo — o back-end continua sendo quem decide de
+    // verdade se o salvamento é permitido.
+    const selectableRoles = roles.filter((role) => {
+        const isCurrentValue = role.value === form.role;
+
+        if (role.hidden) return isCurrentValue;
+
+        if (!loggedUser || canAssignRole(loggedUser, role.value as any)) {
+            return true;
+        }
+
+        return editingUser ? isCurrentValue : false;
+    });
+
+    // Sem isso, um usuário novo sempre começa com role "Funcionário" no
+    // estado do form — se quem está logado não pode atribuir esse perfil,
+    // a opção some da lista mas o valor selecionado ficaria "travado" nela.
+    useEffect(() => {
+        if (editingUser) return;
+        if (selectableRoles.some((role) => role.value === form.role)) return;
+
+        const fallback = selectableRoles[0];
+        if (fallback) {
+            setForm((current) => ({ ...current, role: fallback.value }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectableRoles, editingUser]);
 
     async function loadData() {
         try {

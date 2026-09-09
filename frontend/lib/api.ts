@@ -20,3 +20,22 @@ api.interceptors.request.use((config) => {
 
     return config;
 });
+
+// Sem isso, uma sessão que expirou no meio do uso (ex: teste grátis vencido
+// — ver jwt.strategy.ts) só aparecia como erro solto na tela que fez a
+// chamada, sem tirar a pessoa da conta. Cobre login normal também.
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error?.response?.status === 401 && typeof window !== 'undefined') {
+            Cookies.remove('token');
+            Cookies.remove('user');
+
+            if (window.location.pathname !== '/') {
+                window.location.href = '/';
+            }
+        }
+
+        return Promise.reject(error);
+    },
+);

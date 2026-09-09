@@ -1,8 +1,14 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class CreateStoreDto {
     @IsString()
     name!: string;
+
+    // Marca essa loja como a loja pública de demonstração (destino do
+    // autocadastro de teste). Só deve existir uma marcada assim.
+    @IsOptional()
+    @IsBoolean()
+    isDemo?: boolean;
 
     @IsOptional()
     @IsString()
