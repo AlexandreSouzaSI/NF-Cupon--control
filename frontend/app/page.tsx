@@ -15,8 +15,12 @@ import { toast } from 'sonner';
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState('admin@compras.com');
-  const [password, setPassword] = useState('123456');
+  // Antes vinha pré-preenchido com uma credencial de teste antiga — como a
+  // página agora recebe gente de fora vinda do /demo (e é pública), campo
+  // vazio é mais seguro e menos confuso (ninguém tenta entrar sem querer
+  // com um login que não é o dela).
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
 
