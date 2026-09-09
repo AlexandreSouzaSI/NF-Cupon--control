@@ -254,6 +254,7 @@ export default function BillsReconcilePage() {
                         />
 
                         <button
+                            data-tour="reconcile-import-button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading || loadingBills}
                             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700 disabled:opacity-50"
@@ -299,7 +300,7 @@ export default function BillsReconcilePage() {
                         </div>
 
                         <div className="space-y-3">
-                            {transactions.map((transaction) => {
+                            {transactions.map((transaction, index) => {
                                 const status =
                                     rowStatus[transaction.fitId] || 'PENDING';
                                 const isProcessing =
@@ -348,6 +349,11 @@ export default function BillsReconcilePage() {
                                             ) : (
                                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                                     <select
+                                                        data-tour={
+                                                            index === 0
+                                                                ? 'reconcile-select-bill'
+                                                                : undefined
+                                                        }
                                                         value={
                                                             selectedBillId[
                                                             transaction.fitId
@@ -406,6 +412,11 @@ export default function BillsReconcilePage() {
 
                                                     <div className="flex gap-2">
                                                         <button
+                                                            data-tour={
+                                                                index === 0
+                                                                    ? 'reconcile-confirm-button'
+                                                                    : undefined
+                                                            }
                                                             onClick={() =>
                                                                 confirmMatch(
                                                                     transaction,

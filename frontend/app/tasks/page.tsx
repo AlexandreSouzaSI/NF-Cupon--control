@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { api, API_URL } from '@/lib/api';
 import { getUser } from '@/lib/auth';
@@ -127,10 +128,31 @@ function recurrenceDetail(task: Pick<TaskDef, 'recurrence' | 'weekday' | 'dayOfM
 }
 
 export default function TasksPage() {
+    return (
+        <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Carregando...</div>}>
+            <TasksPageInner />
+        </Suspense>
+    );
+}
+
+function TasksPageInner() {
     const user = getUser();
     const canManage = !!user && MANAGE_ROLES.includes(user.role);
 
-    const [tab, setTab] = useState<'quadro' | 'gerenciar'>('quadro');
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const requestedTab = searchParams.get('tab');
+
+    const [tab, setTab] = useState<'quadro' | 'gerenciar'>(
+        requestedTab === 'gerenciar' && canManage ? 'gerenciar' : 'quadro',
+    );
+
+    // Sincroniza a URL com a aba ativa — usado pelo tutorial "Como criar
+    // tarefas" (em Dúvidas) pra abrir direto em "/tasks?tab=gerenciar".
+    useEffect(() => {
+        router.replace(`/tasks?tab=${tab}`);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab]);
 
     return (
         <AppLayout title="Tarefas">
@@ -889,6 +911,7 @@ function GerenciarTab() {
 
                 {!showForm && (
                     <button
+                        data-tour="task-new-button"
                         onClick={startCreate}
                         className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                     >
@@ -997,6 +1020,7 @@ function GerenciarTab() {
                                 Título
                             </label>
                             <input
+                                data-tour="task-form-title"
                                 value={form.title}
                                 onChange={(e) =>
                                     setForm({ ...form, title: e.target.value })
@@ -1023,6 +1047,7 @@ function GerenciarTab() {
                                 Responsável
                             </label>
                             <select
+                                data-tour="task-form-assignee"
                                 value={form.assignedToId}
                                 onChange={(e) =>
                                     setForm({ ...form, assignedToId: e.target.value })
@@ -1043,6 +1068,7 @@ function GerenciarTab() {
                                 Frequência
                             </label>
                             <select
+                                data-tour="task-form-recurrence"
                                 value={form.recurrence}
                                 onChange={(e) =>
                                     setForm({
@@ -1186,6 +1212,7 @@ function GerenciarTab() {
                     )}
 
                     <button
+                        data-tour="task-form-submit"
                         disabled={saving}
                         className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto sm:px-8"
                     >

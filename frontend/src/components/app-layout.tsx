@@ -26,6 +26,7 @@ import {
 } from '@/lib/active-store';
 import { getTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { menu, menuColorStyles } from '@/lib/menu';
+import { TourGuide } from './tour/TourGuide';
 
 type AppLayoutProps = {
     children: React.ReactNode;
@@ -568,6 +569,8 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                     {children}
                 </section>
             </div>
+
+            <TourGuide />
         </main>
     );
 }

@@ -17,6 +17,7 @@ import {
     PackageX,
     LayoutDashboard,
     FileStack,
+    HelpCircle,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -294,6 +295,18 @@ export const menu: MenuGroup[] = [
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
                 color: 'pink',
                 hidden: true,
+            },
+        ],
+    },
+    {
+        group: 'Ajuda',
+        items: [
+            {
+                label: 'Dúvidas',
+                href: '/help',
+                icon: HelpCircle,
+                roles: ALL_ROLES,
+                color: 'teal',
             },
         ],
     },

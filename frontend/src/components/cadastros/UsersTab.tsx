@@ -99,6 +99,7 @@ export function UsersTab() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [showInactive, setShowInactive] = useState(false);
     const formRef = useRef<HTMLFormElement>(null);
 
     const [form, setForm] = useState({
@@ -271,6 +272,14 @@ export function UsersTab() {
         }
     }
 
+    // Usuário desativado ("excluído") continua existindo no banco (soft
+    // delete, nunca apaga de verdade — ver docs/BUSINESS_RULES.md), mas por
+    // padrão some da lista: sem isso, "Desativar" parecia não fazer nada,
+    // já que a linha continuava visível com o badge "Inativo".
+    const visibleUsers = showInactive
+        ? users
+        : users.filter((user) => user.active);
+
     async function handleRemove(user: User) {
         const confirmed = confirm(`Desativar o usuário "${user.name}"?`);
 
@@ -316,6 +325,7 @@ export function UsersTab() {
                             Nome
                         </label>
                         <input
+                            data-tour="user-form-name"
                             value={form.name}
                             onChange={(e) =>
                                 setForm({ ...form, name: e.target.value })
@@ -329,6 +339,7 @@ export function UsersTab() {
                             E-mail
                         </label>
                         <input
+                            data-tour="user-form-email"
                             value={form.email}
                             onChange={(e) =>
                                 setForm({ ...form, email: e.target.value })
@@ -360,6 +371,7 @@ export function UsersTab() {
                             Senha {editingUser && '(deixe vazio para manter)'}
                         </label>
                         <input
+                            data-tour="user-form-password"
                             type="password"
                             value={form.password}
                             onChange={(e) =>
@@ -374,6 +386,7 @@ export function UsersTab() {
                             Perfil (permissões de acesso)
                         </label>
                         <select
+                            data-tour="user-form-role"
                             value={form.role}
                             onChange={(e) =>
                                 setForm({ ...form, role: e.target.value })
@@ -407,7 +420,10 @@ export function UsersTab() {
                             Lojas
                         </label>
 
-                        <div className="grid grid-cols-2 gap-2">
+                        <div
+                            data-tour="user-form-stores"
+                            className="grid grid-cols-2 gap-2"
+                        >
                             {stores.map((store) => (
                                 <label
                                     key={store.id}
@@ -437,6 +453,7 @@ export function UsersTab() {
 
                     <div className="flex gap-3">
                         <button
+                            data-tour="user-form-submit"
                             disabled={saving}
                             className="h-12 flex-1 rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
                         >
@@ -472,17 +489,29 @@ export function UsersTab() {
                     <Users className="text-zinc-500" />
                 </div>
 
+                <label className="mb-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    <input
+                        type="checkbox"
+                        checked={showInactive}
+                        onChange={(e) => setShowInactive(e.target.checked)}
+                        className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                    />
+                    Mostrar desativados
+                </label>
+
                 {loading ? (
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
                         Carregando...
                     </p>
-                ) : users.length === 0 ? (
+                ) : visibleUsers.length === 0 ? (
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        Nenhum usuário encontrado.
+                        {users.length === 0
+                            ? 'Nenhum usuário encontrado.'
+                            : 'Nenhum usuário ativo. Marque "Mostrar desativados" pra ver os desativados.'}
                     </p>
                 ) : (
                     <div className="space-y-3">
-                        {users.map((user) => (
+                        {visibleUsers.map((user) => (
                             <div
                                 key={user.id}
                                 className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4"

@@ -801,6 +801,7 @@ function NewBillPageInner() {
                             </label>
 
                             <input
+                                data-tour="bill-form-description"
                                 value={
                                     form.description
                                 }
@@ -826,6 +827,7 @@ function NewBillPageInner() {
                             </label>
 
                             <input
+                                data-tour="bill-form-value"
                                 value={form.value}
                                 onChange={(event) =>
                                     setForm(
@@ -849,6 +851,7 @@ function NewBillPageInner() {
                             </label>
 
                             <input
+                                data-tour="bill-form-duedate"
                                 type="date"
                                 value={form.dueDate}
                                 onChange={(event) =>
@@ -872,6 +875,7 @@ function NewBillPageInner() {
                             </label>
 
                             <select
+                                data-tour="bill-form-type"
                                 value={form.type}
                                 onChange={(event) =>
                                     handleBillTypeChange(
@@ -1519,6 +1523,7 @@ function NewBillPageInner() {
                         </button>
 
                         <button
+                            data-tour="bill-form-submit"
                             type="submit"
                             disabled={
                                 saving ||

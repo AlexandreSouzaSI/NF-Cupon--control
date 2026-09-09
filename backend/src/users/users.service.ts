@@ -165,10 +165,24 @@ export class UsersService {
             ? this.getAllowedStoreIds(actingUser)
             : undefined;
 
+        const where: any = {};
+
+        if (allowedStoreIds) {
+            where.userStores = { some: { storeId: { in: allowedStoreIds } } };
+        }
+
+        // Conta de teste (isDemo) nunca aparece pra ninguém do time de
+        // verdade, nem pro Proprietário com acesso global — some da lista
+        // de Cadastros → Usuários igual sumiria se fosse uma base
+        // separada, sem precisar duplicar tabela nenhuma. Uma conta de
+        // teste olhando essa mesma tela continua vendo só ela mesma (o
+        // filtro por loja acima já cuida disso).
+        if (!actingUser?.isDemo) {
+            where.isDemo = false;
+        }
+
         return this.prisma.user.findMany({
-            where: allowedStoreIds
-                ? { userStores: { some: { storeId: { in: allowedStoreIds } } } }
-                : undefined,
+            where,
             orderBy: {
                 name: 'asc',
             },

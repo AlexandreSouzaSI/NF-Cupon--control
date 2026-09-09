@@ -483,6 +483,7 @@ export function StoresTab() {
                                 Nome
                             </label>
                             <input
+                                data-tour="store-form-name"
                                 value={form.name}
                                 onChange={(e) =>
                                     setForm({ ...form, name: e.target.value })
@@ -496,6 +497,7 @@ export function StoresTab() {
                                 CNPJ
                             </label>
                             <input
+                                data-tour="store-form-cnpj"
                                 value={form.cnpj}
                                 onChange={(e) =>
                                     setForm({ ...form, cnpj: e.target.value })
@@ -535,6 +537,7 @@ export function StoresTab() {
                                 UF
                             </label>
                             <input
+                                data-tour="store-form-uf"
                                 value={form.uf}
                                 maxLength={2}
                                 placeholder="Ex: SP, MG"
@@ -711,6 +714,7 @@ export function StoresTab() {
 
                         <div className="flex gap-3">
                             <button
+                                data-tour="store-form-submit"
                                 disabled={saving}
                                 className="h-12 flex-1 rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
                             >

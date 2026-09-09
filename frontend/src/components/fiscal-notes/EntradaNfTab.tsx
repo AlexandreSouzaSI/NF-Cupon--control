@@ -500,7 +500,10 @@ export function EntradaNfTab() {
                         Baixar NFs do período
                     </p>
 
-                    <div className="flex rounded-xl border border-zinc-300 dark:border-zinc-700 p-1">
+                    <div
+                        data-tour="entrada-download-mode"
+                        className="flex rounded-xl border border-zinc-300 dark:border-zinc-700 p-1"
+                    >
                         <button
                             onClick={() => setMode('MONTH')}
                             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${mode === 'MONTH'
@@ -523,13 +526,17 @@ export function EntradaNfTab() {
 
                     {mode === 'MONTH' ? (
                         <input
+                            data-tour="entrada-download-period"
                             type="month"
                             value={month}
                             onChange={(e) => setMonth(e.target.value)}
                             className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     ) : (
-                        <>
+                        <div
+                            data-tour="entrada-download-period"
+                            className="flex items-center gap-2"
+                        >
                             <input
                                 type="date"
                                 value={startDate}
@@ -543,10 +550,11 @@ export function EntradaNfTab() {
                                 onChange={(e) => setEndDate(e.target.value)}
                                 className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
-                        </>
+                        </div>
                     )}
 
                     <button
+                        data-tour="entrada-download-button"
                         onClick={handleDownload}
                         disabled={downloading}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
@@ -130,7 +131,34 @@ function emptyLossItem(): LossItemForm {
 }
 
 export default function LossesPage() {
-    const [tab, setTab] = useState<TabKey>('registrar');
+    return (
+        <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Carregando...</div>}>
+            <LossesPageInner />
+        </Suspense>
+    );
+}
+
+function LossesPageInner() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    const requestedTab = searchParams.get('tab') as TabKey | null;
+    const validTabs: TabKey[] = ['registrar', 'relatorio', 'nfe'];
+
+    const [tab, setTab] = useState<TabKey>(
+        requestedTab && validTabs.includes(requestedTab)
+            ? requestedTab
+            : 'registrar',
+    );
+
+    // Sincroniza a URL com a aba ativa — sem isso, um link direto tipo
+    // "/losses?tab=nfe" (usado pelos tutoriais em Dúvidas) só valeria pra
+    // seleção inicial, e ficaria estranho o endereço não acompanhar a
+    // aba depois de trocar manualmente.
+    useEffect(() => {
+        router.replace(`/losses?tab=${tab}`);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab]);
 
     return (
         <AppLayout title="Perdas">
@@ -368,7 +396,7 @@ function RegistrarTab() {
                     </div>
                 </div>
 
-                <div>
+                <div data-tour="loss-photo">
                     <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                         Foto do que foi perdido
                     </label>
@@ -445,6 +473,11 @@ function RegistrarTab() {
                                         {index + 1}
                                     </span>
                                     <input
+                                        data-tour={
+                                            index === 0
+                                                ? 'loss-item-description'
+                                                : undefined
+                                        }
                                         value={item.description}
                                         onChange={(e) =>
                                             updateItem(index, 'description', e.target.value)
@@ -466,6 +499,11 @@ function RegistrarTab() {
 
                                 <div className="grid grid-cols-3 gap-2">
                                     <input
+                                        data-tour={
+                                            index === 0
+                                                ? 'loss-item-quantity'
+                                                : undefined
+                                        }
                                         type="number"
                                         step="0.001"
                                         min="0"
@@ -485,6 +523,11 @@ function RegistrarTab() {
                                         className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
                                     />
                                     <input
+                                        data-tour={
+                                            index === 0
+                                                ? 'loss-item-value'
+                                                : undefined
+                                        }
                                         type="number"
                                         step="0.01"
                                         min="0"
@@ -526,6 +569,7 @@ function RegistrarTab() {
                 </div>
 
                 <button
+                    data-tour="loss-submit"
                     disabled={saving}
                     className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
@@ -896,7 +940,10 @@ function NfPerdaTab() {
             </div>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_420px]">
-                <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                <section
+                    data-tour="lossnfe-eligible"
+                    className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
+                >
                     <div className="mb-4">
                         <h2 className="text-lg font-bold">Perdas prontas pra NF</h2>
                         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -976,6 +1023,7 @@ function NfPerdaTab() {
                                 Justificativa (motivo da baixa)
                             </label>
                             <textarea
+                                data-tour="lossnfe-justificativa"
                                 value={justificativa}
                                 onChange={(e) => setJustificativa(e.target.value)}
                                 placeholder="Ex: Quebra de garrafas no estoque, produtos vencidos descartados em 05/09..."
@@ -989,6 +1037,7 @@ function NfPerdaTab() {
                         </div>
 
                         <button
+                            data-tour="lossnfe-submit"
                             onClick={handleEmit}
                             disabled={emitting || selectedIds.length === 0}
                             className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"

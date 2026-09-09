@@ -86,6 +86,11 @@ export class StoresService {
             return this.prisma.store.findMany({
                 where: {
                     active: true,
+                    // Loja de teste (isDemo, criada em /demo/signup) nunca
+                    // aparece em Cadastros → Lojas pra Administrativo/
+                    // Proprietário — mesmo efeito de ter uma tabela
+                    // separada só pra isso, sem precisar duplicar nada.
+                    isDemo: false,
                 },
                 orderBy: {
                     name: 'asc',
