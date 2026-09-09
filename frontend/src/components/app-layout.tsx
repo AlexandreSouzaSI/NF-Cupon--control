@@ -201,18 +201,36 @@ export function AppLayout({ children, title }: AppLayoutProps) {
     }
 
     if (storeStatus === 'error') {
+        // Conta de teste sem loja quase sempre é teste vencido (a loja
+        // dele é desativada junto com a conta — ver cleanupExpiredTrials
+        // em demo.service.ts). Pra quem veio de fora pelo /demo, "fale com
+        // um Administrativo" não quer dizer nada — melhor mandar criar um
+        // teste novo direto.
         return (
             <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-50 dark:bg-zinc-950 px-4 text-center text-zinc-900 dark:text-white">
                 <Building2 size={40} className="text-zinc-600" />
                 <div>
                     <h1 className="text-lg font-bold">
-                        Nenhuma loja disponível
+                        {user.isDemo
+                            ? 'Seu teste expirou'
+                            : 'Nenhuma loja disponível'}
                     </h1>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                        Seu usuário não está vinculado a nenhuma loja. Fale com
-                        um Administrativo ou Proprietário.
+                        {user.isDemo
+                            ? 'Esse teste grátis não está mais ativo. Crie um novo pra continuar explorando.'
+                            : 'Seu usuário não está vinculado a nenhuma loja. Fale com um Administrativo ou Proprietário.'}
                     </p>
                 </div>
+
+                {user.isDemo && (
+                    <button
+                        onClick={() => router.push('/demo')}
+                        className="rounded-xl bg-green-500 px-4 py-2 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600"
+                    >
+                        Criar novo teste
+                    </button>
+                )}
+
                 <button
                     onClick={handleLogout}
                     className="rounded-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
