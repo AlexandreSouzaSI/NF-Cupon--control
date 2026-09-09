@@ -75,6 +75,14 @@ export function StoresTab() {
     const user = getUser();
     const isAdmin = !!user && hasGlobalStoreAccess(user.role);
 
+    // Certificado digital: o backend já libera Gerente pra loja(s) dele
+    // (ver @Roles em stores.controller.ts e ensureManagedStoreAccess em
+    // stores.service.ts) — a lista de lojas que chega aqui pra um Gerente
+    // já vem filtrada só pelas dele, então não precisa de checagem extra
+    // por loja. Editar dados/excluir continua só pra isAdmin (regra
+    // explícita: só Proprietário/Administrativo cadastram e editam loja).
+    const canManageCertificate = isAdmin || user?.role === 'GERENTE';
+
     const [stores, setStores] = useState<Store[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -133,7 +141,7 @@ export function StoresTab() {
             const loadedStores: Store[] = response.data;
             setStores(loadedStores);
 
-            if (isAdmin) {
+            if (canManageCertificate) {
                 await loadCertificateStatuses(loadedStores);
             }
         } catch {
@@ -799,7 +807,7 @@ export function StoresTab() {
                                     )}
                                 </div>
 
-                                {isAdmin && (
+                                {canManageCertificate && (
                                     <div className="mt-4 border-t border-zinc-200 dark:border-zinc-800 pt-4">
                                         {certStatus[store.id]?.hasCertificate ? (
                                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

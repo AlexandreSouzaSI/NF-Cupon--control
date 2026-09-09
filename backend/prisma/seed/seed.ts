@@ -117,6 +117,33 @@ async function main() {
         },
     });
 
+    // Corrige contas de teste que ficaram travadas: antes do
+    // cleanupExpiredTrials liberar o e-mail (demo.service.ts), o teste
+    // vencido só ficava com active:false, sem soltar o e-mail — aí o
+    // @unique bloqueava pra sempre um cadastro novo com aquele e-mail
+    // (mesmo a conta estando desativada). Roda sempre, mas só mexe em
+    // quem ainda está com o e-mail original (idempotente).
+    const stuckDemoUsers = await prisma.user.findMany({
+        where: {
+            isDemo: true,
+            active: false,
+            email: { not: { endsWith: '@retirado.local' } },
+        },
+    });
+
+    for (const stuckUser of stuckDemoUsers) {
+        await prisma.user.update({
+            where: { id: stuckUser.id },
+            data: { email: `demo-expirado-${stuckUser.id}@retirado.local` },
+        });
+    }
+
+    if (stuckDemoUsers.length > 0) {
+        console.log(
+            `Corrigido ${stuckDemoUsers.length} conta(s) de teste travada(s) — e-mail liberado pra cadastro novo.`,
+        );
+    }
+
     console.log('Seed executado com sucesso.');
     console.log('Login: alemourasouza33@gmail.com');
     console.log('Senha: 92988096');
