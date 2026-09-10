@@ -1197,7 +1197,18 @@ export class PurchasesService {
                     continue;
                 }
 
-                const parsedNf = parseResNFe(doc.xml);
+                // resNFe (resumo) e procNFe (XML completo) têm raízes XML
+                // diferentes — resNFe/resEvento vs. infNFe — então usam
+                // parsers diferentes. Antes disso aqui sempre chamava
+                // parseResNFe pra tudo: quando a Sefaz finalmente entregava
+                // o procNFe completo (depois da manifestação), parseResNFe
+                // não reconhecia a raiz, devolvia null, e o "continue"
+                // acima descartava o XML completo em silêncio — o registro
+                // nunca saía de "resNFe" e o arquivo nunca era salvo. Único
+                // jeito de notar era abrir a NF e só existir o resumo.
+                const parsedNf = doc.schema.startsWith('procNFe')
+                    ? parseFullNfeXml(doc.xml)
+                    : parseResNFe(doc.xml);
 
                 if (!parsedNf?.chaveAcesso) {
                     continue;

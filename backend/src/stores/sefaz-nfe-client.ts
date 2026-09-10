@@ -516,6 +516,16 @@ export async function sendManifestacao(
     // nosso). Qualquer outro código é rejeição.
     const success = cStat === '135' || cStat === '136';
 
+    // Se mesmo com o fallback de reparse (ver findNode) o cStat continuar
+    // vazio, algo na resposta tem um formato que a gente ainda não
+    // previu — loga o corpo bruto pra dar pra diagnosticar direto pelos
+    // logs do servidor em vez de só ver "motivo desconhecido" na tela.
+    if (!cStat) {
+        console.error(
+            `[sendManifestacao] cStat vazio na resposta da Sefaz (chave ${params.chaveAcesso}). Corpo bruto: ${truncate(response.body, 3000)}`,
+        );
+    }
+
     return {
         success,
         cStat,
@@ -523,6 +533,352 @@ export async function sendManifestacao(
         message: success
             ? `Ciência da operação registrada (${cStat} - ${xMotivo}).`
             : `Sefaz rejeitou a manifestação (${cStat || '?'} - ${xMotivo || 'motivo desconhecido'}).`,
+    };
+}
+
+// ---------------------------------------------------------------------
+// Autorização de NF-e (envio + consulta de recibo)
+//
+// Diferente de tudo mais neste arquivo (que só lê dados da Sefaz), isso
+// aqui EMITE de verdade — envia um XML já assinado (montado por
+// loss-nfe-builder.ts ou devolucao-nfe-builder.ts) pro webservice de
+// autorização e, se aceito, a NF-e passa a ter valor fiscal real (no
+// ambiente que foi enviada, produção ou homologação). Use com cuidado:
+// isso não é mais só leitura.
+//
+// Endereços tirados do portal oficial da SVRS
+// (https://dfe-portal.svrs.rs.gov.br/Nfe/Servicos), que lista o
+// autorizador de cada UF (nem toda UF autoriza a própria NF-e — várias
+// usam a SVRS ou a SVAN como autorizador delegado; a tabela abaixo só
+// lista quem tem autorizador próprio, com fallback pra SVRS igual já era
+// feito pro webservice de eventos).
+const NFE_AUTORIZACAO_URLS: Record<string, { producao: string; homologacao: string }> = {
+    AM: {
+        producao: 'https://nfe.sefaz.am.gov.br/services2/services/NfeAutorizacao4',
+        homologacao: 'https://homnfe.sefaz.am.gov.br/services2/services/NfeAutorizacao4',
+    },
+    BA: {
+        producao: 'https://nfe.sefaz.ba.gov.br/webservices/NFeAutorizacao4/NFeAutorizacao4.asmx',
+        homologacao: 'https://hnfe.sefaz.ba.gov.br/webservices/NFeAutorizacao4/NFeAutorizacao4.asmx',
+    },
+    GO: {
+        producao: 'https://nfe.sefaz.go.gov.br/nfe/services/NFeAutorizacao4',
+        homologacao: 'https://homolog.sefaz.go.gov.br/nfe/services/NFeAutorizacao4',
+    },
+    MG: {
+        producao: 'https://nfe.fazenda.mg.gov.br/nfe2/services/NFeAutorizacao4',
+        homologacao: 'https://hnfe.fazenda.mg.gov.br/nfe2/services/NFeAutorizacao4',
+    },
+    MS: {
+        producao: 'https://nfe.sefaz.ms.gov.br/ws/NFeAutorizacao4',
+        homologacao: 'https://hom.nfe.sefaz.ms.gov.br/ws/NFeAutorizacao4',
+    },
+    MT: {
+        producao: 'https://nfe.sefaz.mt.gov.br/nfews/v2/services/NfeAutorizacao4',
+        homologacao: 'https://homologacao.sefaz.mt.gov.br/nfews/v2/services/NfeAutorizacao4',
+    },
+    PE: {
+        producao: 'https://nfe.sefaz.pe.gov.br/nfe-service/services/NFeAutorizacao4',
+        homologacao: 'https://nfehomolog.sefaz.pe.gov.br/nfe-service/services/NFeAutorizacao4',
+    },
+    PR: {
+        producao: 'https://nfe.sefa.pr.gov.br/nfe/NFeAutorizacao4',
+        homologacao: 'https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeAutorizacao4',
+    },
+    RS: {
+        producao: 'https://nfe.sefazrs.rs.gov.br/ws/NfeAutorizacao/NFeAutorizacao4.asmx',
+        homologacao: 'https://nfe-homologacao.sefazrs.rs.gov.br/ws/NfeAutorizacao/NFeAutorizacao4.asmx',
+    },
+    SP: {
+        producao: 'https://nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx',
+        homologacao: 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx',
+    },
+};
+
+const NFE_AUTORIZACAO_SVRS_FALLBACK = {
+    producao: 'https://nfe.svrs.rs.gov.br/ws/NfeAutorizacao/NFeAutorizacao4.asmx',
+    homologacao: 'https://nfe-homologacao.svrs.rs.gov.br/ws/NfeAutorizacao/NFeAutorizacao4.asmx',
+};
+
+const NFE_RET_AUTORIZACAO_URLS: Record<string, { producao: string; homologacao: string }> = {
+    AM: {
+        producao: 'https://nfe.sefaz.am.gov.br/services2/services/NfeRetAutorizacao4',
+        homologacao: 'https://homnfe.sefaz.am.gov.br/services2/services/NfeRetAutorizacao4',
+    },
+    BA: {
+        producao: 'https://nfe.sefaz.ba.gov.br/webservices/NFeRetAutorizacao4/NFeRetAutorizacao4.asmx',
+        homologacao: 'https://hnfe.sefaz.ba.gov.br/webservices/NFeRetAutorizacao4/NFeRetAutorizacao4.asmx',
+    },
+    GO: {
+        producao: 'https://nfe.sefaz.go.gov.br/nfe/services/NFeRetAutorizacao4',
+        homologacao: 'https://homolog.sefaz.go.gov.br/nfe/services/NFeRetAutorizacao4',
+    },
+    MG: {
+        producao: 'https://nfe.fazenda.mg.gov.br/nfe2/services/NFeRetAutorizacao4',
+        homologacao: 'https://hnfe.fazenda.mg.gov.br/nfe2/services/NFeRetAutorizacao4',
+    },
+    MS: {
+        producao: 'https://nfe.sefaz.ms.gov.br/ws/NFeRetAutorizacao4',
+        homologacao: 'https://hom.nfe.sefaz.ms.gov.br/ws/NFeRetAutorizacao4',
+    },
+    MT: {
+        producao: 'https://nfe.sefaz.mt.gov.br/nfews/v2/services/NfeRetAutorizacao4',
+        homologacao: 'https://homologacao.sefaz.mt.gov.br/nfews/v2/services/NfeRetAutorizacao4',
+    },
+    PE: {
+        producao: 'https://nfe.sefaz.pe.gov.br/nfe-service/services/NFeRetAutorizacao4',
+        homologacao: 'https://nfehomolog.sefaz.pe.gov.br/nfe-service/services/NFeRetAutorizacao4',
+    },
+    PR: {
+        producao: 'https://nfe.sefa.pr.gov.br/nfe/NFeRetAutorizacao4',
+        homologacao: 'https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeRetAutorizacao4',
+    },
+    RS: {
+        producao: 'https://nfe.sefazrs.rs.gov.br/ws/NfeRetAutorizacao/NFeRetAutorizacao4.asmx',
+        homologacao: 'https://nfe-homologacao.sefazrs.rs.gov.br/ws/NfeRetAutorizacao/NFeRetAutorizacao4.asmx',
+    },
+    SP: {
+        producao: 'https://nfe.fazenda.sp.gov.br/ws/nferetautorizacao4.asmx',
+        homologacao: 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nferetautorizacao4.asmx',
+    },
+};
+
+const NFE_RET_AUTORIZACAO_SVRS_FALLBACK = {
+    producao: 'https://nfe.svrs.rs.gov.br/ws/NfeRetAutorizacao/NFeRetAutorizacao4.asmx',
+    homologacao: 'https://nfe-homologacao.svrs.rs.gov.br/ws/NfeRetAutorizacao/NFeRetAutorizacao4.asmx',
+};
+
+function getAutorizacaoUrl(uf: string, tpAmb: 1 | 2): string {
+    const entry = NFE_AUTORIZACAO_URLS[uf.trim().toUpperCase()] || NFE_AUTORIZACAO_SVRS_FALLBACK;
+    return tpAmb === 2 ? entry.homologacao : entry.producao;
+}
+
+function getRetAutorizacaoUrl(uf: string, tpAmb: 1 | 2): string {
+    const entry = NFE_RET_AUTORIZACAO_URLS[uf.trim().toUpperCase()] || NFE_RET_AUTORIZACAO_SVRS_FALLBACK;
+    return tpAmb === 2 ? entry.homologacao : entry.producao;
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export type AutorizacaoResult = {
+    // 'autorizada' = cStat 100 (uso autorizado); 'rejeitada' = qualquer
+    // outro cStat definitivo; 'pendente' = a Sefaz aceitou o lote mas
+    // ainda não processou depois de todas as tentativas de consulta —
+    // precisa checar de novo mais tarde com o nRec salvo.
+    status: 'autorizada' | 'rejeitada' | 'pendente';
+    cStat?: string;
+    xMotivo?: string;
+    protocolo?: string; // nProt, só quando autorizada
+    nRec?: string; // recibo do lote, só quando ficou pendente
+    message: string;
+};
+
+// Monta o envelope enviNFe (lote de 1 NF-e, processamento síncrono —
+// indSinc=1) e envia pro webservice de autorização da UF autorizadora da
+// loja. A NF-e já vem pronta e assinada (parâmetro nfeXmlAssinado), como
+// devolvida por buildAndSignLossNfe/buildAndSignDevolucaoNfe.
+export async function sendAutorizacaoNfe(
+    cert: LoadedCertificate,
+    params: {
+        uf: string;
+        tpAmb: 1 | 2;
+        nfeXmlAssinado: string; // já inclui a tag <NFe>...</NFe> com a assinatura
+    },
+): Promise<AutorizacaoResult> {
+    const idLote = String(Date.now()).slice(-15);
+
+    const enviNFeXml =
+        `<enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">` +
+        `<idLote>${idLote}</idLote>` +
+        `<indSinc>1</indSinc>` +
+        params.nfeXmlAssinado.replace(/^<\?xml[^>]*\?>/, '') +
+        `</enviNFe>`;
+
+    const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeAutorizacaoLote xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">
+      <nfeDadosMsg>${enviNFeXml}</nfeDadosMsg>
+    </nfeAutorizacaoLote>
+  </soap12:Body>
+</soap12:Envelope>`;
+
+    const url = getAutorizacaoUrl(params.uf, params.tpAmb);
+    const action = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4/nfeAutorizacaoLote';
+
+    let response: RawResponse;
+
+    try {
+        response = await soapPost(url, soapEnvelope, cert, action);
+    } catch (error: any) {
+        return {
+            status: 'rejeitada',
+            message: `Erro de conexão com a Sefaz (${url}): ${error?.message || error}`,
+        };
+    }
+
+    let parsed: any;
+
+    try {
+        parsed = parser.parse(response.body);
+    } catch {
+        return {
+            status: 'rejeitada',
+            message: `Resposta da Sefaz não é um XML válido (HTTP ${response.status}): ${truncate(response.body, 3000)}`,
+        };
+    }
+
+    const result = interpretAutorizacaoResponse(parsed);
+
+    if (result.status !== 'pendente' || !result.nRec) {
+        if (!result.cStat) {
+            console.error(
+                `[sendAutorizacaoNfe] cStat vazio na resposta da Sefaz. Corpo bruto: ${truncate(response.body, 3000)}`,
+            );
+        }
+
+        return result;
+    }
+
+    // Lote aceito mas ainda em processamento (cStat 103/105 com nRec) —
+    // consulta o recibo algumas vezes com espera crescente antes de
+    // desistir e devolver "pendente" (quem chamou pode tentar de novo
+    // depois usando consultarReciboNfe com o nRec salvo).
+    const nRec = result.nRec;
+    const waitsMs = [3000, 5000, 8000];
+
+    for (const waitMs of waitsMs) {
+        await sleep(waitMs);
+
+        const retry = await consultarReciboNfe(cert, {
+            uf: params.uf,
+            tpAmb: params.tpAmb,
+            nRec,
+        });
+
+        if (retry.status !== 'pendente') {
+            return retry;
+        }
+    }
+
+    return {
+        status: 'pendente',
+        cStat: result.cStat,
+        xMotivo: result.xMotivo,
+        nRec,
+        message: `Lote recebido pela Sefaz (recibo ${nRec}), ainda em processamento depois de algumas tentativas — consulte de novo em alguns minutos.`,
+    };
+}
+
+// Consulta um recibo de lote já enviado (NFeRetAutorizacao4) — usado
+// internamente pelo retry de sendAutorizacaoNfe, e também exportado pra
+// dar pra checar de novo manualmente um lote que ficou "pendente".
+export async function consultarReciboNfe(
+    cert: LoadedCertificate,
+    params: { uf: string; tpAmb: 1 | 2; nRec: string },
+): Promise<AutorizacaoResult> {
+    const consReciNFeXml =
+        `<consReciNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">` +
+        `<tpAmb>${params.tpAmb}</tpAmb>` +
+        `<nRec>${escapeXml(params.nRec)}</nRec>` +
+        `</consReciNFe>`;
+
+    const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeRetAutorizacaoLote xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRetAutorizacao4">
+      <nfeDadosMsg>${consReciNFeXml}</nfeDadosMsg>
+    </nfeRetAutorizacaoLote>
+  </soap12:Body>
+</soap12:Envelope>`;
+
+    const url = getRetAutorizacaoUrl(params.uf, params.tpAmb);
+    const action = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRetAutorizacao4/nfeRetAutorizacaoLote';
+
+    let response: RawResponse;
+
+    try {
+        response = await soapPost(url, soapEnvelope, cert, action);
+    } catch (error: any) {
+        return {
+            status: 'rejeitada',
+            message: `Erro de conexão com a Sefaz (${url}): ${error?.message || error}`,
+        };
+    }
+
+    let parsed: any;
+
+    try {
+        parsed = parser.parse(response.body);
+    } catch {
+        return {
+            status: 'rejeitada',
+            message: `Resposta da Sefaz não é um XML válido (HTTP ${response.status}): ${truncate(response.body, 3000)}`,
+        };
+    }
+
+    return interpretAutorizacaoResponse(parsed);
+}
+
+// Lê tanto retEnviNFe (resposta direta do envio) quanto retConsReciNFe
+// (resposta da consulta de recibo) — as duas têm o mesmo formato de
+// protNFe/infProt quando processadas, então um único interpretador serve
+// pras duas.
+function interpretAutorizacaoResponse(parsed: any): AutorizacaoResult {
+    const protNFe = findNode(parsed, 'protNFe');
+    const infProt = protNFe ? findNode(protNFe, 'infProt') : findNode(parsed, 'infProt');
+
+    if (infProt) {
+        const cStat = extractText(infProt.cStat);
+        const xMotivo = extractText(infProt.xMotivo);
+        const nProt = extractText(infProt.nProt);
+
+        if (cStat === '100') {
+            return {
+                status: 'autorizada',
+                cStat,
+                xMotivo,
+                protocolo: nProt || undefined,
+                message: `NF-e autorizada pela Sefaz (protocolo ${nProt}).`,
+            };
+        }
+
+        return {
+            status: 'rejeitada',
+            cStat,
+            xMotivo,
+            message: `Sefaz rejeitou a NF-e (${cStat || '?'} - ${xMotivo || 'motivo desconhecido'}).`,
+        };
+    }
+
+    // Sem protNFe — olha o cStat do lote em si (nível retEnviNFe/
+    // retConsReciNFe). 103/105 = ainda processando (precisa consultar o
+    // recibo, se veio). Qualquer outro código sem protNFe é rejeição do
+    // lote inteiro (ex: 215 duplicidade, 225 falha de schema etc.).
+    const loteCStat = extractText(findNode(parsed, 'cStat'));
+    const loteXMotivo = extractText(findNode(parsed, 'xMotivo'));
+    const infRec = findNode(parsed, 'infRec');
+    const nRec = infRec ? extractText(infRec.nRec) : '';
+
+    if ((loteCStat === '103' || loteCStat === '105') && nRec) {
+        return {
+            status: 'pendente',
+            cStat: loteCStat,
+            xMotivo: loteXMotivo,
+            nRec,
+            message: `Lote recebido pela Sefaz (recibo ${nRec}), ainda em processamento.`,
+        };
+    }
+
+    return {
+        status: 'rejeitada',
+        cStat: loteCStat,
+        xMotivo: loteXMotivo,
+        message: loteCStat
+            ? `Sefaz recusou o lote: ${loteCStat} - ${loteXMotivo || 'motivo desconhecido'}.`
+            : `Resposta da Sefaz sem cStat reconhecível.`,
     };
 }
 
@@ -585,6 +941,16 @@ export type ParsedFullNfe = {
 // porque o XML completo de uma NF-e pode vir "cru" (<NFe>...</NFe>) ou
 // embrulhado no protocolo de autorização (<nfeProc><NFe>...<protNFe>...),
 // dependendo de onde a pessoa exportou o arquivo.
+// Mesmo problema documentado em findRetDistDFeInt: alguns webservices
+// .asmx (incluindo o de recepção de evento/manifestação, não só o de
+// distribuição) devolvem o corpo da resposta como texto com entidades já
+// desescapadas dentro de um nó "#text", em vez de XML aninhado de
+// verdade. Sem esse fallback, findNode nunca enxergava infEvento/cStat
+// dentro da resposta da manifestação — a busca simplesmente não descia
+// pra dentro da string — e cStat/xMotivo voltavam sempre vazios,
+// aparecendo na tela como "Sefaz rejeitou a manifestação (? - motivo
+// desconhecido)" mesmo quando a manifestação tinha sido aceita (ou
+// rejeitada por um motivo real, que nunca chegava a ser lido).
 function findNode(parsed: any, key: string): any | null {
     const stack = [parsed];
 
@@ -596,6 +962,24 @@ function findNode(parsed: any, key: string): any | null {
 
         for (const nodeKey of Object.keys(node)) {
             const value = node[nodeKey];
+
+            if (
+                nodeKey === '#text' &&
+                typeof value === 'string' &&
+                /^\s*<\w/.test(value)
+            ) {
+                try {
+                    const reparsed = parser.parse(value);
+                    if (reparsed && typeof reparsed === 'object') {
+                        stack.push(reparsed);
+                    }
+                } catch {
+                    // não era XML de verdade — ignora e segue a busca
+                }
+
+                continue;
+            }
+
             if (value && typeof value === 'object') stack.push(value);
         }
     }
@@ -667,8 +1051,13 @@ function toArray<T>(value: T | T[] | undefined | null): T[] {
 type NfeAddress = {
     logradouro?: string;
     numero?: string;
+    complemento?: string;
     bairro?: string;
     municipio?: string;
+    // Código IBGE do município (cMun) — não aparece na tela de
+    // visualização, mas é exigido pra montar o enderDest de uma futura
+    // NF-e de devolução referenciando esse emitente (ver devolucoes/).
+    codigoMunicipioIbge?: string;
     uf?: string;
     cep?: string;
 };
@@ -679,8 +1068,10 @@ function extractAddress(ender: any): NfeAddress | undefined {
     return {
         logradouro: extractText(ender.xLgr) || undefined,
         numero: extractText(ender.nro) || undefined,
+        complemento: extractText(ender.xCpl) || undefined,
         bairro: extractText(ender.xBairro) || undefined,
         municipio: extractText(ender.xMun) || undefined,
+        codigoMunicipioIbge: extractText(ender.cMun) || undefined,
         uf: extractText(ender.UF) || undefined,
         cep: extractText(ender.CEP) || undefined,
     };
@@ -706,6 +1097,10 @@ export type NfeView = {
     emitente: {
         nome?: string;
         cnpj?: string;
+        // Não exibido na tela de visualização — usado pra montar o
+        // enderDest/IE de uma futura NF-e de devolução, que devolve a
+        // mercadoria pra esse mesmo emitente (ver devolucoes/).
+        inscricaoEstadual?: string;
         endereco?: NfeAddress;
     };
     destinatario: {
@@ -795,6 +1190,7 @@ export function parseFullNfeForView(xml: string): NfeView | null {
         emitente: {
             nome: extractText(emit.xNome) || undefined,
             cnpj: extractText(emit.CNPJ) || undefined,
+            inscricaoEstadual: extractText(emit.IE) || undefined,
             endereco: extractAddress(emit.enderEmit),
         },
         destinatario: {

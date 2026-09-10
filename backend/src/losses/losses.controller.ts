@@ -4,6 +4,7 @@ import {
     Delete,
     Get,
     Param,
+    Patch,
     Post,
     Query,
     UploadedFile,
@@ -158,6 +159,19 @@ export class LossesController {
     @Get('nfe/:id')
     async findLossNfeById(@Param('id') id: string, @CurrentUser() user: any) {
         return this.lossesService.findLossNfeById(id, user);
+    }
+
+    @Patch('nfe/:id/cancel')
+    async cancelLossNfe(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.lossesService.cancelLossNfeDraft(id, user);
+    }
+
+    // Envia de verdade pro webservice de autorização da Sefaz (sempre
+    // homologação por enquanto — ver comentário no service). Pode ser
+    // chamado de novo se a tentativa anterior ficou "pendente".
+    @Post('nfe/:id/send')
+    async sendLossNfeToSefaz(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.lossesService.sendLossNfeToSefaz(id, user);
     }
 
     @Delete(':id')

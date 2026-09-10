@@ -15,7 +15,9 @@ import {
     PackageX,
     Plus,
     Printer,
+    Send,
     Trash2,
+    XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NfViewerModal } from '../../src/components/ui/NfViewerModal';
@@ -58,6 +60,8 @@ type LossNfe = {
     issueDate: string | null;
     justificativa: string;
     xmlFileUrl: string | null;
+    protocolo: string | null;
+    statusMessage: string | null;
     createdAt: string;
     createdBy: { id: string; name: string };
     losses: {
@@ -821,11 +825,14 @@ function NfPerdaTab() {
     const [eligible, setEligible] = useState<Loss[]>([]);
     const [selected, setSelected] = useState<Record<string, boolean>>({});
     const [justificativa, setJustificativa] = useState('');
+    const [cfop, setCfop] = useState('5927');
     const [loading, setLoading] = useState(true);
     const [emitting, setEmitting] = useState(false);
     const [nfes, setNfes] = useState<LossNfe[]>([]);
     const [loadingNfes, setLoadingNfes] = useState(true);
     const [viewingNfeId, setViewingNfeId] = useState<string | null>(null);
+    const [sendingId, setSendingId] = useState<string | null>(null);
+    const [cancelingId, setCancelingId] = useState<string | null>(null);
 
     const store = getActiveStore();
 
@@ -913,11 +920,13 @@ function NfPerdaTab() {
                 storeId: store.id,
                 lossIds: selectedIds,
                 justificativa: justificativa.trim(),
+                cfop: cfop.trim() || undefined,
             });
 
             toast.success('NF de perda gerada e assinada (homologação).');
             setSelected({});
             setJustificativa('');
+            setCfop('5927');
             await loadEligible();
             await loadNfes();
         } catch (error: any) {
@@ -930,13 +939,59 @@ function NfPerdaTab() {
         }
     }
 
+    async function handleSend(nfe: LossNfe) {
+        const confirmed = confirm(
+            nfe.status === 'ENVIADA'
+                ? 'Consultar de novo o resultado desse envio na Sefaz?'
+                : 'Enviar essa NF de perda pro webservice da Sefaz (ambiente de homologação, sem valor fiscal)?',
+        );
+        if (!confirmed) return;
+
+        try {
+            setSendingId(nfe.id);
+            await api.post(`/losses/nfe/${nfe.id}/send`);
+            toast.success('Envio processado — confira o status abaixo.');
+            await loadNfes();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao enviar pra Sefaz.';
+
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setSendingId(null);
+        }
+    }
+
+    async function handleCancelNfe(nfe: LossNfe) {
+        const confirmed = confirm(
+            'Cancelar esse rascunho de NF de perda? As perdas vinculadas voltam a ficar disponíveis pra entrar em outra NF.',
+        );
+        if (!confirmed) return;
+
+        try {
+            setCancelingId(nfe.id);
+            await api.patch(`/losses/nfe/${nfe.id}/cancel`);
+            toast.success('NF de perda cancelada.');
+            await loadEligible();
+            await loadNfes();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao cancelar.';
+
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setCancelingId(null);
+        }
+    }
+
     return (
         <div className="space-y-5">
             <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-700 dark:text-yellow-400">
-                Essa NF de perda ainda é gerada só em ambiente de{' '}
-                <strong>homologação</strong> (teste, sem valor fiscal) — ainda
-                não é enviada pra Sefaz nem substitui nenhum controle contábil
-                atual. Confirme com o contador antes de usar isso pra valer.
+                Essa NF de perda é gerada e enviada só em ambiente de{' '}
+                <strong>homologação</strong> (teste, sem valor fiscal) —
+                ainda não substitui nenhum controle contábil atual. Confirme
+                com o contador antes de decidir emitir em produção de
+                verdade.
             </div>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_420px]">
@@ -1036,6 +1091,24 @@ function NfPerdaTab() {
                             </p>
                         </div>
 
+                        <div>
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                CFOP
+                            </label>
+                            <input
+                                type="text"
+                                value={cfop}
+                                onChange={(e) => setCfop(e.target.value)}
+                                placeholder="5927"
+                                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-emerald-500"
+                            />
+                            <p className="mt-1 text-xs text-zinc-500">
+                                5927 é a sugestão padrão pra baixa de perda.
+                                Confirme com o contador se o seu caso pede
+                                outro CFOP.
+                            </p>
+                        </div>
+
                         <button
                             data-tour="lossnfe-submit"
                             onClick={handleEmit}
@@ -1107,9 +1180,21 @@ function NfPerdaTab() {
                                                     : ''}{' '}
                                                 — {nfe.createdBy.name}
                                             </p>
+
+                                            {nfe.protocolo && (
+                                                <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-500">
+                                                    Protocolo: {nfe.protocolo}
+                                                </p>
+                                            )}
+
+                                            {nfe.statusMessage && (
+                                                <p className="mt-1 text-xs text-zinc-500">
+                                                    {nfe.statusMessage}
+                                                </p>
+                                            )}
                                         </div>
 
-                                        <div className="flex shrink-0 gap-2">
+                                        <div className="flex shrink-0 flex-wrap gap-2">
                                             <button
                                                 onClick={() => setViewingNfeId(nfe.id)}
                                                 className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-500 hover:bg-emerald-500/20"
@@ -1128,6 +1213,34 @@ function NfPerdaTab() {
                                                     <FileText size={14} />
                                                     Ver XML
                                                 </a>
+                                            )}
+
+                                            {(nfe.status === 'RASCUNHO' || nfe.status === 'ENVIADA') && (
+                                                <button
+                                                    disabled={sendingId === nfe.id}
+                                                    onClick={() => handleSend(nfe)}
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-500 hover:bg-blue-500/20 disabled:opacity-50"
+                                                >
+                                                    {sendingId === nfe.id ? (
+                                                        <Loader2 size={14} className="animate-spin" />
+                                                    ) : (
+                                                        <Send size={14} />
+                                                    )}
+                                                    {nfe.status === 'ENVIADA'
+                                                        ? 'Consultar resultado'
+                                                        : 'Enviar pra Sefaz'}
+                                                </button>
+                                            )}
+
+                                            {nfe.status === 'RASCUNHO' && (
+                                                <button
+                                                    disabled={cancelingId === nfe.id}
+                                                    onClick={() => handleCancelNfe(nfe)}
+                                                    className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                                                >
+                                                    <XCircle size={14} />
+                                                    Cancelar
+                                                </button>
                                             )}
                                         </div>
                                     </div>

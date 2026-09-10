@@ -69,6 +69,11 @@ export type BuildLossNfeParams = {
     justificativa: string;
     itens: LossNfeItem[];
     dataEmissao?: Date;
+    // CFOP da baixa — não é mais fixo: o padrão sugerido (5.927, Ajuste
+    // SINIEF 49/2025) vale pra maioria dos casos de perda/quebra/perecimento,
+    // mas o contador pode pedir outro CFOP conforme o caso (ex: roubo/furto,
+    // regras específicas por UF). Sem valor informado, cai no padrão.
+    cfop?: string;
 };
 
 export type BuiltLossNfe = {
@@ -78,7 +83,7 @@ export type BuiltLossNfe = {
 };
 
 const DEFAULT_NCM = '21069090';
-const CFOP_BAIXA_PERDA = '5927';
+export const CFOP_BAIXA_PERDA_PADRAO = '5927';
 
 // Código do IBGE da UF — mesma tabela usada em sefaz-nfe-client.ts, mas
 // duplicada aqui (arquivo pequeno, sem valor em criar acoplamento só por
@@ -177,7 +182,12 @@ function buildEnderecoXml(tag: 'enderEmit' | 'enderDest', store: LossNfeStoreDat
     );
 }
 
-function buildDetXml(item: LossNfeItem, nItem: number, crt: 1 | 3): { xml: string; vProd: number } {
+function buildDetXml(
+    item: LossNfeItem,
+    nItem: number,
+    crt: 1 | 3,
+    cfop: string,
+): { xml: string; vProd: number } {
     const vUnCom = round2(item.valorUnitario);
     const vProd = round2(item.quantidade * vUnCom);
     const cProd = `PERDA${String(nItem).padStart(4, '0')}`;
@@ -204,7 +214,7 @@ function buildDetXml(item: LossNfeItem, nItem: number, crt: 1 | 3): { xml: strin
         `<cEAN>SEM GTIN</cEAN>` +
         `<xProd>${escapeXml(item.descricao)}</xProd>` +
         `<NCM>${ncm}</NCM>` +
-        `<CFOP>${CFOP_BAIXA_PERDA}</CFOP>` +
+        `<CFOP>${escapeXml(cfop)}</CFOP>` +
         `<uCom>${escapeXml(item.unidade || 'UN')}</uCom>` +
         `<qCom>${item.quantidade.toFixed(4)}</qCom>` +
         `<vUnCom>${vUnCom.toFixed(10)}</vUnCom>` +
@@ -230,8 +240,9 @@ function buildInfNFeXml(params: BuildLossNfeParams, chaveAcesso: string): string
     const dataEmissao = params.dataEmissao || new Date();
     const cUF = ufToCode(store.uf);
     const cnpjDigits = store.cnpj.replace(/\D/g, '');
+    const cfop = (params.cfop || CFOP_BAIXA_PERDA_PADRAO).trim();
 
-    const detsBuilt = itens.map((item, index) => buildDetXml(item, index + 1, store.crt));
+    const detsBuilt = itens.map((item, index) => buildDetXml(item, index + 1, store.crt, cfop));
     const detsXml = detsBuilt.map((d) => d.xml).join('');
     const vProdTotal = round2(detsBuilt.reduce((sum, d) => sum + d.vProd, 0));
 

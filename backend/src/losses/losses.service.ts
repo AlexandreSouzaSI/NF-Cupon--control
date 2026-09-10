@@ -11,7 +11,12 @@ import { join } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { loadCertificate } from '../stores/sefaz-nfse-client';
-import { parseFullNfeForView, type NfeView } from '../stores/sefaz-nfe-client';
+import {
+    parseFullNfeForView,
+    sendAutorizacaoNfe,
+    consultarReciboNfe,
+    type NfeView,
+} from '../stores/sefaz-nfe-client';
 import {
     buildAndSignLossNfe,
     type BuiltLossNfe,
@@ -469,6 +474,10 @@ export class LossesService {
                 // (combinado com o usuário).
                 tpAmb: 2,
                 justificativa: dto.justificativa.trim(),
+                // CFOP depende de orientação do contador e varia por caso —
+                // fica opcional aqui; se não vier, o builder usa o padrão
+                // sugerido (5927).
+                cfop: dto.cfop?.trim() || undefined,
                 itens: losses.map((loss) => ({
                     descricao: loss.description,
                     ncm: loss.ncm || undefined,
@@ -513,6 +522,91 @@ export class LossesService {
         });
 
         return { ...lossNfe, valorTotal: built.valorTotal };
+    }
+
+    // Envia de verdade o rascunho assinado pro webservice de autorização
+    // da Sefaz (NFeAutorizacao4). SEMPRE em homologação por enquanto
+    // (lossNfe.ambiente já nasce como 2 em createLossNfeDraft) — nada
+    // aqui muda isso; quando alguém decidir emitir em produção de
+    // verdade, precisa ser uma decisão explícita revisada com o
+    // contador, não um efeito colateral de código.
+    //
+    // Suporta ser chamado mais de uma vez pro mesmo rascunho: se a
+    // tentativa anterior ficou "pendente" (lote aceito mas Sefaz ainda
+    // processando), em vez de reenviar o lote (o que geraria duplicidade
+    // de evento) extrai o número do recibo salvo no statusMessage e só
+    // consulta o resultado de novo.
+    async sendLossNfeToSefaz(id: string, user: any) {
+        const lossNfe = await this.findLossNfeById(id, user);
+
+        if (!MANAGE_ROLES.includes(user.role)) {
+            throw new ForbiddenException(
+                'Só a gestão pode enviar uma NF de perda pra Sefaz.',
+            );
+        }
+
+        if (lossNfe.status !== 'RASCUNHO' && lossNfe.status !== 'ENVIADA') {
+            throw new BadRequestException(
+                `Essa NF já está com status "${lossNfe.status}" — só dá pra enviar rascunhos (ou consultar um envio pendente).`,
+            );
+        }
+
+        if (!lossNfe.xmlFileUrl) {
+            throw new BadRequestException('NF de perda sem XML assinado — isso não deveria acontecer.');
+        }
+
+        const store = await this.prisma.store.findUnique({ where: { id: lossNfe.storeId } });
+
+        if (!store?.uf) {
+            throw new BadRequestException('Loja sem UF cadastrada — complete o cadastro fiscal antes de enviar.');
+        }
+
+        const certificate = await this.prisma.storeCertificate.findUnique({
+            where: { storeId: lossNfe.storeId },
+        });
+
+        if (!certificate) {
+            throw new BadRequestException('Essa loja não tem certificado digital cadastrado.');
+        }
+
+        const cert = loadCertificate(certificate.filePath, {
+            cipher: certificate.passwordCipher,
+            iv: certificate.passwordIv,
+            authTag: certificate.passwordAuthTag,
+        });
+
+        const tpAmb = (lossNfe.ambiente === 1 ? 1 : 2) as 1 | 2;
+
+        // Já tentou antes e ficou pendente — em vez de reenviar (risco de
+        // duplicidade), extrai o recibo salvo e só consulta de novo.
+        const reciboMatch = lossNfe.status === 'ENVIADA'
+            ? lossNfe.statusMessage?.match(/recibo (\d+)/)
+            : null;
+
+        const result = reciboMatch
+            ? await consultarReciboNfe(cert, { uf: store.uf, tpAmb, nRec: reciboMatch[1] })
+            : await sendAutorizacaoNfe(cert, {
+                uf: store.uf,
+                tpAmb,
+                nfeXmlAssinado: readFileSync(
+                    join(process.cwd(), lossNfe.xmlFileUrl.replace(/^\//, '')),
+                    'utf-8',
+                ),
+            });
+
+        const newStatus =
+            result.status === 'autorizada' ? 'AUTORIZADA' :
+                result.status === 'rejeitada' ? 'REJEITADA' :
+                    'ENVIADA';
+
+        return this.prisma.lossNfe.update({
+            where: { id },
+            data: {
+                status: newStatus,
+                protocolo: result.protocolo,
+                statusMessage: result.message,
+            },
+        });
     }
 
     async findLossNfes(user: any, storeId?: string) {
@@ -594,6 +688,38 @@ export class LossesService {
             },
             nf: parsed,
         };
+    }
+
+    // Cancela um rascunho de NF de perda — só permitido enquanto ainda é
+    // RASCUNHO (não enviado pra Sefaz); depois de autorizada exigiria o
+    // evento de cancelamento (110111) de verdade, que ainda não existe
+    // aqui (fica pra Fase 3, junto do envio de autorização). Libera as
+    // perdas vinculadas de volta pra lista de elegíveis.
+    async cancelLossNfeDraft(id: string, user: any) {
+        const lossNfe = await this.findLossNfeById(id, user);
+
+        if (!MANAGE_ROLES.includes(user.role)) {
+            throw new ForbiddenException('Só a gestão pode cancelar uma NF de perda.');
+        }
+
+        if (lossNfe.status !== 'RASCUNHO') {
+            throw new BadRequestException(
+                'Só é possível cancelar uma NF de perda que ainda está em rascunho (não enviada pra Sefaz).',
+            );
+        }
+
+        const [updated] = await this.prisma.$transaction([
+            this.prisma.lossNfe.update({
+                where: { id },
+                data: { status: 'CANCELADA' },
+            }),
+            this.prisma.productLoss.updateMany({
+                where: { lossNfeId: id },
+                data: { lossNfeId: null },
+            }),
+        ]);
+
+        return updated;
     }
 
     async remove(id: string, user: any) {

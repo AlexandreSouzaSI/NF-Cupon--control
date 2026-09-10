@@ -23,6 +23,7 @@ import { TaxModule } from './tax/tax.module';
 import { FreelancersModule } from './freelancers/freelancers.module';
 import { TasksModule } from './tasks/tasks.module';
 import { LossesModule } from './losses/losses.module';
+import { DevolucoesModule } from './devolucoes/devolucoes.module';
 import { PushModule } from './push/push.module';
 import { OutgoingSalesNfModule } from './outgoing-sales-nf/outgoing-sales-nf.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
@@ -55,6 +56,7 @@ import { DemoModule } from './demo/demo.module';
     FreelancersModule,
     TasksModule,
     LossesModule,
+    DevolucoesModule,
     PushModule,
     OutgoingSalesNfModule,
     WhatsappModule,

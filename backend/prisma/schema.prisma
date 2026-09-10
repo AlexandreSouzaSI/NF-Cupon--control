@@ -311,8 +311,9 @@ model User {
   tasksAssigned            Task[]           @relation("TaskAssignedTo")
   taskOccurrencesConfirmed TaskOccurrence[] @relation("TaskOccurrenceConfirmedBy")
 
-  productLossesReported ProductLoss[] @relation("ProductLossReportedBy")
-  lossNfesCreated       LossNfe[]     @relation("LossNfeCreatedBy")
+  productLossesReported ProductLoss[]  @relation("ProductLossReportedBy")
+  lossNfesCreated       LossNfe[]      @relation("LossNfeCreatedBy")
+  devolucaoNfesCreated  DevolucaoNfe[] @relation("DevolucaoNfeCreatedBy")
 
   pushSubscriptions PushSubscription[]
   whatsappMessages  WhatsappOutboundMessage[]
@@ -392,6 +393,7 @@ model Store {
   productLosses         ProductLoss[]
   sefazSyncLogs         SefazSyncLog[]
   lossNfes              LossNfe[]
+  devolucaoNfes         DevolucaoNfe[]
 
   // Numeração própria da série de NF-e de baixa por perda (Nota de
   // Débito, finNFe=6/tpNFDebito=07 — Ajuste SINIEF 49/2025), separada da
@@ -401,6 +403,11 @@ model Store {
   // homologação (sem valor fiscal).
   lossNfeSerie      Int?
   lossNfeNextNumber Int?
+
+  // Mesma lógica acima, mas pra série própria da NF-e de devolução
+  // (finNFe=4) — também separada da série de venda do PDV.
+  devolucaoNfeSerie      Int?
+  devolucaoNfeNextNumber Int?
 }
 
 model UserStore {
@@ -881,9 +888,10 @@ model IncomingGoodsNf {
   accepted Boolean @default(false)
   billId   String?
 
-  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  purchase Purchase? @relation(fields: [purchaseId], references: [id])
-  bill     Bill?     @relation("IncomingGoodsNfBill", fields: [billId], references: [id])
+  store      Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  purchase   Purchase?      @relation(fields: [purchaseId], references: [id])
+  bill       Bill?          @relation("IncomingGoodsNfBill", fields: [billId], references: [id])
+  devolucoes DevolucaoNfe[]
 
   @@unique([storeId, chaveAcesso])
   @@index([storeId])
@@ -1319,6 +1327,96 @@ model LossNfe {
   losses    ProductLoss[]
 
   @@index([storeId])
+}
+
+enum DevolucaoNfeStatus {
+  RASCUNHO // montada mas ainda não enviada pra Sefaz
+  ENVIADA // lote enviado, aguardando retorno
+  AUTORIZADA
+  REJEITADA
+  CANCELADA
+}
+
+// NF-e de devolução de mercadoria (finNFe=4) — emitida pela LOJA (que
+// recebeu a compra original) DE VOLTA pro fornecedor, referenciando a
+// chave de acesso da NF-e de entrada original (refNFe). Diferente da
+// LossNfe (nota pra si mesma), aqui emit = a loja e dest = o fornecedor
+// da NF original. Suporta devolver só alguns itens (e quantidade
+// parcial) de uma NF de entrada com muitos itens — cada linha aqui
+// referencia o nItem da nota original.
+model DevolucaoNfe {
+  id String @id @default(uuid())
+
+  storeId String
+
+  // NF de entrada original que está sendo devolvida (referência pro
+  // refNFe do XML) — cada devolução se refere a uma única NF de origem.
+  incomingGoodsNfId String
+  refChaveAcesso    String // chave de acesso da NF original (44 dígitos)
+
+  status DevolucaoNfeStatus @default(RASCUNHO)
+
+  // tpAmb da Sefaz: 1 = produção, 2 = homologação (teste, sem valor
+  // fiscal). Mesma convenção da LossNfe — nasce em homologação até
+  // alguém decidir usar de verdade com uma série de produção.
+  ambiente Int @default(2)
+
+  serie  Int?
+  numero Int?
+
+  chaveAcesso String?
+  issueDate   DateTime?
+
+  // Motivo da devolução (produto errado, vencido, avariado, etc.) — vai
+  // pro campo de informações complementares do XML.
+  motivo String
+
+  xmlFileUrl    String? // XML assinado, guardado em disco (mesmo padrão da LossNfe)
+  protocolo     String? // nProt devolvido pela Sefaz quando autorizada
+  statusMessage String? // cStat/xMotivo do último retorno, só pra diagnóstico
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store           Store              @relation(fields: [storeId], references: [id])
+  incomingGoodsNf IncomingGoodsNf    @relation(fields: [incomingGoodsNfId], references: [id])
+  createdBy       User               @relation("DevolucaoNfeCreatedBy", fields: [createdById], references: [id])
+  itens           DevolucaoNfeItem[]
+
+  @@index([storeId])
+  @@index([incomingGoodsNfId])
+}
+
+// Cada linha devolvida — referencia o item (nItem) da NF de entrada
+// original, com a quantidade devolvida (pode ser menor que a quantidade
+// recebida) e o CFOP calculado pra devolução (derivado do CFOP de
+// compra original, com fallback manual quando não há mapeamento).
+model DevolucaoNfeItem {
+  id String @id @default(uuid())
+
+  devolucaoNfeId String
+
+  // Número do item (nItem) na NF de entrada original — não tem FK
+  // porque os itens da NF original não são persistidos à parte, só
+  // existem dentro do XML (ver parseFullNfeForView); isso é só uma
+  // referência pro registro/exibição.
+  nItemOrigem Int
+
+  descricao String
+  ncm       String?
+
+  cfopOrigem    String // CFOP do item na NF de compra original
+  cfopDevolucao String // CFOP calculado (ou informado manualmente) pra devolução
+
+  quantidade    Decimal @db.Decimal(10, 3)
+  unidade       String
+  valorUnitario Decimal @db.Decimal(10, 2)
+  valorTotal    Decimal @db.Decimal(10, 2)
+
+  devolucaoNfe DevolucaoNfe @relation(fields: [devolucaoNfeId], references: [id], onDelete: Cascade)
+
+  @@index([devolucaoNfeId])
 }
 
 model Attachment {

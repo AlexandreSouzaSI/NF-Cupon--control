@@ -4,12 +4,13 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { getUser, type UserRole } from '@/lib/auth';
-import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, RotateCcw } from 'lucide-react';
 
 import { EntradaNfTab } from '../../src/components/fiscal-notes/EntradaNfTab';
 import { SaidaNfTab } from '../../src/components/fiscal-notes/SaidaNfTab';
+import { DevolucaoTab } from '../../src/components/fiscal-notes/DevolucaoTab';
 
-type TabKey = 'entrada' | 'saida';
+type TabKey = 'entrada' | 'saida' | 'devolucao';
 
 const tabs: {
     key: TabKey;
@@ -39,6 +40,18 @@ const tabs: {
             'GERENTE',
             'COMPRADOR',
             'FINANCEIRO',
+        ],
+    },
+    {
+        key: 'devolucao',
+        label: 'Devolução',
+        icon: RotateCcw,
+        roles: [
+            'ADMINISTRATIVO',
+            'PROPRIETARIO',
+            'GERENTE',
+            'COMPRADOR',
+            'ESTOQUISTA',
         ],
     },
 ];
@@ -114,6 +127,7 @@ function FiscalNotesPageInner() {
 
                 {activeTab === 'entrada' && <EntradaNfTab />}
                 {activeTab === 'saida' && <SaidaNfTab />}
+                {activeTab === 'devolucao' && <DevolucaoTab />}
             </div>
         </AppLayout>
     );

@@ -1,4 +1,4 @@
-import { ArrayMinSize, IsArray, IsString } from 'class-validator';
+import { ArrayMinSize, IsArray, IsOptional, IsString } from 'class-validator';
 
 export class CreateLossNfeDto {
     @IsString()
@@ -14,4 +14,11 @@ export class CreateLossNfeDto {
     // for roubo/furto, inclua o número do B.O. aqui.
     @IsString()
     justificativa!: string;
+
+    // CFOP a ser usado nos itens da NF. Depende de orientação do contador
+    // (varia por caso/regime) — por isso é opcional e preenchido na hora,
+    // em vez de fixo no código. Se não vier, usa o padrão sugerido (5927).
+    @IsOptional()
+    @IsString()
+    cfop?: string;
 }
