@@ -10,10 +10,11 @@ import { join } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 import { encryptSecret } from './certificate-crypto.util';
 import { runDiagnostics, testCertificateConnection, loadCertificate } from './sefaz-nfse-client';
 import { testGoodsConnection } from './sefaz-nfe-client';
+import { ALL_STORE_MODULES } from '../common/store-module-labels';
 
 // Fica fora de /uploads de propósito: /uploads é servido publicamente pelo
 // Express (app.useStaticAssets) e um certificado digital nunca pode ficar
@@ -201,6 +202,29 @@ export class StoresService {
                 cep: dto.cep,
                 inscricaoEstadual: dto.inscricaoEstadual,
             },
+        });
+    }
+
+    // Painel de módulos (isAdminMaster) — controller já garante o guard,
+    // aqui só valida a lista recebida e persiste. Não passa por
+    // ensureManagedStoreAccess de propósito: quem edita isso é você, dono
+    // do SaaS, não o Proprietário/Gerente da loja.
+    async updateModules(id: string, enabledModules: StoreModule[]) {
+        await this.ensureStoreExists(id);
+
+        const invalid = enabledModules.filter(
+            (module) => !ALL_STORE_MODULES.includes(module),
+        );
+
+        if (invalid.length > 0) {
+            throw new BadRequestException(
+                `Módulo inválido: ${invalid.join(', ')}.`,
+            );
+        }
+
+        return this.prisma.store.update({
+            where: { id },
+            data: { enabledModules },
         });
     }
 

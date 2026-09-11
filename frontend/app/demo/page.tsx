@@ -143,7 +143,7 @@ export default function DemoSignupPage() {
                         Já criou um teste?{' '}
                         <button
                             type="button"
-                            onClick={() => router.push('/')}
+                            onClick={() => router.push('/login')}
                             className="font-semibold text-green-500 hover:underline"
                         >
                             Entrar

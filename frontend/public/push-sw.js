@@ -11,12 +11,12 @@ self.addEventListener('push', function (event) {
         data = event.data ? event.data.json() : {};
     } catch (error) {
         data = {
-            title: 'NuGalho Hub',
+            title: 'GestIA',
             message: event.data ? event.data.text() : '',
         };
     }
 
-    var title = data.title || 'NuGalho Hub';
+    var title = data.title || 'GestIA';
     var options = {
         body: data.message || '',
         icon: '/icons/icon-192.png',

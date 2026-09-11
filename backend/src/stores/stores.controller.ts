@@ -4,6 +4,7 @@ import {
     Delete,
     Get,
     Param,
+    Patch,
     Post,
     Put,
     Req,
@@ -11,17 +12,20 @@ import {
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { AdminMasterGuard } from '../auth/admin-master.guard';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
+import { UpdateStoreModulesDto } from './dto/update-store-modules.dto';
 import { StoresService } from './stores.service';
 import { LinkUserStoreDto } from './dto/link-user-store.dto';
+import { ALL_STORE_MODULES, MODULE_LABELS } from '../common/store-module-labels';
 
 @Controller('stores')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -160,5 +164,26 @@ export class StoresController {
     @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
     async getSefazSyncLogs(@Param('id') id: string, @Req() req: any) {
         return this.storesService.getSefazSyncLogs(id, req.user);
+    }
+
+    // Painel de módulos contratados por loja — restrito a isAdminMaster
+    // (só você). Não usa @Roles/RolesGuard de propósito: é uma camada
+    // acima do perfil dentro da loja, nem Proprietário chega aqui.
+    @Get('admin/modules-catalog')
+    @UseGuards(AdminMasterGuard)
+    getModulesCatalog() {
+        return ALL_STORE_MODULES.map((module) => ({
+            value: module,
+            label: MODULE_LABELS[module],
+        }));
+    }
+
+    @Patch(':id/modules')
+    @UseGuards(AdminMasterGuard)
+    async updateModules(
+        @Param('id') id: string,
+        @Body() body: UpdateStoreModulesDto,
+    ) {
+        return this.storesService.updateModules(id, body.enabledModules as StoreModule[]);
     }
 }

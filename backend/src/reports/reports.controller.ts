@@ -1,10 +1,14 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { StoreModule } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 import { ReportsService } from './reports.service';
 
 @Controller('reports')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ModuleAccessGuard)
+@RequiresModule(StoreModule.RELATORIOS)
 export class ReportsController {
     constructor(private reportsService: ReportsService) { }
 

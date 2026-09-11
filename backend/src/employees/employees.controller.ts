@@ -11,7 +11,7 @@ import {
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
@@ -21,6 +21,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -69,8 +71,9 @@ const receiptInterceptor = FileInterceptor('file', {
 // Dados sensíveis (folha de pagamento) — só ADMINISTRATIVO/PROPRIETARIO
 // chegam em qualquer rota deste controller.
 @Controller('employees')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
 @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
+@RequiresModule(StoreModule.FUNCIONARIOS)
 export class EmployeesController {
     constructor(private employeesService: EmployeesService) { }
 

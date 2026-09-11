@@ -26,6 +26,20 @@ export type MenuRole = UserRole;
 
 export type BadgeKey = 'approvals' | 'alerts' | 'notifications';
 
+// Espelha o enum StoreModule do backend (prisma/schema.prisma) — cada valor
+// aqui é um módulo que o painel /admin/modules liga/desliga por loja.
+export type StoreModuleKey =
+    | 'COMPRAS'
+    | 'NOTAS_FISCAIS'
+    | 'SERVICOS'
+    | 'TRIBUTOS'
+    | 'PERDAS'
+    | 'CONTAS_A_PAGAR'
+    | 'TAREFAS'
+    | 'RELATORIOS'
+    | 'FUNCIONARIOS'
+    | 'FREELANCERS';
+
 // Cor de referência visual de cada item — soft (fundo bem clarinho +
 // texto na cor), pra dar uma pista rápida do "tipo" da tela sem gritar.
 // Ex: Perdas = vermelho (é sempre algo ruim), Tarefas = violeta, etc.
@@ -73,6 +87,11 @@ export type MenuItem = {
     // normalmente se alguém acessar direto (não é bloqueio de permissão,
     // só visibilidade). Reversível: é só tirar o "hidden" depois.
     hidden?: boolean;
+    // Quando definido, o item só aparece se a loja ativa tiver esse módulo
+    // habilitado (painel /admin/modules, restrito a você). Item sem
+    // "module" é estrutura do sistema (Início, Cadastros, Ajuda...) e
+    // aparece sempre, independente da loja.
+    module?: StoreModuleKey;
 };
 
 export type MenuGroup = {
@@ -125,7 +144,7 @@ export const menu: MenuGroup[] = [
                     'ESTOQUISTA',
                 ],
                 color: 'blue',
-                hidden: true,
+                module: 'COMPRAS',
             },
             {
                 label: 'Compras',
@@ -139,7 +158,7 @@ export const menu: MenuGroup[] = [
                     'ESTOQUISTA',
                 ],
                 color: 'blue',
-                hidden: true,
+                module: 'COMPRAS',
             },
             {
                 label: 'Aprovações',
@@ -148,7 +167,7 @@ export const menu: MenuGroup[] = [
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
                 badgeKey: 'approvals',
                 color: 'amber',
-                hidden: true,
+                module: 'COMPRAS',
             },
         ],
     },
@@ -161,6 +180,7 @@ export const menu: MenuGroup[] = [
                 icon: Receipt,
                 roles: ALL_ROLES,
                 color: 'purple',
+                module: 'NOTAS_FISCAIS',
                 hidden: true,
             },
             {
@@ -180,6 +200,7 @@ export const menu: MenuGroup[] = [
                     'FINANCEIRO',
                 ],
                 color: 'purple',
+                module: 'NOTAS_FISCAIS',
             },
             {
                 label: 'Serviços',
@@ -196,6 +217,7 @@ export const menu: MenuGroup[] = [
                     'FINANCEIRO',
                 ],
                 color: 'purple',
+                module: 'SERVICOS',
             },
             {
                 label: 'Tributos',
@@ -209,6 +231,7 @@ export const menu: MenuGroup[] = [
                     'FINANCEIRO',
                 ],
                 color: 'cyan',
+                module: 'TRIBUTOS',
             },
             {
                 label: 'Perdas',
@@ -223,6 +246,7 @@ export const menu: MenuGroup[] = [
                     'FUNCIONARIO',
                 ],
                 color: 'red',
+                module: 'PERDAS',
             },
         ],
     },
@@ -237,6 +261,7 @@ export const menu: MenuGroup[] = [
                 // espírito de Tributos.
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
                 color: 'teal',
+                module: 'CONTAS_A_PAGAR',
             },
         ],
     },
@@ -249,6 +274,7 @@ export const menu: MenuGroup[] = [
                 icon: ListChecks,
                 roles: ALL_ROLES,
                 color: 'violet',
+                module: 'TAREFAS',
             },
         ],
     },
@@ -261,7 +287,7 @@ export const menu: MenuGroup[] = [
                 icon: BarChart3,
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
                 color: 'indigo',
-                hidden: true,
+                module: 'RELATORIOS',
             },
         ],
     },
@@ -286,7 +312,7 @@ export const menu: MenuGroup[] = [
                 icon: UserCog,
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO'],
                 color: 'pink',
-                hidden: true,
+                module: 'FUNCIONARIOS',
             },
             {
                 label: 'Freelancer',
@@ -294,7 +320,7 @@ export const menu: MenuGroup[] = [
                 icon: UserPlus,
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
                 color: 'pink',
-                hidden: true,
+                module: 'FREELANCERS',
             },
         ],
     },
@@ -348,10 +374,25 @@ export const menu: MenuGroup[] = [
 // continua Gerente pra manter o isolamento por loja no back-end, então
 // liberar mais telas aqui não muda o que ela consegue enxergar, só evita
 // esbarrar num bloqueio de perfil pensado pra funcionário de verdade.
+// Item sem "module" (Início, Cadastros, Ajuda...) é estrutura do sistema e
+// aparece sempre. Item com "module" só aparece se a loja ativa tiver esse
+// módulo na lista — lista undefined/null (ainda carregando ou loja sem
+// info) libera tudo, pra não sumir a tela com a página piscando.
+export function isModuleEnabled(
+    item: Pick<MenuItem, 'module'>,
+    enabledModules?: StoreModuleKey[] | null,
+): boolean {
+    if (!item.module) return true;
+    if (!enabledModules) return true;
+
+    return enabledModules.includes(item.module);
+}
+
 export function canAccessHref(
     role: MenuRole,
     href: string,
     isDemo?: boolean,
+    enabledModules?: StoreModuleKey[] | null,
 ): boolean {
     if (isDemo) return true;
 
@@ -364,5 +405,8 @@ export function canAccessHref(
 
     if (!matchedItem) return true;
 
-    return matchedItem.roles.includes(role);
+    return (
+        matchedItem.roles.includes(role) &&
+        isModuleEnabled(matchedItem, enabledModules)
+    );
 }

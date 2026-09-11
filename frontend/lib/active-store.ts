@@ -1,10 +1,16 @@
 import Cookies from 'js-cookie';
+import type { StoreModuleKey } from './menu';
 
 const ACTIVE_STORE_COOKIE = 'activeStore';
 
 export type ActiveStore = {
     id: string;
     name: string;
+    // Módulos contratados pra essa loja (painel /admin/modules) — usado
+    // pra filtrar o menu. Opcional/undefined em cookies antigos (de antes
+    // dessa feature) — nesse caso o menu trata como "libera tudo" até o
+    // próximo resolveActiveStore trazer o valor de verdade.
+    enabledModules?: StoreModuleKey[];
 };
 
 export function getActiveStore(): ActiveStore | null {

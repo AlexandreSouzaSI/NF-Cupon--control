@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import {
     BillStatus,
+    EmployeePaymentStatus,
     PurchaseAlertLevel,
     PurchaseStatus,
     TaskOccurrenceStatus,
@@ -136,6 +137,12 @@ export class DashboardService {
         const monthStart = this.getStartOfMonth();
         const monthEnd = this.getEndOfMonth();
 
+        // "AAAA-MM" do mês corrente — mesmo formato usado em
+        // OutgoingSalesNf.referenceMonth e RevenueEntry.referenceMonth.
+        const currentReferenceMonth = `${monthStart.getFullYear()}-${String(
+            monthStart.getMonth() + 1,
+        ).padStart(2, '0')}`;
+
         const [
             totalPurchases,
 
@@ -160,8 +167,15 @@ export class DashboardService {
             totalCardPurchases,
 
             serviceNfCountMonth,
+            serviceValuesMonth,
+            incomingGoodsNfValuesMonth,
+            outgoingSalesNfValuesMonth,
+            revenueEntryMonth,
 
-            lossesCountMonth,
+            lossesMonth,
+            employeePaymentsMonth,
+            freelancerPaymentsMonth,
+
             myPendingTasks,
             teamTaskOccurrences,
 
@@ -360,13 +374,113 @@ export class DashboardService {
                 },
             }),
 
-            this.prisma.productLoss.count({
+            // Valor total (não só as com NF anexada) dos serviços com data
+            // dentro do mês corrente — "quanto gastei com serviço esse mês".
+            this.prisma.service.findMany({
+                where: {
+                    storeId: storeFilter,
+                    serviceDate: {
+                        gte: monthStart,
+                        lte: monthEnd,
+                    },
+                },
+                select: {
+                    value: true,
+                },
+            }),
+
+            // Valor das NF de entrada (mercadoria) emitidas dentro do mês
+            // corrente — ignora só o que foi marcado como "não é nossa"
+            // (ignored=true); NF sem issueDate cai fora do filtro de data
+            // naturalmente.
+            this.prisma.incomingGoodsNf.findMany({
+                where: {
+                    storeId: storeFilter,
+                    ignored: false,
+                    issueDate: {
+                        gte: monthStart,
+                        lte: monthEnd,
+                    },
+                },
+                select: {
+                    value: true,
+                },
+            }),
+
+            // NF de saída (venda), pra fechar o par com Total em Entradas —
+            // usa referenceMonth (já vem pronto em "AAAA-MM" no próprio
+            // registro) em vez de faixa de data.
+            this.prisma.outgoingSalesNf.findMany({
+                where: {
+                    storeId: storeFilter,
+                    ignored: false,
+                    referenceMonth: currentReferenceMonth,
+                },
+                select: {
+                    value: true,
+                },
+            }),
+
+            // Faturamento cadastrado manualmente em Tributos pro mês
+            // corrente — @@unique([storeId, referenceMonth]), então no
+            // máximo 1 linha. Sem storeId definido (mais de uma loja
+            // permitida e nenhuma ativa escolhida) não dá pra somar
+            // faturamento de lojas diferentes com sentido, então nem busca.
+            typeof storeFilter === 'string'
+                ? this.prisma.revenueEntry.findFirst({
+                    where: {
+                        storeId: storeFilter,
+                        referenceMonth: currentReferenceMonth,
+                    },
+                    select: { grossRevenue: true },
+                })
+                : Promise.resolve(null),
+
+            // Quantidade + valor unitário de cada perda no mês — dá pra
+            // contar (length) e somar (quantity * unitValue, só quando
+            // preenchido) na mesma consulta.
+            this.prisma.productLoss.findMany({
                 where: {
                     storeId: storeFilter,
                     occurredAt: {
                         gte: monthStart,
                         lte: monthEnd,
                     },
+                },
+                select: {
+                    quantity: true,
+                    unitValue: true,
+                },
+            }),
+
+            // Folha prevista do mês (RH) — todo lançamento de funcionário
+            // com vencimento dentro do mês corrente, pago ou não.
+            this.prisma.employeePayment.findMany({
+                where: {
+                    employee: { storeId: storeFilter },
+                    dueDate: {
+                        gte: monthStart,
+                        lte: monthEnd,
+                    },
+                },
+                select: {
+                    value: true,
+                    status: true,
+                },
+            }),
+
+            // Pagamentos de freelancer já confirmados dentro do mês —
+            // snapshot congelado (ver comentário no schema), não recalcula.
+            this.prisma.freelancerPayment.findMany({
+                where: {
+                    storeId: storeFilter,
+                    paymentDate: {
+                        gte: monthStart,
+                        lte: monthEnd,
+                    },
+                },
+                select: {
+                    totalValue: true,
                 },
             }),
 
@@ -588,6 +702,50 @@ export class DashboardService {
             0,
         );
 
+        const serviceValueMonth = serviceValuesMonth.reduce(
+            (sum, item) => sum + Number(item.value),
+            0,
+        );
+
+        const incomingGoodsNfValueMonth = incomingGoodsNfValuesMonth.reduce(
+            (sum, item) => sum + Number(item.value || 0),
+            0,
+        );
+
+        const outgoingSalesNfValueMonth = outgoingSalesNfValuesMonth.reduce(
+            (sum, item) => sum + Number(item.value),
+            0,
+        );
+
+        const revenueMonth = revenueEntryMonth
+            ? Number(revenueEntryMonth.grossRevenue)
+            : 0;
+
+        const lossesCountMonth = lossesMonth.length;
+
+        const lossesValueMonth = lossesMonth.reduce(
+            (sum, item) =>
+                sum +
+                (item.unitValue
+                    ? Number(item.quantity) * Number(item.unitValue)
+                    : 0),
+            0,
+        );
+
+        const employeePayrollMonth = employeePaymentsMonth.reduce(
+            (sum, item) => sum + Number(item.value),
+            0,
+        );
+
+        const employeePayrollOpenCount = employeePaymentsMonth.filter(
+            (item) => item.status === EmployeePaymentStatus.OPEN,
+        ).length;
+
+        const freelancerPaidMonth = freelancerPaymentsMonth.reduce(
+            (sum, item) => sum + Number(item.totalValue),
+            0,
+        );
+
         const teamBoardMap = new Map<string, TeamTaskStat>();
 
         for (const occurrence of teamTaskOccurrences as Array<{
@@ -729,10 +887,33 @@ export class DashboardService {
 
             services: {
                 nfCountMonth: serviceNfCountMonth,
+                valueMonth: serviceValueMonth,
+            },
+
+            incomingGoodsNf: {
+                valueMonth: incomingGoodsNfValueMonth,
+            },
+
+            outgoingSalesNf: {
+                valueMonth: outgoingSalesNfValueMonth,
+            },
+
+            revenue: {
+                month: revenueMonth,
+            },
+
+            payroll: {
+                month: employeePayrollMonth,
+                openCount: employeePayrollOpenCount,
+            },
+
+            freelancers: {
+                paidMonth: freelancerPaidMonth,
             },
 
             losses: {
                 countMonth: lossesCountMonth,
+                valueMonth: lossesValueMonth,
             },
 
             tasks: {

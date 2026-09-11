@@ -13,7 +13,7 @@ import type { LoadedCertificate } from '../stores/sefaz-nfse-client';
 // em vigor desde 04/05/2026, formalizado na Nota Técnica 2025/002.
 //
 // Diferente de tudo que este projeto já emite/consome (que são só leitura
-// da Sefaz), essa é a primeira NF-e que o próprio NuGalho Hub monta e
+// da Sefaz), essa é a primeira NF-e que o próprio GestIA monta e
 // assina — nota emitida pela loja PARA ELA MESMA (emit === dest), sem
 // venda nem circulação de mercadoria de verdade, só formalizando a baixa
 // do produto perdido/roubado/deteriorado do estoque, com CFOP 5.927.
@@ -246,9 +246,17 @@ function buildInfNFeXml(params: BuildLossNfeParams, chaveAcesso: string): string
     const detsXml = detsBuilt.map((d) => d.xml).join('');
     const vProdTotal = round2(detsBuilt.reduce((sum, d) => sum + d.vProd, 0));
 
+    // cNF é o mesmo número aleatório de 8 dígitos usado pra gerar a chave
+    // de acesso (posições 36-43 da chave, base 0) — a Sefaz confere que o
+    // valor aqui bate com o que está embutido na chave. Faltar esse campo
+    // (era esquecido antes) já é suficiente pra rejeitar o lote inteiro
+    // por falha de schema (cStat 225), mesmo com todo o resto correto.
+    const cNF = chaveAcesso.slice(35, 43);
+
     const ideXml =
         `<ide>` +
         `<cUF>${cUF}</cUF>` +
+        `<cNF>${cNF}</cNF>` +
         `<natOp>${escapeXml('Baixa de estoque por perda')}</natOp>` +
         `<mod>55</mod>` +
         `<serie>${serie}</serie>` +
@@ -267,7 +275,7 @@ function buildInfNFeXml(params: BuildLossNfeParams, chaveAcesso: string): string
         `<indPres>9</indPres>` +
         `<indIntermed>0</indIntermed>` +
         `<procEmi>0</procEmi>` +
-        `<verProc>NuGalhoHub 1.0</verProc>` +
+        `<verProc>GestIA 1.0</verProc>` +
         `</ide>`;
 
     const emitXml =
@@ -285,10 +293,20 @@ function buildInfNFeXml(params: BuildLossNfeParams, chaveAcesso: string): string
     // mesmos dados (indIEDest reflete se a loja é contribuinte de ICMS).
     const indIEDest = store.inscricaoEstadual ? '1' : '9';
 
+    // Em homologação a Sefaz EXIGE esse texto literal como razão social
+    // do destinatário (independente de quem seja de verdade) — é assim
+    // que ela marca a nota como teste sem valor fiscal. Usar o nome real
+    // da loja aqui rejeita com cStat 598. Só se aplica com tpAmb=2; em
+    // produção usa o nome de verdade.
+    const xNomeDest =
+        tpAmb === 2
+            ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
+            : store.nome;
+
     const destXml =
         `<dest>` +
         `<CNPJ>${cnpjDigits}</CNPJ>` +
-        `<xNome>${escapeXml(store.nome)}</xNome>` +
+        `<xNome>${escapeXml(xNomeDest)}</xNome>` +
         buildEnderecoXml('enderDest', store) +
         `<indIEDest>${indIEDest}</indIEDest>` +
         (store.inscricaoEstadual

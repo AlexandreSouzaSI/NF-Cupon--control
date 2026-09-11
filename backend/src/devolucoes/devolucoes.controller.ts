@@ -1,10 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { DevolucoesService } from './devolucoes.service';
 import { CreateDevolucaoNfeDto } from './dto/create-devolucao-nfe.dto';
@@ -12,7 +14,8 @@ import { CreateDevolucaoNfeDto } from './dto/create-devolucao-nfe.dto';
 // Mesmo grupo de perfis que já mexe com NF de entrada/perda no dia a dia
 // — Financeiro não participa desse fluxo operacional.
 @Controller('devolucoes')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
+@RequiresModule(StoreModule.NOTAS_FISCAIS)
 @Roles(
     UserRole.ADMINISTRATIVO,
     UserRole.PROPRIETARIO,

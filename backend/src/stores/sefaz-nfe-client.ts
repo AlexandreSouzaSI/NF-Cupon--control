@@ -60,6 +60,16 @@ function soapPost(
                     timeout: 20000,
                     headers: {
                         'Content-Type': `application/soap+xml; charset=utf-8; action="${soapAction}"`,
+                        // Alguns webservices estaduais (implementação Java/
+                        // Apache CXF — ex: MG, GO, MT, MS, PE, AM) só
+                        // despacham o método olhando o header clássico
+                        // SOAPAction (padrão SOAP 1.1), mesmo recebendo um
+                        // envelope SOAP 1.2. Sem isso, respondem "Não é
+                        // possível localizar o método de despacho" mesmo
+                        // com o envelope correto. Mandar os dois não quebra
+                        // os serviços .asmx (SVRS/RS/SP/BA) que já
+                        // funcionavam só com o action no Content-Type.
+                        SOAPAction: `"${soapAction}"`,
                         'Content-Length': payload.length,
                     },
                 },
@@ -696,12 +706,16 @@ export async function sendAutorizacaoNfe(
         params.nfeXmlAssinado.replace(/^<\?xml[^>]*\?>/, '') +
         `</enviNFe>`;
 
+    // Sem elemento "nfeAutorizacaoLote" envolvendo — o dispatch de vários
+    // webservices estaduais (implementação Java/CXF, ex: MG, GO, MT, MS,
+    // PE, AM) é feito só pela SOAPAction, e eles esperam o nfeDadosMsg
+    // direto como filho do Body (igual bibliotecas de referência tipo
+    // sped-nfe fazem). Um wrapper extra faz alguns desses servidores
+    // devolverem "Não é possível localizar o método de despacho".
     const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>
-    <nfeAutorizacaoLote xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">
-      <nfeDadosMsg>${enviNFeXml}</nfeDadosMsg>
-    </nfeAutorizacaoLote>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">${enviNFeXml}</nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>`;
 
@@ -734,9 +748,19 @@ export async function sendAutorizacaoNfe(
 
     if (result.status !== 'pendente' || !result.nRec) {
         if (!result.cStat) {
+            // Não achamos cStat em lugar nenhum — normalmente é um SOAP
+            // Fault ou resposta em formato inesperado, não uma rejeição
+            // fiscal de verdade. Bota o corpo bruto (resumido) direto na
+            // mensagem, porque o usuário não tem acesso ao console do
+            // servidor pra ver o log.
             console.error(
-                `[sendAutorizacaoNfe] cStat vazio na resposta da Sefaz. Corpo bruto: ${truncate(response.body, 3000)}`,
+                `[sendAutorizacaoNfe] cStat vazio na resposta da Sefaz (${url}). Corpo bruto: ${truncate(response.body, 3000)}`,
             );
+
+            return {
+                ...result,
+                message: buildUnrecognizedResponseMessage(response),
+            };
         }
 
         return result;
@@ -785,12 +809,12 @@ export async function consultarReciboNfe(
         `<nRec>${escapeXml(params.nRec)}</nRec>` +
         `</consReciNFe>`;
 
+    // Mesmo motivo do sendAutorizacaoNfe: sem wrapper de operação, só o
+    // nfeDadosMsg direto como filho do Body.
     const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>
-    <nfeRetAutorizacaoLote xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRetAutorizacao4">
-      <nfeDadosMsg>${consReciNFeXml}</nfeDadosMsg>
-    </nfeRetAutorizacaoLote>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRetAutorizacao4">${consReciNFeXml}</nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>`;
 
@@ -819,7 +843,20 @@ export async function consultarReciboNfe(
         };
     }
 
-    return interpretAutorizacaoResponse(parsed);
+    const result = interpretAutorizacaoResponse(parsed);
+
+    if (!result.cStat) {
+        console.error(
+            `[consultarReciboNfe] cStat vazio na resposta da Sefaz (${url}). Corpo bruto: ${truncate(response.body, 3000)}`,
+        );
+
+        return {
+            ...result,
+            message: buildUnrecognizedResponseMessage(response),
+        };
+    }
+
+    return result;
 }
 
 // Lê tanto retEnviNFe (resposta direta do envio) quanto retConsReciNFe
@@ -963,11 +1000,14 @@ function findNode(parsed: any, key: string): any | null {
         for (const nodeKey of Object.keys(node)) {
             const value = node[nodeKey];
 
-            if (
-                nodeKey === '#text' &&
-                typeof value === 'string' &&
-                /^\s*<\w/.test(value)
-            ) {
+            // Algumas respostas SOAP da Sefaz (várias .asmx, não só
+            // distribuição/manifestação) devolvem o XML de resultado como
+            // texto escapado em vez de nó já interpretado. Isso pode vir
+            // tanto como um nó '#text' (quando o elemento tem atributos)
+            // quanto como o valor direto de qualquer chave (elemento só
+            // com texto, sem atributos) — então checa os dois casos, não
+            // só '#text'.
+            if (typeof value === 'string' && /^\s*<\w/.test(value)) {
                 try {
                     const reparsed = parser.parse(value);
                     if (reparsed && typeof reparsed === 'object') {
@@ -1315,4 +1355,33 @@ function interpretConnectionError(error: any): NfeConnectionTestResult {
 function truncate(text: string, max = 500) {
     if (text.length <= max) return text;
     return `${text.slice(0, max)}...`;
+}
+
+// Quando a Sefaz devolve um SOAP Fault (erro de comunicação/dispatch, não
+// uma rejeição fiscal — ex: método de despacho não encontrado, XML mal
+// formado, action errada), a mensagem legível fica dentro de <S:Text>/
+// <faultstring>. Extrai só esse texto pra mostrar algo apresentável em vez
+// do XML cru inteiro na tela do usuário.
+function extractSoapFaultReason(body: string): string | null {
+    const textMatch = body.match(/<[^:>]*:?Text[^>]*>([\s\S]*?)<\/[^:>]*:?Text>/i);
+    if (textMatch) return textMatch[1].trim();
+
+    const faultstringMatch = body.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
+    if (faultstringMatch) return faultstringMatch[1].trim();
+
+    return null;
+}
+
+// Monta uma mensagem apresentável pra quando a resposta da Sefaz não tem
+// cStat em lugar nenhum — geralmente é um erro técnico de comunicação
+// (SOAP Fault, URL/ação errada), não uma rejeição fiscal de verdade. Deixa
+// o XML cru só como detalhe técnico opcional, resumido.
+function buildUnrecognizedResponseMessage(response: RawResponse): string {
+    const faultReason = extractSoapFaultReason(response.body);
+
+    if (faultReason) {
+        return `Erro de comunicação com a Sefaz (não é uma rejeição fiscal): ${faultReason}`;
+    }
+
+    return `Resposta da Sefaz em formato não reconhecido (HTTP ${response.status}). Detalhe técnico: ${truncate(response.body, 800)}`;
 }

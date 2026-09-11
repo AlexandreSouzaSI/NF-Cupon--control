@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NuGalho Hub",
-  description: "Compras, tarefas, perdas e serviços das lojas NuGalho",
+  title: "GestIA",
+  description: "Gestão de compras, notas fiscais, tarefas e perdas pra redes de lojas",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "NuGalho Hub",
+    title: "GestIA",
   },
 };
 

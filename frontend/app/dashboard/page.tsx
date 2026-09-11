@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Briefcase,
+    FileStack,
     ListChecks,
     PackageX,
 } from 'lucide-react';
@@ -112,6 +113,11 @@ type DashboardSummary = {
 
     services: {
         nfCountMonth: number;
+        valueMonth: number;
+    };
+
+    incomingGoodsNf: {
+        valueMonth: number;
     };
 
     losses: {
@@ -247,6 +253,28 @@ export default function DashboardPage() {
             iconClass: 'text-blue-400 bg-blue-500/10',
             href: '/services?tab=relatorios',
         },
+        {
+            title: 'Total em Serviços',
+            value: summary.services.valueMonth.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: 'Valor acumulado no mês',
+            icon: Briefcase,
+            iconClass: 'text-blue-400 bg-blue-500/10',
+            href: '/services?tab=relatorios',
+        },
+        {
+            title: 'Total em Entradas',
+            value: summary.incomingGoodsNf.valueMonth.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: 'NF de mercadoria emitidas no mês',
+            icon: FileStack,
+            iconClass: 'text-purple-400 bg-purple-500/10',
+            href: '/fiscal-notes',
+        },
     ];
 
     // Só mostra o card se o perfil logado tem acesso à página que ele
@@ -254,7 +282,12 @@ export default function DashboardPage() {
     // um atalho pra uma tela que depois não consegue abrir.
     const visibleCards = user
         ? operationalCards.filter((card) =>
-            canAccessHref(user.role, card.href, user.isDemo),
+            canAccessHref(
+                user.role,
+                card.href,
+                user.isDemo,
+                getActiveStore()?.enabledModules,
+            ),
         )
         : operationalCards;
 

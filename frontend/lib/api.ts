@@ -31,8 +31,8 @@ api.interceptors.response.use(
             Cookies.remove('token');
             Cookies.remove('user');
 
-            if (window.location.pathname !== '/') {
-                window.location.href = '/';
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
             }
         }
 

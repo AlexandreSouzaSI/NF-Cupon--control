@@ -11,7 +11,7 @@ import {
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
-import { TaskOccurrenceStatus, UserRole } from '@prisma/client';
+import { StoreModule, TaskOccurrenceStatus, UserRole } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
@@ -21,6 +21,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -55,7 +57,8 @@ const attachmentInterceptor = FileInterceptor('attachment', {
 // (criar/editar/remover/desfazer) exigem Administrativo/Proprietário/
 // Gerente, restrito por método abaixo.
 @Controller('tasks')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
+@RequiresModule(StoreModule.TAREFAS)
 export class TasksController {
     constructor(private tasksService: TasksService) { }
 

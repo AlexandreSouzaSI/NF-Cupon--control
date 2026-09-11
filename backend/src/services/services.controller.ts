@@ -20,12 +20,14 @@ import { extname, join } from 'path';
 import type { Response } from 'express';
 import archiver from 'archiver';
 
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
@@ -41,7 +43,8 @@ if (!existsSync(uploadPath)) {
 // Funcionário não participa do módulo de Serviços no projeto reduzido —
 // o único perfil de fora deixado fora daqui.
 @Controller('services')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
+@RequiresModule(StoreModule.SERVICOS)
 @Roles(
     UserRole.ADMINISTRATIVO,
     UserRole.PROPRIETARIO,

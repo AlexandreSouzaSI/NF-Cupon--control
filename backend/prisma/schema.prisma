@@ -408,6 +408,31 @@ model Store {
   // (finNFe=4) — também separada da série de venda do PDV.
   devolucaoNfeSerie      Int?
   devolucaoNfeNextNumber Int?
+
+  // Quais telas/funcionalidades essa loja enxerga — controle de módulos do
+  // SaaS. Só quem tem isAdminMaster edita isso (painel /admin/modules); o
+  // Proprietário/Administrativo da própria loja não vê nem muda. Lojas
+  // novas nascem com tudo ligado (default abaixo) — é uma lista negativa
+  // na prática: você desliga só o que aquele cliente não contratou.
+  enabledModules StoreModule[] @default([COMPRAS, NOTAS_FISCAIS, SERVICOS, TRIBUTOS, PERDAS, CONTAS_A_PAGAR, TAREFAS, RELATORIOS, FUNCIONARIOS, FREELANCERS])
+}
+
+// Módulos que podem ser ligados/desligados por loja (painel restrito ao
+// isAdminMaster). Cada valor aqui corresponde a um grupo de telas do menu
+// (ver frontend/lib/menu.ts) — Cadastros, Início, Dashboard, Ajuda e
+// Alertas/Notificações não entram porque são estrutura do sistema, não
+// "produto contratável".
+enum StoreModule {
+  COMPRAS
+  NOTAS_FISCAIS
+  SERVICOS
+  TRIBUTOS
+  PERDAS
+  CONTAS_A_PAGAR
+  TAREFAS
+  RELATORIOS
+  FUNCIONARIOS
+  FREELANCERS
 }
 
 model UserStore {
@@ -1288,7 +1313,7 @@ enum LossNfeStatus {
 // NF-e de baixa de estoque por perda (Nota de Débito — finNFe=6,
 // tpNFDebito=07, CFOP 5.927 — Ajuste SINIEF 49/2025). Diferente de
 // IncomingGoodsNf/OutgoingSalesNf (que só guardam NF-e de terceiros já
-// emitidas), esse é o único documento que o próprio NuGalho Hub emite —
+// emitidas), esse é o único documento que o próprio GestIA emite —
 // por isso guarda o XML assinado inteiro, não só um resumo.
 model LossNfe {
   id String @id @default(uuid())

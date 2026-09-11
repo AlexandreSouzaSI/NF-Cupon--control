@@ -180,9 +180,15 @@ function buildInfNFeXml(params: BuildDevolucaoNfeParams, chaveAcesso: string): s
     const detsXml = detsBuilt.map((d) => d.xml).join('');
     const vProdTotal = round2(detsBuilt.reduce((sum, d) => sum + d.vProd, 0));
 
+    // Mesmo campo obrigatório que faltava no builder de Perda — cNF tem
+    // que bater com o número embutido na chave de acesso, senão a Sefaz
+    // rejeita o lote inteiro por falha de schema.
+    const cNF = chaveAcesso.slice(35, 43);
+
     const ideXml =
         `<ide>` +
         `<cUF>${cUF}</cUF>` +
+        `<cNF>${cNF}</cNF>` +
         `<natOp>${escapeXml('Devolução de compra')}</natOp>` +
         `<mod>55</mod>` +
         `<serie>${serie}</serie>` +
@@ -200,7 +206,7 @@ function buildInfNFeXml(params: BuildDevolucaoNfeParams, chaveAcesso: string): s
         `<indPres>9</indPres>` +
         `<indIntermed>0</indIntermed>` +
         `<procEmi>0</procEmi>` +
-        `<verProc>NuGalhoHub 1.0</verProc>` +
+        `<verProc>GestIA 1.0</verProc>` +
         `<NFref><refNFe>${escapeXml(refChaveAcesso)}</refNFe></NFref>` +
         `</ide>`;
 
@@ -217,10 +223,19 @@ function buildInfNFeXml(params: BuildDevolucaoNfeParams, chaveAcesso: string): s
 
     const indIEDest = fornecedor.inscricaoEstadual ? '1' : '9';
 
+    // Mesma exigência da Sefaz em homologação que existe no builder de
+    // Perda: com tpAmb=2 o xNome do destinatário TEM que ser esse texto
+    // literal, senão rejeita com cStat 598 — não importa quem seja o
+    // fornecedor de verdade.
+    const xNomeDest =
+        tpAmb === 2
+            ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
+            : fornecedor.nome;
+
     const destXml =
         `<dest>` +
         `<CNPJ>${cnpjDest}</CNPJ>` +
-        `<xNome>${escapeXml(fornecedor.nome)}</xNome>` +
+        `<xNome>${escapeXml(xNomeDest)}</xNome>` +
         buildEnderecoXml('enderDest', fornecedor) +
         `<indIEDest>${indIEDest}</indIEDest>` +
         (fornecedor.inscricaoEstadual

@@ -301,11 +301,13 @@ export class DevolucoesService {
             authTag: certificate.passwordAuthTag,
         });
 
-        // Sem série de produção configurada ainda, usa 901 (convenção de
-        // teste/homologação, diferente da 900 já usada pela LossNfe pra
-        // nunca colidir entre si) — decide a série real com o contador
-        // antes de emitir em produção.
-        const serie = store.devolucaoNfeSerie ?? 901;
+        // Sem série configurada ainda, usa 16 (diferente da 15 usada pela
+        // LossNfe, pra nunca colidir entre si). NÃO usar >= 900 — essa
+        // faixa é reservada pela Sefaz pra emissão em contingência, e como
+        // aqui declaramos tpEmis=1 (emissão normal) isso rejeita com
+        // cStat 244 "Processo de Emissão do Contribuinte incompatível com
+        // a Série da NF" (aconteceu de verdade com a série 900 da LossNfe).
+        const serie = store.devolucaoNfeSerie ?? 16;
         const numero = (store.devolucaoNfeNextNumber ?? 0) + 1;
 
         const storeData: DevolucaoNfeStoreData = {

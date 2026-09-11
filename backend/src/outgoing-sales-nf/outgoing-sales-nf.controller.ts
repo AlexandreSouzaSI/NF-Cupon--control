@@ -11,12 +11,14 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { OutgoingSalesNfService } from './outgoing-sales-nf.service';
 
@@ -24,7 +26,8 @@ import { OutgoingSalesNfService } from './outgoing-sales-nf.service';
 // saída alimenta esse dado direto, então quem pode ver/importar aqui é
 // quem já pode mexer em Faturamento.
 @Controller('outgoing-sales-nf')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
+@RequiresModule(StoreModule.NOTAS_FISCAIS)
 @Roles(
     UserRole.ADMINISTRATIVO,
     UserRole.PROPRIETARIO,

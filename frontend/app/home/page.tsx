@@ -4,16 +4,19 @@ import { useRouter } from 'next/navigation';
 
 import { AppLayout } from '../../src/components/app-layout';
 import { getUser } from '@/lib/auth';
-import { menu, menuColorStyles } from '@/lib/menu';
+import { getActiveStore } from '@/lib/active-store';
+import { menu, menuColorStyles, isModuleEnabled } from '@/lib/menu';
 
 export default function HomePage() {
     const router = useRouter();
     const user = getUser();
+    const activeStore = getActiveStore();
 
     // Mesma lista/ícones/permissão do menu lateral, tudo junto num grid só
     // (sem separar por segmento), em quadrados grandes pra abrir com um
     // toque — tipo um app. Já filtra sozinho pra mostrar só o que o
-    // perfil logado pode acessar e o que não está oculto no momento.
+    // perfil logado pode acessar, o que não está oculto e o que a loja
+    // ativa tem contratado.
     const items = user
         ? menu
             .flatMap((group) => group.items)
@@ -21,7 +24,8 @@ export default function HomePage() {
                 (item) =>
                     item.href !== '/home' &&
                     item.roles.includes(user.role) &&
-                    !item.hidden,
+                    !item.hidden &&
+                    isModuleEnabled(item, activeStore?.enabledModules),
             )
         : [];
 

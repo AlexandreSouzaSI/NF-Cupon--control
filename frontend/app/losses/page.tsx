@@ -1215,7 +1215,7 @@ function NfPerdaTab() {
                                                 </a>
                                             )}
 
-                                            {(nfe.status === 'RASCUNHO' || nfe.status === 'ENVIADA') && (
+                                            {(nfe.status === 'RASCUNHO' || nfe.status === 'ENVIADA' || nfe.status === 'REJEITADA') && (
                                                 <button
                                                     disabled={sendingId === nfe.id}
                                                     onClick={() => handleSend(nfe)}
@@ -1232,7 +1232,7 @@ function NfPerdaTab() {
                                                 </button>
                                             )}
 
-                                            {nfe.status === 'RASCUNHO' && (
+                                            {(nfe.status === 'RASCUNHO' || nfe.status === 'REJEITADA') && (
                                                 <button
                                                     disabled={cancelingId === nfe.id}
                                                     onClick={() => handleCancelNfe(nfe)}

@@ -15,6 +15,7 @@ import {
 
 import {
     BillStatus,
+    StoreModule,
     UserRole,
 } from '@prisma/client';
 
@@ -27,6 +28,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
@@ -48,8 +51,9 @@ if (!existsSync(uploadPath)) {
 // (mesmo espírito de Tributos), assim como os perfis operacionais
 // (Comprador/Estoquista/Funcionário) que não mexem com pagamento.
 @Controller('bills')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
 @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.FINANCEIRO)
+@RequiresModule(StoreModule.CONTAS_A_PAGAR)
 export class BillsController {
     constructor(private billsService: BillsService) { }
 

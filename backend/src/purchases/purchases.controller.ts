@@ -18,10 +18,12 @@ import { existsSync, mkdirSync } from 'fs';
 import { extname, join } from 'path';
 import type { Response } from 'express';
 import archiver from 'archiver';
-import { PurchaseCategory, PurchaseStatus } from '@prisma/client';
+import { PurchaseCategory, PurchaseStatus, StoreModule } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 import { PurchasesService } from './purchases.service';
 import { PurchaseVoiceService } from './purchase-voice.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
@@ -57,8 +59,14 @@ const orderMirrorInterceptor = FileInterceptor('file', {
     limits: { fileSize: 15 * 1024 * 1024 },
 });
 
+// Esse controller mistura dois módulos: o fluxo de Compra (pedido,
+// aprovação, recebimento) e a NF-e de mercadoria buscada da Sefaz (que no
+// menu vive dentro de "Notas Fiscais", não "Compras"). O default da classe
+// é COMPRAS; as rotas prefixadas com incoming-goods-nf/* sobrescrevem pra
+// NOTAS_FISCAIS (metadado de método tem prioridade sobre o de classe).
 @Controller('purchases')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ModuleAccessGuard)
+@RequiresModule(StoreModule.COMPRAS)
 export class PurchasesController {
     constructor(
         private purchasesService: PurchasesService,
@@ -134,6 +142,7 @@ export class PurchasesController {
     // devolve a aba "NFs Aceitas" (vinculada, aceita sem conta ou aceita
     // com conta); por padrão (ou accepted=false) devolve só as pendentes.
     @Get('incoming-goods-nf')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
     async findIncomingGoodsNf(
         @CurrentUser() user: any,
         @Query('storeId') storeId?: string,
@@ -152,6 +161,7 @@ export class PurchasesController {
     // Precisa vir antes de qualquer rota "incoming-goods-nf/:id/..." pra não
     // ser interpretada como um id.
     @Get('incoming-goods-nf/download/zip')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
     async downloadIncomingGoodsNfZip(
         @CurrentUser() user: any,
         @Res() res: Response,
@@ -223,6 +233,7 @@ export class PurchasesController {
     // Busca (produção Sefaz) as NF-e novas emitidas pro CNPJ da loja desde
     // o último NSU salvo.
     @Post('incoming-goods-nf/sync')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
     async syncIncomingGoodsNf(
         @CurrentUser() user: any,
         @Body('storeId') storeId: string,
@@ -233,6 +244,7 @@ export class PurchasesController {
     // Fallback manual: importa vários XMLs de NF-e de compra de uma vez só,
     // pra quando a busca automática na Sefaz não estiver disponível.
     @Post('incoming-goods-nf/import-xml')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
     @UseInterceptors(
         FilesInterceptor('files', 50, {
             storage: memoryStorage(),
@@ -259,6 +271,7 @@ export class PurchasesController {
     }
 
     @Post('incoming-goods-nf/:id/link')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
     async linkIncomingGoodsNf(
         @Param('id') id: string,
         @Body('purchaseId') purchaseId: string,
@@ -272,6 +285,7 @@ export class PurchasesController {
     }
 
     @Post('incoming-goods-nf/:id/ignore')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
     async ignoreIncomingGoodsNf(
         @Param('id') id: string,
         @CurrentUser() user: any,
@@ -280,6 +294,7 @@ export class PurchasesController {
     }
 
     @Post('incoming-goods-nf/:id/accept')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
     async acceptIncomingGoodsNf(
         @Param('id') id: string,
         @Body() body: AcceptIncomingNfDto,
@@ -289,6 +304,7 @@ export class PurchasesController {
     }
 
     @Get('incoming-goods-nf/:id/view')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
     async viewIncomingGoodsNf(
         @Param('id') id: string,
         @CurrentUser() user: any,

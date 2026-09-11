@@ -1,7 +1,7 @@
 {
-    "name": "NuGalho Hub",
-    "short_name": "NuGalho",
-    "description": "Compras, tarefas, perdas e serviços das lojas NuGalho",
+    "name": "GestIA",
+    "short_name": "GestIA",
+    "description": "Gestão de compras, notas fiscais, tarefas e perdas pra redes de lojas",
     "start_url": "/home",
     "display": "standalone",
     "background_color": "#09090b",

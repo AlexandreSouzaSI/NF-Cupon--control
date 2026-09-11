@@ -9,12 +9,14 @@ import {
     Query,
     UseGuards,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { RevenueService } from './revenue.service';
 import { CreateRevenueEntryDto } from './dto/create-revenue-entry.dto';
@@ -26,7 +28,8 @@ import { UpdateRevenueEntryDto } from './dto/update-revenue-entry.dto';
 // Gerente fora daqui de propósito — Tributos é acesso restrito
 // (Administrativo/Proprietário/Comprador/Financeiro).
 @Controller('revenue-entries')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
+@RequiresModule(StoreModule.TRIBUTOS)
 @Roles(
     UserRole.ADMINISTRATIVO,
     UserRole.PROPRIETARIO,

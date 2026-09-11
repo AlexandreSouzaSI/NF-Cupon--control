@@ -10,6 +10,7 @@ import {
     LogOut,
     Menu,
     Moon,
+    ShieldCheck,
     Sun,
     TimerReset,
     X,
@@ -25,7 +26,7 @@ import {
     type ActiveStore,
 } from '@/lib/active-store';
 import { getTheme, toggleTheme, type Theme } from '@/lib/theme';
-import { menu, menuColorStyles } from '@/lib/menu';
+import { menu, menuColorStyles, isModuleEnabled, type StoreModuleKey } from '@/lib/menu';
 import { TourGuide } from './tour/TourGuide';
 
 type AppLayoutProps = {
@@ -36,6 +37,7 @@ type AppLayoutProps = {
 type StoreOption = {
     id: string;
     name: string;
+    enabledModules?: StoreModuleKey[];
 };
 
 type StoreStatus = 'loading' | 'needs-selection' | 'ready' | 'error';
@@ -90,6 +92,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             const stores: StoreOption[] = response.data.map((store: any) => ({
                 id: store.id,
                 name: store.name,
+                enabledModules: store.enabledModules,
             }));
 
             setAvailableStores(stores);
@@ -107,11 +110,17 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             }
 
             const savedStore = getActiveStore();
-            const stillValid =
-                savedStore && stores.some((store) => store.id === savedStore.id);
+            const freshMatch = stores.find(
+                (store) => savedStore && store.id === savedStore.id,
+            );
 
-            if (stillValid) {
-                setActiveStoreState(savedStore);
+            if (freshMatch) {
+                // Sempre usa os módulos frescos da API (não o que estava no
+                // cookie) — se você desligou um módulo dessa loja depois do
+                // último login, o menu já reflete isso no próximo
+                // carregamento, sem precisar trocar de loja pra "destravar".
+                setActiveStore(freshMatch);
+                setActiveStoreState(freshMatch);
                 setStoreStatus('ready');
             } else {
                 setStoreStatus('needs-selection');
@@ -126,7 +135,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         const currentUser = getUser();
 
         if (!token || !currentUser) {
-            router.push('/');
+            router.push('/login');
             return;
         }
 
@@ -143,7 +152,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
 
     function handleLogout() {
         logout();
-        router.push('/');
+        router.push('/login');
     }
 
     // Conta de teste (isDemo): mostra quanto falta e desloga sozinho
@@ -291,7 +300,8 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             items: group.items.filter(
                 (item) =>
                     (user.isDemo || item.roles.includes(user.role)) &&
-                    !item.hidden,
+                    !item.hidden &&
+                    isModuleEnabled(item, activeStore?.enabledModules),
             ),
         }))
         .filter((group) => group.items.length > 0);
@@ -417,7 +427,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                     <div className="mb-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
                         <div className="mb-2 flex items-center gap-2">
                             <FileText size={18} className="text-emerald-400" />
-                            <strong>NuGalho HUB</strong>
+                            <strong>GestIA</strong>
                         </div>
 
                         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -475,6 +485,24 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                 </div>
                             </div>
                         ))}
+
+                        {user.isAdminMaster && (
+                            <div>
+                                <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                                    Admin
+                                </p>
+
+                                <button
+                                    onClick={() => router.push('/admin/modules')}
+                                    className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                >
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                                        <ShieldCheck size={18} />
+                                    </span>
+                                    <span className="flex-1">Módulos por loja</span>
+                                </button>
+                            </div>
+                        )}
                     </nav>
                 </aside>
 
@@ -560,6 +588,27 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                         </div>
                                     </div>
                                 ))}
+
+                                {user.isAdminMaster && (
+                                    <div>
+                                        <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                                            Admin
+                                        </p>
+
+                                        <button
+                                            onClick={() => {
+                                                setMenuOpen(false);
+                                                router.push('/admin/modules');
+                                            }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                        >
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                                                <ShieldCheck size={18} />
+                                            </span>
+                                            <span className="flex-1">Módulos por loja</span>
+                                        </button>
+                                    </div>
+                                )}
                             </nav>
                         </aside>
                     </div>

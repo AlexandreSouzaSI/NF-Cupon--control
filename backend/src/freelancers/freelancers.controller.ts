@@ -9,12 +9,14 @@ import {
     Query,
     UseGuards,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { FreelancersService } from './freelancers.service';
 import { CreateFreelancerDto } from './dto/create-freelancer.dto';
@@ -24,8 +26,9 @@ import { ConfirmFreelancerPaymentDto } from './dto/confirm-payment.dto';
 
 // Diferente de Funcionários (RH): Gerente também tem acesso aqui.
 @Controller('freelancers')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
 @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+@RequiresModule(StoreModule.FREELANCERS)
 export class FreelancersController {
     constructor(private freelancersService: FreelancersService) { }
 

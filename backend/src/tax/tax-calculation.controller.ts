@@ -1,15 +1,18 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RequiresModule } from '../auth/requires-module.decorator';
+import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { TaxCalculationService } from './tax-calculation.service';
 
 @Controller('tax-calculations')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
+@RequiresModule(StoreModule.TRIBUTOS)
 // Gerente fora daqui de propósito — Tributos é acesso restrito
 // (Administrativo/Proprietário/Comprador/Financeiro).
 @Roles(

@@ -441,10 +441,13 @@ export class LossesService {
             authTag: certificate.passwordAuthTag,
         });
 
-        // Sem série de produção configurada ainda, usa 900 — convenção
-        // comum de série de teste/homologação, só pra nunca colidir com
-        // a série real que o time definir depois com o contador.
-        const serie = store.lossNfeSerie ?? 900;
+        // Sem série configurada ainda, usa 1 como padrão. NÃO usar
+        // qualquer valor >= 900: a Sefaz reserva essa faixa pra processos
+        // de emissão em contingência (SCAN/SVC), e como aqui sempre
+        // declaramos tpEmis=1 (emissão normal), série nessa faixa causa
+        // rejeição 244 "Processo de Emissão do Contribuinte incompatível
+        // com a Série da NF" — foi exatamente isso que aconteceu com 900.
+        const serie = store.lossNfeSerie ?? 1;
         const numero = (store.lossNfeNextNumber ?? 0) + 1;
 
         const storeData: LossNfeStoreData = {
@@ -545,9 +548,18 @@ export class LossesService {
             );
         }
 
-        if (lossNfe.status !== 'RASCUNHO' && lossNfe.status !== 'ENVIADA') {
+        // REJEITADA também pode ser reenviada: uma rejeição pode ter sido
+        // um erro de leitura da resposta aqui do nosso lado (bug de parsing,
+        // problema de rede etc.), não necessariamente uma rejeição de
+        // verdade da Sefaz — e como é sempre homologação, reenviar não tem
+        // risco fiscal. Só AUTORIZADA e CANCELADA ficam travadas de vez.
+        if (
+            lossNfe.status !== 'RASCUNHO' &&
+            lossNfe.status !== 'ENVIADA' &&
+            lossNfe.status !== 'REJEITADA'
+        ) {
             throw new BadRequestException(
-                `Essa NF já está com status "${lossNfe.status}" — só dá pra enviar rascunhos (ou consultar um envio pendente).`,
+                `Essa NF já está com status "${lossNfe.status}" — só dá pra enviar rascunhos, reenviar rejeitadas ou consultar um envio pendente.`,
             );
         }
 
@@ -702,9 +714,12 @@ export class LossesService {
             throw new ForbiddenException('Só a gestão pode cancelar uma NF de perda.');
         }
 
-        if (lossNfe.status !== 'RASCUNHO') {
+        // REJEITADA também pode ser cancelada — libera as perdas vinculadas
+        // pra montar um rascunho novo do zero (ex: depois de corrigir um
+        // problema no XML que causou a rejeição).
+        if (lossNfe.status !== 'RASCUNHO' && lossNfe.status !== 'REJEITADA') {
             throw new BadRequestException(
-                'Só é possível cancelar uma NF de perda que ainda está em rascunho (não enviada pra Sefaz).',
+                'Só é possível cancelar uma NF de perda que ainda está em rascunho ou foi rejeitada (não enviada/autorizada pra valer na Sefaz).',
             );
         }
 
