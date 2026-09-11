@@ -57,7 +57,7 @@ COPY --from=build /app/package.json ./package.json
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x docker-entrypoint.sh \
-    && mkdir -p uploads \
+    && mkdir -p uploads storage/certificates storage/diagnostics \
     && chown -R nugalho:nugalho /app
 
 USER nugalho

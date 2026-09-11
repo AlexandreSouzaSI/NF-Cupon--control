@@ -193,6 +193,7 @@ services:
       - "4000:4000"
     volumes:
       - backend_uploads:/app/uploads
+      - backend_certificates:/app/storage/certificates
     depends_on:
       db:
         condition: service_healthy
@@ -212,7 +213,15 @@ services:
 volumes:
   db_data:
   backend_uploads:
+  backend_certificates:
 ```
+
+> `backend_certificates` guarda os arquivos `.pfx` do Certificado Digital
+> (fica fora de `/uploads` de propósito, porque `/uploads` é servido
+> publicamente). Sem esse volume, todo `docker compose up -d --build`
+> recria o container do zero e apaga os certificados enviados — o registro
+> no banco continua existindo, mas aponta pra um arquivo que já era. Com
+> o volume, o arquivo sobrevive a rebuilds normalmente.
 
 Salva e sai (`Ctrl+O`, `Enter`, `Ctrl+X`).
 
