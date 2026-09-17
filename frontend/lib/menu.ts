@@ -18,6 +18,7 @@ import {
     LayoutDashboard,
     FileStack,
     HelpCircle,
+    Package,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -38,7 +39,8 @@ export type StoreModuleKey =
     | 'TAREFAS'
     | 'RELATORIOS'
     | 'FUNCIONARIOS'
-    | 'FREELANCERS';
+    | 'FREELANCERS'
+    | 'PRODUTOS';
 
 // Cor de referência visual de cada item — soft (fundo bem clarinho +
 // texto na cor), pra dar uma pista rápida do "tipo" da tela sem gritar.
@@ -288,6 +290,20 @@ export const menu: MenuGroup[] = [
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
                 color: 'indigo',
                 module: 'RELATORIOS',
+            },
+            {
+                label: 'Produtos',
+                href: '/products',
+                icon: Package,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'FINANCEIRO',
+                ],
+                color: 'orange',
+                module: 'PRODUTOS',
             },
         ],
     },

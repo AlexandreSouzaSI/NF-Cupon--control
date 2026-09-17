@@ -14,6 +14,7 @@ export const MODULE_LABELS: Record<StoreModule, string> = {
     RELATORIOS: 'Relatórios',
     FUNCIONARIOS: 'Funcionários',
     FREELANCERS: 'Freelancers',
+    PRODUTOS: 'Produtos',
 };
 
 export const ALL_STORE_MODULES: StoreModule[] = Object.values(StoreModule);

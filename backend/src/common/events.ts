@@ -28,3 +28,33 @@ export type WhatsappTaskStartEvent = {
     taskOccurrenceId: string;
     userId: string;
 };
+
+// Disparado quando o cron vira uma ocorrência pendente pra "Atrasada" —
+// mesma ideia do TASK_OCCURRENCE_CREATED_EVENT, só que pra cutucar o
+// responsável que ainda não iniciou. Quem estiver ouvindo decide o que
+// fazer (hoje: WhatsappService manda a mensagem, se a pessoa tiver
+// telefone).
+export const TASK_OCCURRENCE_OVERDUE_EVENT = 'task.occurrence.overdue';
+
+export type TaskOccurrenceOverdueEvent = {
+    userId: string;
+    phone: string | null;
+    taskOccurrenceId: string;
+    title: string;
+    dueDateLabel: string;
+};
+
+// Disparado quando alguém que gerencia tarefas clica em "Notificar
+// WhatsApp" no card de uma ocorrência, pra cutucar o responsável na hora
+// (sem esperar o cron de atraso). Mesmo formato do evento de atraso — quem
+// estiver ouvindo decide o texto (hoje: WhatsappService manda como
+// lembrete, ver src/common/events.ts).
+export const TASK_OCCURRENCE_REMINDER_EVENT = 'task.occurrence.reminder';
+
+export type TaskOccurrenceReminderEvent = {
+    userId: string;
+    phone: string | null;
+    taskOccurrenceId: string;
+    title: string;
+    dueDateLabel: string;
+};

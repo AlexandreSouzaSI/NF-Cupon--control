@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { AppLayout } from '../../../src/components/app-layout';
 import { api } from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import { getActiveStore, setActiveStore } from '@/lib/active-store';
 import type { StoreModuleKey } from '@/lib/menu';
 
 type ModuleCatalogItem = {
@@ -21,6 +22,15 @@ type StoreRow = {
     enabledModules: StoreModuleKey[];
 };
 
+// Mesma ordenação de módulo que vem da API, só pra comparar duas listas
+// de módulos sem se importar com a ordem (evita marcar como "alterado"
+// uma linha que só teve os itens reordenados).
+function sameModules(a: StoreModuleKey[], b: StoreModuleKey[]) {
+    if (a.length !== b.length) return false;
+    const setB = new Set(b);
+    return a.every((item) => setB.has(item));
+}
+
 export default function AdminModulesPage() {
     const router = useRouter();
 
@@ -28,6 +38,10 @@ export default function AdminModulesPage() {
     const [loading, setLoading] = useState(true);
     const [catalog, setCatalog] = useState<ModuleCatalogItem[]>([]);
     const [stores, setStores] = useState<StoreRow[]>([]);
+    // Snapshot do que está salvo de verdade no banco — usado só pra saber
+    // quais linhas têm alteração pendente (dirty) e pra "Descartar" voltar
+    // ao estado original sem precisar recarregar a página.
+    const [savedStores, setSavedStores] = useState<StoreRow[]>([]);
     const [savingStoreId, setSavingStoreId] = useState<string | null>(null);
 
     // Só você (isAdminMaster) chega aqui — nem Proprietário do cliente vê
@@ -57,13 +71,15 @@ export default function AdminModulesPage() {
                 ]);
 
                 setCatalog(catalogRes.data);
-                setStores(
-                    storesRes.data.map((store: any) => ({
-                        id: store.id,
-                        name: store.name,
-                        enabledModules: store.enabledModules || [],
-                    })),
-                );
+
+                const rows = storesRes.data.map((store: any) => ({
+                    id: store.id,
+                    name: store.name,
+                    enabledModules: store.enabledModules || [],
+                }));
+
+                setStores(rows);
+                setSavedStores(rows);
             } catch {
                 toast.error('Não deu pra carregar as lojas/módulos.');
             } finally {
@@ -74,36 +90,75 @@ export default function AdminModulesPage() {
         load();
     }, [checking]);
 
-    async function toggleModule(store: StoreRow, module: StoreModuleKey) {
-        const nextModules = store.enabledModules.includes(module)
-            ? store.enabledModules.filter((item) => item !== module)
-            : [...store.enabledModules, module];
+    // Só mexe na tela — não salva nada sozinho. Fica pendente até a pessoa
+    // clicar em "Salvar" naquela linha (evita disparar um PATCH por
+    // clique e a pessoa perder o fio de quantos módulos já mudou).
+    function toggleModule(storeId: string, module: StoreModuleKey) {
+        setStores((prev) =>
+            prev.map((item) => {
+                if (item.id !== storeId) return item;
 
-        // Otimista: atualiza a tela na hora, desfaz se o backend recusar.
+                const nextModules = item.enabledModules.includes(module)
+                    ? item.enabledModules.filter((entry) => entry !== module)
+                    : [...item.enabledModules, module];
+
+                return { ...item, enabledModules: nextModules };
+            }),
+        );
+    }
+
+    function isDirty(store: StoreRow) {
+        const saved = savedStores.find((item) => item.id === store.id);
+        if (!saved) return false;
+        return !sameModules(store.enabledModules, saved.enabledModules);
+    }
+
+    function discardChanges(storeId: string) {
+        const saved = savedStores.find((item) => item.id === storeId);
+        if (!saved) return;
+
         setStores((prev) =>
             prev.map((item) =>
-                item.id === store.id
-                    ? { ...item, enabledModules: nextModules }
+                item.id === storeId
+                    ? { ...item, enabledModules: saved.enabledModules }
                     : item,
             ),
         );
+    }
 
+    async function saveStore(store: StoreRow) {
         setSavingStoreId(store.id);
 
         try {
             await api.patch(`/stores/${store.id}/modules`, {
-                enabledModules: nextModules,
+                enabledModules: store.enabledModules,
             });
-        } catch {
-            toast.error(`Não deu pra salvar os módulos de ${store.name}.`);
 
-            setStores((prev) =>
+            setSavedStores((prev) =>
                 prev.map((item) =>
                     item.id === store.id
                         ? { ...item, enabledModules: store.enabledModules }
                         : item,
                 ),
             );
+
+            // Se a loja salva é a loja ativa da sua própria sessão, o menu
+            // lateral já carregou os módulos antigos quando essa página
+            // montou — atualiza o cookie com o valor novo e recarrega, senão
+            // a mudança só aparece depois de trocar de tela ou dar F5 na
+            // mão. Mesmo padrão do seletor de loja no topo.
+            const active = getActiveStore();
+
+            if (active && active.id === store.id) {
+                setActiveStore({ ...active, enabledModules: store.enabledModules });
+                toast.success(`Módulos de ${store.name} salvos. Atualizando...`);
+                window.location.reload();
+                return;
+            }
+
+            toast.success(`Módulos de ${store.name} salvos.`);
+        } catch {
+            toast.error(`Não deu pra salvar os módulos de ${store.name}.`);
         } finally {
             setSavingStoreId(null);
         }
@@ -156,44 +211,76 @@ export default function AdminModulesPage() {
                             </thead>
 
                             <tbody>
-                                {stores.map((store, index) => (
-                                    <tr
-                                        key={store.id}
-                                        className={
-                                            index % 2 === 0
-                                                ? 'bg-white dark:bg-zinc-950'
-                                                : 'bg-zinc-50 dark:bg-zinc-900/40'
-                                        }
-                                    >
-                                        <td className="sticky left-0 z-10 bg-inherit px-4 py-3 font-medium">
-                                            {store.name}
+                                {stores.map((store, index) => {
+                                    const dirty = isDirty(store);
+                                    const savingThis = savingStoreId === store.id;
 
-                                            {savingStoreId === store.id && (
-                                                <span className="ml-2 text-xs text-zinc-500">
-                                                    salvando...
-                                                </span>
-                                            )}
-                                        </td>
+                                    return (
+                                        <tr
+                                            key={store.id}
+                                            className={
+                                                index % 2 === 0
+                                                    ? 'bg-white dark:bg-zinc-950'
+                                                    : 'bg-zinc-50 dark:bg-zinc-900/40'
+                                            }
+                                        >
+                                            <td className="sticky left-0 z-10 bg-inherit px-4 py-3 font-medium">
+                                                <div className="flex items-center gap-2">
+                                                    <span>{store.name}</span>
 
-                                        {catalog.map((module) => (
-                                            <td
-                                                key={module.value}
-                                                className="px-3 py-3 text-center"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    className="h-4 w-4 accent-emerald-500"
-                                                    checked={store.enabledModules.includes(
-                                                        module.value,
+                                                    {dirty && !savingThis && (
+                                                        <span
+                                                            className="h-1.5 w-1.5 rounded-full bg-amber-500"
+                                                            title="Alterações não salvas"
+                                                        />
                                                     )}
-                                                    onChange={() =>
-                                                        toggleModule(store, module.value)
-                                                    }
-                                                />
+                                                </div>
+
+                                                {(dirty || savingThis) && (
+                                                    <div className="mt-1 flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={savingThis}
+                                                            onClick={() => saveStore(store)}
+                                                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                        >
+                                                            {savingThis ? 'Salvando...' : 'Salvar'}
+                                                        </button>
+
+                                                        {!savingThis && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => discardChanges(store.id)}
+                                                                className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                                                            >
+                                                                Descartar
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </td>
-                                        ))}
-                                    </tr>
-                                ))}
+
+                                            {catalog.map((module) => (
+                                                <td
+                                                    key={module.value}
+                                                    className="px-3 py-3 text-center"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        className="h-4 w-4 accent-emerald-500"
+                                                        disabled={savingThis}
+                                                        checked={store.enabledModules.includes(
+                                                            module.value,
+                                                        )}
+                                                        onChange={() =>
+                                                            toggleModule(store.id, module.value)
+                                                        }
+                                                    />
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

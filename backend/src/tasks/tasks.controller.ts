@@ -161,6 +161,24 @@ export class TasksController {
         return this.tasksService.undoConfirmation(id, user);
     }
 
+    @Post('occurrences/:id/cancel')
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async cancelOccurrence(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.tasksService.cancelOccurrence(id, user);
+    }
+
+    @Post('occurrences/:id/notify-whatsapp')
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async notifyAssigneeWhatsapp(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.tasksService.notifyAssigneeWhatsapp(id, user);
+    }
+
     @Get(':id')
     async findOne(@Param('id') id: string, @CurrentUser() user: any) {
         return this.tasksService.findOne(id, user);

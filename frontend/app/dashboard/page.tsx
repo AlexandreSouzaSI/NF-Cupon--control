@@ -4,9 +4,16 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Briefcase,
+    ChevronLeft,
+    ChevronRight,
+    ClipboardList,
     FileStack,
     ListChecks,
     PackageX,
+    TrendingUp,
+    UserCog,
+    UserPlus,
+    Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -78,7 +85,30 @@ type TeamTaskStat = {
     concluidas: number;
 };
 
+function currentMonthValue() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function shiftMonth(value: string, delta: number) {
+    const [year, month] = value.split('-').map(Number);
+    const date = new Date(year, month - 1 + delta, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(value: string) {
+    const [year, month] = value.split('-').map(Number);
+    const date = new Date(year, month - 1, 1);
+    const label = date.toLocaleDateString('pt-BR', {
+        month: 'long',
+        year: 'numeric',
+    });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 type DashboardSummary = {
+    referenceMonth: string;
+
     operational: {
         totalPurchases: number;
         waitingApproval: number;
@@ -120,8 +150,26 @@ type DashboardSummary = {
         valueMonth: number;
     };
 
+    outgoingSalesNf: {
+        valueMonth: number;
+    };
+
+    revenue: {
+        month: number;
+    };
+
+    payroll: {
+        month: number;
+        openCount: number;
+    };
+
+    freelancers: {
+        paidMonth: number;
+    };
+
     losses: {
         countMonth: number;
+        valueMonth: number;
     };
 
     tasks: {
@@ -175,6 +223,7 @@ export default function DashboardPage() {
     );
 
     const [loading, setLoading] = useState(true);
+    const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
 
     async function loadSummary() {
         try {
@@ -183,6 +232,7 @@ export default function DashboardPage() {
             const response = await api.get('/dashboard/summary', {
                 params: {
                     storeId: getActiveStore()?.id || undefined,
+                    month: selectedMonth,
                 },
             });
 
@@ -196,14 +246,65 @@ export default function DashboardPage() {
 
     useEffect(() => {
         loadSummary();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedMonth]);
+
+    // Botão de mês do Dashboard: setas pra andar mês a mês + o mês atual
+    // clicável pra digitar direto. Só os totais mensais dos cards mudam
+    // com isso — "hoje"/"essa semana" e o quadro de tarefas continuam reais.
+    const monthSelector = (
+        <div className="inline-flex items-center gap-1 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1">
+            <button
+                type="button"
+                onClick={() => setSelectedMonth((prev) => shiftMonth(prev, -1))}
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                title="Mês anterior"
+            >
+                <ChevronLeft size={18} />
+            </button>
+
+            <label className="relative flex h-9 min-w-[9.5rem] cursor-pointer items-center justify-center rounded-xl px-2 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                {formatMonthLabel(selectedMonth)}
+                <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) =>
+                        e.target.value && setSelectedMonth(e.target.value)
+                    }
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                />
+            </label>
+
+            <button
+                type="button"
+                onClick={() => setSelectedMonth((prev) => shiftMonth(prev, 1))}
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                title="Próximo mês"
+            >
+                <ChevronRight size={18} />
+            </button>
+
+            {selectedMonth !== currentMonthValue() && (
+                <button
+                    type="button"
+                    onClick={() => setSelectedMonth(currentMonthValue())}
+                    className="ml-1 h-9 rounded-xl px-3 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                >
+                    Hoje
+                </button>
+            )}
+        </div>
+    );
 
     if (loading) {
         return (
             <AppLayout title="Dashboard">
-                <p className="text-zinc-600 dark:text-zinc-400">
-                    Carregando centro de operações...
-                </p>
+                <div className="space-y-4">
+                    {monthSelector}
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                        Carregando centro de operações...
+                    </p>
+                </div>
             </AppLayout>
         );
     }
@@ -211,18 +312,22 @@ export default function DashboardPage() {
     if (!summary) {
         return (
             <AppLayout title="Dashboard">
-                <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-                    <p className="text-zinc-600 dark:text-zinc-400">
-                        Não foi possível carregar o dashboard.
-                    </p>
+                <div className="space-y-4">
+                    {monthSelector}
 
-                    <button
-                        type="button"
-                        onClick={loadSummary}
-                        className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 font-medium text-zinc-900 dark:text-white hover:bg-emerald-700"
-                    >
-                        Tentar novamente
-                    </button>
+                    <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+                        <p className="text-zinc-600 dark:text-zinc-400">
+                            Não foi possível carregar o dashboard.
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={loadSummary}
+                            className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 font-medium text-zinc-900 dark:text-white hover:bg-emerald-700"
+                        >
+                            Tentar novamente
+                        </button>
+                    </div>
                 </div>
             </AppLayout>
         );
@@ -230,20 +335,34 @@ export default function DashboardPage() {
 
     const operationalCards = [
         {
-            title: 'Perdas este mês',
-            value: summary.losses.countMonth,
-            description: 'Registros de perda no período',
-            icon: PackageX,
-            iconClass: 'text-red-400 bg-red-500/10',
-            href: '/losses',
+            title: 'Compras em aberto',
+            value: summary.today.open,
+            description: 'Aguardando aprovação, recebimento ou NF',
+            icon: ClipboardList,
+            iconClass: 'text-sky-400 bg-sky-500/10',
+            href: '/purchases',
         },
         {
-            title: 'Minhas tarefas pendentes',
-            value: summary.tasks.pendingToday,
-            description: 'Suas tarefas a fazer ou atrasadas até hoje',
-            icon: ListChecks,
-            iconClass: 'text-violet-400 bg-violet-500/10',
-            href: '/tasks',
+            title: 'Total em Entradas',
+            value: summary.incomingGoodsNf.valueMonth.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: 'NF de mercadoria emitidas no mês',
+            icon: FileStack,
+            iconClass: 'text-purple-400 bg-purple-500/10',
+            href: '/fiscal-notes',
+        },
+        {
+            title: 'Total em Saídas',
+            value: summary.outgoingSalesNf.valueMonth.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: 'NF de venda emitidas no mês',
+            icon: FileStack,
+            iconClass: 'text-purple-400 bg-purple-500/10',
+            href: '/fiscal-notes',
         },
         {
             title: 'NF Serviços',
@@ -265,15 +384,86 @@ export default function DashboardPage() {
             href: '/services?tab=relatorios',
         },
         {
-            title: 'Total em Entradas',
-            value: summary.incomingGoodsNf.valueMonth.toLocaleString('pt-BR', {
+            title: 'Faturamento do mês',
+            value: summary.revenue.month.toLocaleString('pt-BR', {
                 style: 'currency',
                 currency: 'BRL',
             }),
-            description: 'NF de mercadoria emitidas no mês',
-            icon: FileStack,
-            iconClass: 'text-purple-400 bg-purple-500/10',
-            href: '/fiscal-notes',
+            description: 'Receita bruta lançada em Tributos',
+            icon: TrendingUp,
+            iconClass: 'text-cyan-400 bg-cyan-500/10',
+            href: '/revenue',
+        },
+        {
+            title: 'Perdas este mês',
+            value: summary.losses.countMonth,
+            description: 'Registros de perda no período',
+            icon: PackageX,
+            iconClass: 'text-red-400 bg-red-500/10',
+            href: '/losses',
+        },
+        {
+            title: 'Valor perdido no mês',
+            value: summary.losses.valueMonth.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: 'Quantidade x valor unitário das perdas',
+            icon: PackageX,
+            iconClass: 'text-red-400 bg-red-500/10',
+            href: '/losses',
+        },
+        {
+            title: 'Vencendo hoje',
+            value: summary.financial.billsDueTodayTotal.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: 'Contas a pagar com vencimento hoje',
+            icon: Wallet,
+            iconClass: 'text-teal-400 bg-teal-500/10',
+            href: '/bills',
+        },
+        {
+            title: 'Em atraso',
+            value: summary.financial.overdueBillsTotal.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: 'Contas a pagar vencidas',
+            icon: Wallet,
+            iconClass: 'text-teal-400 bg-teal-500/10',
+            href: '/bills',
+        },
+        {
+            title: 'Minhas tarefas pendentes',
+            value: summary.tasks.pendingToday,
+            description: 'Suas tarefas a fazer ou atrasadas até hoje',
+            icon: ListChecks,
+            iconClass: 'text-violet-400 bg-violet-500/10',
+            href: '/tasks',
+        },
+        {
+            title: 'Folha do mês',
+            value: summary.payroll.month.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: `${summary.payroll.openCount} pagamento(s) em aberto`,
+            icon: UserCog,
+            iconClass: 'text-pink-400 bg-pink-500/10',
+            href: '/employees',
+        },
+        {
+            title: 'Freelancers pagos no mês',
+            value: summary.freelancers.paidMonth.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+            }),
+            description: 'Pagamentos confirmados no período',
+            icon: UserPlus,
+            iconClass: 'text-pink-400 bg-pink-500/10',
+            href: '/freelancers',
         },
     ];
 
@@ -294,14 +484,18 @@ export default function DashboardPage() {
     return (
         <AppLayout title="Centro de Operações">
             <div className="space-y-6">
-                <header>
-                    <h2 className="text-2xl font-bold">
-                        O que precisa ser resolvido
-                    </h2>
+                <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h2 className="text-2xl font-bold">
+                            O que precisa ser resolvido
+                        </h2>
 
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                        Acompanhe perdas, serviços e tarefas.
-                    </p>
+                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                            Totais mensais de {formatMonthLabel(selectedMonth)}.
+                        </p>
+                    </div>
+
+                    {monthSelector}
                 </header>
 
                 <section className="grid grid-cols-2 gap-4 md:grid-cols-4">

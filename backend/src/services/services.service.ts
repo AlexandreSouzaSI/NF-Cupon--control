@@ -444,6 +444,55 @@ export class ServicesService {
         ];
     }
 
+    // Usado pelo card de total no topo da tela — soma TODAS as NF de
+    // serviço já geradas (aceitas ou ainda pendentes de conciliação),
+    // respeitando o mesmo filtro de mês/período do download em zip. Mesma
+    // fonte (findAllNfForDownload) e mesmo filtro de data (buildDateFilter)
+    // pra não haver divergência entre o que esse total mostra e o que o
+    // zip efetivamente baixa.
+    async findAllNfTotal(
+        user: any,
+        filters: {
+            storeId?: string;
+            month?: string;
+            startDate?: string;
+            endDate?: string;
+        },
+    ) {
+        if (filters?.storeId) {
+            this.ensureStoreAccess(filters.storeId, user);
+        }
+
+        const allItems = await this.findAllNfForDownload(
+            user,
+            filters?.storeId,
+        );
+        const dateFilter = this.buildDateFilter(filters);
+
+        const items = dateFilter
+            ? allItems.filter((item) => {
+                const time = new Date(item.date).getTime();
+
+                if (dateFilter.gte && time < dateFilter.gte.getTime()) {
+                    return false;
+                }
+
+                if (dateFilter.lte && time > dateFilter.lte.getTime()) {
+                    return false;
+                }
+
+                return true;
+            })
+            : allItems;
+
+        const total = items.reduce(
+            (sum, item) => sum + Number(item.value || 0),
+            0,
+        );
+
+        return { count: items.length, total };
+    }
+
     async findForDownload(
         user: any,
         filters: {

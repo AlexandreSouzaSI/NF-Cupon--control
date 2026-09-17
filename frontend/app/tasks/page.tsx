@@ -8,11 +8,13 @@ import { getUser } from '@/lib/auth';
 import { getActiveStore } from '@/lib/active-store';
 import {
     AlertTriangle,
+    Ban,
     Camera,
     CheckCircle2,
     Clock,
     EyeOff,
     ListChecks,
+    MessageCircle,
     Paperclip,
     PauseCircle,
     Pencil,
@@ -32,7 +34,8 @@ type OccurrenceStatus =
     | 'IN_PROGRESS'
     | 'PAUSED'
     | 'DONE'
-    | 'LATE';
+    | 'LATE'
+    | 'CANCELLED';
 
 const RECURRENCE_LABELS: Record<Recurrence, string> = {
     DAILY: 'Diária',
@@ -237,6 +240,15 @@ function StatusBadge({ status }: { status: OccurrenceStatus }) {
         );
     }
 
+    if (status === 'CANCELLED') {
+        return (
+            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-3 py-1 text-xs font-medium text-zinc-500 line-through">
+                <Ban size={13} />
+                Cancelada
+            </span>
+        );
+    }
+
     return (
         <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-3 py-1 text-xs font-medium text-zinc-500">
             <Clock size={13} />
@@ -259,6 +271,7 @@ const BOARD_COLUMNS: {
             statuses: ['IN_PROGRESS', 'PAUSED'],
         },
         { key: 'done', label: 'Concluídas', statuses: ['DONE'] },
+        { key: 'cancelled', label: 'Canceladas', statuses: ['CANCELLED'] },
     ];
 
 function QuadroTab({
@@ -362,6 +375,48 @@ function QuadroTab({
         }
     }
 
+    // Manda um lembrete avulso pro WhatsApp do responsável, na hora —
+    // mesma regra de quem pode ver (canManage), já que é quem cadastra/
+    // gerencia que vai querer cutucar. Backend valida se a pessoa tem
+    // telefone cadastrado e devolve erro claro se não tiver.
+    async function handleNotifyWhatsapp(occurrence: Occurrence) {
+        try {
+            setActingId(occurrence.id);
+            await api.post(`/tasks/occurrences/${occurrence.id}/notify-whatsapp`);
+            toast.success('Lembrete enviado pelo WhatsApp.');
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message ||
+                'Erro ao enviar lembrete pelo WhatsApp.';
+
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setActingId(null);
+        }
+    }
+
+    // Só quem gerencia tarefas cancela (mesma regra de editar/remover) — o
+    // responsável só inicia/conclui a dele, nunca cancela.
+    async function handleCancel(occurrence: Occurrence) {
+        const confirmed = confirm('Cancelar essa ocorrência da tarefa?');
+
+        if (!confirmed) return;
+
+        try {
+            setActingId(occurrence.id);
+            await api.post(`/tasks/occurrences/${occurrence.id}/cancel`);
+            toast.success('Tarefa cancelada.');
+            await load();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao cancelar tarefa.';
+
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setActingId(null);
+        }
+    }
+
     async function handleMove(
         occurrence: Occurrence,
         action: 'start' | 'pause' | 'resume',
@@ -383,9 +438,16 @@ function QuadroTab({
     }
 
     function renderCard(occurrence: Occurrence) {
+        // Só o responsável mexe no andamento — quem criou/gerencia só vê,
+        // edita ou cancela (ver isResponsavel() no backend).
         const canActOnThis =
             occurrence.status !== 'DONE' &&
-            (canManage || occurrence.task.assignedTo.id === currentUserId);
+            occurrence.status !== 'CANCELLED' &&
+            occurrence.task.assignedTo.id === currentUserId;
+        const canCancelThis =
+            canManage &&
+            occurrence.status !== 'DONE' &&
+            occurrence.status !== 'CANCELLED';
         const acting = actingId === occurrence.id;
 
         return (
@@ -615,6 +677,29 @@ function QuadroTab({
                         Desfazer
                     </button>
                 )}
+
+                {canCancelThis && (
+                    <div className="mt-auto flex flex-wrap gap-2">
+                        <button
+                            onClick={() => handleNotifyWhatsapp(occurrence)}
+                            disabled={acting}
+                            title="Enviar lembrete pelo WhatsApp"
+                            className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-emerald-300 dark:border-emerald-900 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50"
+                        >
+                            <MessageCircle size={16} />
+                            Notificar WhatsApp
+                        </button>
+                        <button
+                            onClick={() => handleCancel(occurrence)}
+                            disabled={acting}
+                            title="Cancelar essa ocorrência"
+                            className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-red-300 dark:border-red-900 px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                        >
+                            <Ban size={16} />
+                            Cancelar
+                        </button>
+                    </div>
+                )}
             </div>
         );
     }
@@ -661,7 +746,7 @@ function QuadroTab({
                         })}
                     </div>
 
-                    <div className="flex flex-col gap-4 md:grid md:grid-cols-3 md:gap-5 lg:gap-6 2xl:mx-auto 2xl:max-w-[1700px]">
+                    <div className="flex flex-col gap-4 md:grid md:grid-cols-4 md:gap-5 lg:gap-6 2xl:mx-auto 2xl:max-w-[1700px]">
                         {BOARD_COLUMNS.map((column) => {
                             const columnItems = occurrences.filter((occurrence) =>
                                 column.statuses.includes(occurrence.status),

@@ -23,6 +23,8 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { ConfirmOccurrenceDto } from './dto/confirm-occurrence.dto';
 import {
     TASK_OCCURRENCE_CREATED_EVENT,
+    TASK_OCCURRENCE_OVERDUE_EVENT,
+    TASK_OCCURRENCE_REMINDER_EVENT,
     WHATSAPP_TASK_START_EVENT,
 } from '../common/events';
 import type { WhatsappTaskStartEvent } from '../common/events';
@@ -660,7 +662,7 @@ export class TasksService implements OnModuleInit {
                         title: true,
                         assignedToId: true,
                         createdById: true,
-                        assignedTo: { select: { name: true } },
+                        assignedTo: { select: { name: true, phone: true } },
                     },
                 },
             },
@@ -680,6 +682,19 @@ export class TasksService implements OnModuleInit {
                 message: `"${occurrence.task.title}" não foi confirmada e está atrasada.`,
                 type: NotificationType.TASK_OVERDUE,
                 userId: occurrence.task.assignedToId,
+            });
+
+            // Cutuca o responsável por WhatsApp também, se ele tiver
+            // telefone cadastrado — quem estiver ouvindo decide (hoje só
+            // WhatsappService; ver src/common/events.ts).
+            this.eventEmitter.emit(TASK_OCCURRENCE_OVERDUE_EVENT, {
+                userId: occurrence.task.assignedToId,
+                phone: occurrence.task.assignedTo.phone,
+                taskOccurrenceId: occurrence.id,
+                title: occurrence.task.title,
+                dueDateLabel: occurrence.dueDate.toLocaleDateString('pt-BR', {
+                    timeZone: 'UTC',
+                }),
             });
 
             if (occurrence.task.createdById !== occurrence.task.assignedToId) {
@@ -746,21 +761,21 @@ export class TasksService implements OnModuleInit {
         });
     }
 
-    private canConfirm(
-        occurrenceTask: {
-            assignedToId: string;
-            createdById: string;
-            restrictedFromAdministrativo: boolean;
-            restrictedFromGerente: boolean;
-        },
+    // Só o RESPONSÁVEL (assignedTo) pode iniciar/pausar/retomar/concluir —
+    // sem exceção pra quem criou a tarefa, Administrativo, Gerente ou até
+    // Proprietário. Eles continuam vendo a tarefa (canViewTask) e podem
+    // editar/cancelar, mas não mexem no andamento de uma tarefa que não é
+    // deles — assim quem cadastra não fica gerenciando o dia a dia de
+    // cada tarefa, só quem realmente vai executar.
+    private isResponsavel(
+        occurrenceTask: { assignedToId: string },
         user: any,
     ) {
-        return this.canViewTask(occurrenceTask, user);
+        return occurrenceTask.assignedToId === user.id;
     }
 
     // Movimentações manuais do quadro estilo Trello (A fazer → Em
-    // andamento → Pausada/Concluída). Mesma regra de quem pode agir que a
-    // confirmação: responsável, quem criou, ou Administrativo/Proprietário.
+    // andamento → Pausada/Concluída). Só o responsável pode agir.
     private async loadOccurrenceForAction(id: string, user: any) {
         const occurrence = await this.prisma.taskOccurrence.findUnique({
             where: { id },
@@ -773,9 +788,9 @@ export class TasksService implements OnModuleInit {
 
         this.ensureStoreAccess(occurrence.task.storeId, user);
 
-        if (!this.canConfirm(occurrence.task, user)) {
+        if (!this.isResponsavel(occurrence.task, user)) {
             throw new ForbiddenException(
-                'Só o responsável, quem criou a tarefa ou Administrativo/Proprietário podem mover essa tarefa.',
+                'Só o responsável pela tarefa pode movê-la.',
             );
         }
 
@@ -874,9 +889,9 @@ export class TasksService implements OnModuleInit {
 
         this.ensureStoreAccess(occurrence.task.storeId, user);
 
-        if (!this.canConfirm(occurrence.task, user)) {
+        if (!this.isResponsavel(occurrence.task, user)) {
             throw new ForbiddenException(
-                'Só o responsável, quem criou a tarefa ou Administrativo/Proprietário podem confirmar.',
+                'Só o responsável pela tarefa pode confirmá-la.',
             );
         }
 
@@ -936,5 +951,100 @@ export class TasksService implements OnModuleInit {
                 confirmedById: null,
             },
         });
+    }
+
+    // Cancela uma ocorrência específica (ex: hoje não vai rolar por algum
+    // motivo) — só quem gerencia tarefas (mesma regra de editar/remover),
+    // nunca o responsável, que só inicia/conclui a dele. Não cancela a
+    // Task recorrente inteira, só essa data — as próximas ocorrências
+    // continuam sendo geradas normalmente pelo cron.
+    async cancelOccurrence(id: string, user: any) {
+        this.ensureCanManage(user);
+
+        const occurrence = await this.prisma.taskOccurrence.findUnique({
+            where: { id },
+            include: { task: true },
+        });
+
+        if (!occurrence) {
+            throw new NotFoundException('Tarefa não encontrada.');
+        }
+
+        this.ensureStoreAccess(occurrence.task.storeId, user);
+        this.ensureTaskVisible(occurrence.task, user);
+
+        if (
+            occurrence.status === TaskOccurrenceStatus.DONE ||
+            occurrence.status === TaskOccurrenceStatus.CANCELLED
+        ) {
+            throw new BadRequestException(
+                'Essa tarefa já está concluída ou cancelada.',
+            );
+        }
+
+        return this.prisma.taskOccurrence.update({
+            where: { id },
+            data: {
+                status: TaskOccurrenceStatus.CANCELLED,
+                cancelledAt: new Date(),
+                cancelledById: user.id,
+            },
+        });
+    }
+
+    // Lembrete manual — botão "Notificar WhatsApp" no card da ocorrência.
+    // Só quem gerencia tarefas pode cutucar (mesma regra de editar/
+    // cancelar); o responsável não notifica a si mesmo por aqui. Valida
+    // aqui mesmo (síncrono) se a pessoa tem telefone cadastrado, pra dar um
+    // erro claro na hora em vez de falhar silenciosamente lá no
+    // WhatsappService — o envio em si continua assíncrono via evento
+    // (TasksService não sabe nada sobre WhatsApp, de propósito).
+    async notifyAssigneeWhatsapp(id: string, user: any) {
+        this.ensureCanManage(user);
+
+        const occurrence = await this.prisma.taskOccurrence.findUnique({
+            where: { id },
+            include: {
+                task: {
+                    include: {
+                        assignedTo: { select: { id: true, phone: true } },
+                    },
+                },
+            },
+        });
+
+        if (!occurrence) {
+            throw new NotFoundException('Tarefa não encontrada.');
+        }
+
+        this.ensureStoreAccess(occurrence.task.storeId, user);
+        this.ensureTaskVisible(occurrence.task, user);
+
+        if (
+            occurrence.status === TaskOccurrenceStatus.DONE ||
+            occurrence.status === TaskOccurrenceStatus.CANCELLED
+        ) {
+            throw new BadRequestException(
+                'Essa tarefa já está concluída ou cancelada.',
+            );
+        }
+
+        if (!occurrence.task.assignedTo.phone) {
+            throw new BadRequestException(
+                'O responsável por essa tarefa não tem WhatsApp cadastrado.',
+            );
+        }
+
+        this.eventEmitter.emit(TASK_OCCURRENCE_REMINDER_EVENT, {
+            userId: occurrence.task.assignedToId,
+            phone: occurrence.task.assignedTo.phone,
+            taskOccurrenceId: occurrence.id,
+            title: occurrence.task.title,
+            dueDateLabel: occurrence.dueDate.toLocaleDateString('pt-BR', {
+                timeZone: 'UTC',
+            }),
+        });
+
+        return { sent: true };
     }
 }

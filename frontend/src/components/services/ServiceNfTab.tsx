@@ -115,6 +115,13 @@ export function ServiceNfTab() {
     const [endDate, setEndDate] = useState('');
     const [confirmedPage, setConfirmedPage] = useState(1);
 
+    // Total do card do topo — aceitas + pendentes, calculado no backend
+    // (findAllNfTotal) pra não depender só do que já foi paginado/carregado
+    // aqui no front.
+    const [allNfTotal, setAllNfTotal] = useState(0);
+    const [allNfCount, setAllNfCount] = useState(0);
+    const [loadingAllNfTotal, setLoadingAllNfTotal] = useState(true);
+
     const servicesWithoutNf = useMemo(
         () => allServices.filter((service) => !service.nfFileUrl),
         [allServices],
@@ -135,6 +142,37 @@ export function ServiceNfTab() {
             toast.error('Erro ao carregar NFs de serviços.');
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function loadAllNfTotal() {
+        try {
+            setLoadingAllNfTotal(true);
+
+            const params: Record<string, string> = {
+                storeId: getActiveStore()?.id || '',
+            };
+
+            if (mode === 'MONTH') {
+                if (month) params.month = month;
+            } else {
+                if (startDate) params.startDate = startDate;
+                if (endDate) params.endDate = endDate;
+            }
+
+            const response = await api.get('/services/all-nf-total', {
+                params,
+            });
+
+            const result = response.data as { count: number; total: number };
+
+            setAllNfTotal(result.total || 0);
+            setAllNfCount(result.count || 0);
+        } catch {
+            // Não bloqueia a tela por causa do card de total — só mantém o
+            // último valor conhecido.
+        } finally {
+            setLoadingAllNfTotal(false);
         }
     }
 
@@ -406,6 +444,11 @@ export function ServiceNfTab() {
         setConfirmedPage(1);
     }, [mode, month, startDate, endDate]);
 
+    useEffect(() => {
+        loadAllNfTotal();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mode, month, startDate, endDate]);
+
     const filteredServices = useMemo(() => {
         return confirmedNfs.filter((item) => {
             if (mode === 'MONTH') {
@@ -528,6 +571,21 @@ export function ServiceNfTab() {
 
     return (
         <div className="space-y-5">
+            <section className="rounded-3xl border border-emerald-500/30 bg-emerald-500/5 p-5">
+                <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                    Valor total das NFs geradas{' '}
+                    {mode === 'MONTH' && month
+                        ? `em ${month.split('-').reverse().join('/')}`
+                        : 'no período selecionado'}
+                </p>
+                <p className="mt-1 text-3xl font-bold text-emerald-500">
+                    {loadingAllNfTotal ? '...' : formatCurrency(allNfTotal)}
+                </p>
+                <p className="text-sm text-zinc-500">
+                    {allNfCount} NF(s) — aceitas e pendentes de conciliação
+                </p>
+            </section>
+
             <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>

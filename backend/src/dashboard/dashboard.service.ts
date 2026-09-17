@@ -117,7 +117,27 @@ export class DashboardService {
         );
     }
 
-    async summary(user: any, storeId?: string) {
+    // Aceita "AAAA-MM" (seletor de mês do Dashboard) e devolve o dia 1
+    // daquele mês; qualquer coisa inválida ou ausente cai no mês corrente,
+    // pra nunca quebrar o dashboard por causa de um parâmetro estranho.
+    private resolveReferenceDate(month?: string): Date {
+        if (month) {
+            const match = /^(\d{4})-(\d{2})$/.exec(month);
+
+            if (match) {
+                const year = Number(match[1]);
+                const monthIndex = Number(match[2]) - 1;
+
+                if (monthIndex >= 0 && monthIndex <= 11) {
+                    return new Date(year, monthIndex, 1);
+                }
+            }
+        }
+
+        return new Date();
+    }
+
+    async summary(user: any, storeId?: string, month?: string) {
         const storeFilter = this.resolveStoreFilter(user, storeId);
         const isGlobalTaskViewer = GLOBAL_TASK_VIEW_ROLES.includes(
             user.role,
@@ -131,13 +151,18 @@ export class DashboardService {
             storeId: storeFilter,
         };
 
+        const referenceDate = this.resolveReferenceDate(month);
+
+        // "Hoje" e "essa semana" continuam sempre reais, independente do
+        // mês escolhido no seletor — só os totais do mês (Serviços, NF,
+        // Faturamento, Perdas, Folha, Freelancers) mudam com ele.
         const todayStart = this.getStartOfDay();
         const todayEnd = this.getEndOfDay();
         const weekEnd = this.getEndOfWeek();
-        const monthStart = this.getStartOfMonth();
-        const monthEnd = this.getEndOfMonth();
+        const monthStart = this.getStartOfMonth(referenceDate);
+        const monthEnd = this.getEndOfMonth(referenceDate);
 
-        // "AAAA-MM" do mês corrente — mesmo formato usado em
+        // "AAAA-MM" do mês escolhido — mesmo formato usado em
         // OutgoingSalesNf.referenceMonth e RevenueEntry.referenceMonth.
         const currentReferenceMonth = `${monthStart.getFullYear()}-${String(
             monthStart.getMonth() + 1,
@@ -844,6 +869,12 @@ export class DashboardService {
             .slice(0, 10);
 
         return {
+            // Mês que os totais mensais abaixo (services/incomingGoodsNf/
+            // outgoingSalesNf/revenue/payroll/freelancers/losses.valueMonth)
+            // se referem — o seletor do Dashboard usa isso pra saber o que
+            // já está selecionado.
+            referenceMonth: currentReferenceMonth,
+
             operational: {
                 totalPurchases,
                 waitingApproval,

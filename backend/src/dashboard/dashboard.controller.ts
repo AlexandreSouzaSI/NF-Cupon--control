@@ -14,8 +14,12 @@ export class DashboardController {
     async summary(
         @CurrentUser() user: any,
         @Query('storeId') storeId?: string,
+        // "AAAA-MM" pra escolher outro mês além do corrente no seletor do
+        // Dashboard — só afeta os totais mensais (Serviços, NF, Faturamento,
+        // Perdas, Folha, Freelancers); "hoje"/"essa semana" continuam reais.
+        @Query('month') month?: string,
     ) {
-        return this.dashboardService.summary(user, storeId);
+        return this.dashboardService.summary(user, storeId, month);
     }
 
     @Get('badges')

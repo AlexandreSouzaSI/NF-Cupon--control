@@ -94,6 +94,26 @@ export class ServicesController {
     }
 
     // Precisa vir antes de ":id" pra não ser interpretada como um id.
+    // Total do card no topo da tela — soma TODAS as NF de serviço já
+    // geradas (aceitas ou ainda pendentes de conciliação), respeitando o
+    // mesmo filtro de mês/período usado no download em zip.
+    @Get('all-nf-total')
+    async findAllNfTotal(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId?: string,
+        @Query('month') month?: string,
+        @Query('startDate') startDate?: string,
+        @Query('endDate') endDate?: string,
+    ) {
+        return this.servicesService.findAllNfTotal(user, {
+            storeId,
+            month,
+            startDate,
+            endDate,
+        });
+    }
+
+    // Precisa vir antes de ":id" pra não ser interpretada como um id.
     @Get('download/zip')
     async downloadZip(
         @CurrentUser() user: any,

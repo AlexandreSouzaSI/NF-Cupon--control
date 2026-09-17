@@ -129,6 +129,18 @@ export function EntradaNfTab() {
         }
     }
 
+    // "Vincular à compra existente" só faz sentido pra quem também usa o
+    // módulo Compras — sem ele não existe pedido de compra nenhum pra
+    // vincular. Lista undefined (ainda carregando/loja sem info) libera,
+    // mesmo critério usado no resto do sistema (ver isModuleEnabled).
+    const enabledModules = getActiveStore()?.enabledModules;
+    const comprasEnabled = !enabledModules || enabledModules.includes('COMPRAS');
+
+    // Só alimenta o dropdown opcional "Vincular à compra existente" de cada
+    // NF pendente — não é o motivo de estar nessa tela. Se falhar, o
+    // dropdown fica vazio e a pessoa continua vendo/gerenciando as NFs
+    // normalmente; não faz sentido estourar um erro de "compras" numa tela
+    // de Notas Fiscais por causa de um recurso secundário.
     async function loadPurchases() {
         try {
             const response = await api.get('/purchases', {
@@ -140,15 +152,19 @@ export function EntradaNfTab() {
             );
 
             setPurchases(relevant);
-        } catch {
-            toast.error('Erro ao carregar compras.');
+        } catch (error) {
+            console.error('Erro ao carregar compras para vínculo:', error);
         }
     }
 
     useEffect(() => {
+        // Loja sem o módulo Compras nem tem pedido de compra pra buscar —
+        // nem tenta a chamada (evita o 403 previsível do guard de módulo).
+        if (!comprasEnabled) return;
+
         loadPurchases();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [comprasEnabled]);
 
     useEffect(() => {
         loadIncomingNfs(incomingPage);
@@ -791,13 +807,15 @@ export function EntradaNfTab() {
                                             </>
                                         ) : acceptingId === nf.id ? null : (
                                             <>
-                                                <button
-                                                    onClick={() => setLinkingId(nf.id)}
-                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 text-sm font-medium text-blue-500 hover:bg-blue-500/20"
-                                                >
-                                                    <Link2 size={16} />
-                                                    Vincular à compra existente
-                                                </button>
+                                                {comprasEnabled && (
+                                                    <button
+                                                        onClick={() => setLinkingId(nf.id)}
+                                                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 text-sm font-medium text-blue-500 hover:bg-blue-500/20"
+                                                    >
+                                                        <Link2 size={16} />
+                                                        Vincular à compra existente
+                                                    </button>
+                                                )}
 
                                                 <button
                                                     onClick={() => setAcceptingId(nf.id)}

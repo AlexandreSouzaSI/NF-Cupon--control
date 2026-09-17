@@ -174,6 +174,7 @@ enum TaskOccurrenceStatus {
   PAUSED
   DONE
   LATE
+  CANCELLED
 }
 
 enum DeletionRequestStatus {
@@ -310,10 +311,13 @@ model User {
   tasksCreated             Task[]           @relation("TaskCreatedBy")
   tasksAssigned            Task[]           @relation("TaskAssignedTo")
   taskOccurrencesConfirmed TaskOccurrence[] @relation("TaskOccurrenceConfirmedBy")
+  taskOccurrencesCancelled TaskOccurrence[] @relation("TaskOccurrenceCancelledBy")
 
   productLossesReported ProductLoss[]  @relation("ProductLossReportedBy")
   lossNfesCreated       LossNfe[]      @relation("LossNfeCreatedBy")
   devolucaoNfesCreated  DevolucaoNfe[] @relation("DevolucaoNfeCreatedBy")
+
+  productSalesImportsImported ProductSalesImport[] @relation("ProductSalesImportImportedBy")
 
   pushSubscriptions PushSubscription[]
   whatsappMessages  WhatsappOutboundMessage[]
@@ -414,7 +418,12 @@ model Store {
   // Proprietário/Administrativo da própria loja não vê nem muda. Lojas
   // novas nascem com tudo ligado (default abaixo) — é uma lista negativa
   // na prática: você desliga só o que aquele cliente não contratou.
-  enabledModules StoreModule[] @default([COMPRAS, NOTAS_FISCAIS, SERVICOS, TRIBUTOS, PERDAS, CONTAS_A_PAGAR, TAREFAS, RELATORIOS, FUNCIONARIOS, FREELANCERS])
+  enabledModules StoreModule[] @default([COMPRAS, NOTAS_FISCAIS, SERVICOS, TRIBUTOS, PERDAS, CONTAS_A_PAGAR, TAREFAS, RELATORIOS, FUNCIONARIOS, FREELANCERS, PRODUTOS])
+
+  productSalesImports ProductSalesImport[]
+  ingredients         Ingredient[]
+  productRecipeItems  ProductRecipeItem[]
+  recipeImportBackup  ProductRecipeImportBackup?
 }
 
 // Módulos que podem ser ligados/desligados por loja (painel restrito ao
@@ -433,6 +442,7 @@ enum StoreModule {
   RELATORIOS
   FUNCIONARIOS
   FREELANCERS
+  PRODUTOS
 }
 
 model UserStore {
@@ -964,6 +974,190 @@ model OutgoingSalesNf {
   @@index([referenceMonth])
 }
 
+// Um "lote" de importação da planilha de vendas do PDV/sistema de comanda
+// (relatório por produto — ex: export "Nu Galho Raiz"), usada pra análise
+// de quantidade vendida, margem e comparação com o que foi comprado (NF de
+// entrada). Cada linha vira um ProductSalesEntry; o cabeçalho aqui guarda
+// os metadados do próprio arquivo exportado (nome do local, quem exportou,
+// quando) só pra referência/auditoria — não tem efeito nenhum no cálculo.
+model ProductSalesImport {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  nomeLocal    String?
+  exportadoPor String?
+  exportadoEm  DateTime?
+
+  // Período coberto pelo relatório (ex: "do dia 1 ao dia 15") — a
+  // planilha não traz isso, então é informado manualmente por quem
+  // importa, na hora do upload. Mostrado no histórico de importações e
+  // usado pra dar contexto de data à análise (não filtra nada sozinho,
+  // já que quem decide o recorte de dados é o relatório exportado do
+  // PDV, não este sistema).
+  periodoInicio DateTime?
+  periodoFim    DateTime?
+
+  arquivoOriginal String
+  totalLinhas     Int
+
+  importedById String?
+  importedBy   User?    @relation("ProductSalesImportImportedBy", fields: [importedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  entries ProductSalesEntry[]
+
+  @@index([storeId])
+}
+
+// Uma linha (um produto) de uma importação — categoria/produto exatamente
+// como veio na planilha, mais "produtoChave" (normalizado: maiúsculo, sem
+// espaço duplicado) pra facilitar agrupar o mesmo produto entre
+// importações diferentes e, mais pra frente, casar com o nome do item na
+// NF de entrada pra calcular margem.
+model ProductSalesEntry {
+  id String @id @default(uuid())
+
+  importId String
+  import   ProductSalesImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  categoria    String
+  produto      String
+  produtoChave String
+
+  quantidade Decimal @db.Decimal(12, 3)
+  valor      Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([importId])
+  @@index([produtoChave])
+}
+
+// Como o consumo de um ingrediente deve ser lido/contado. KG é peso
+// (a "gramas" da ficha técnica é peso mesmo — Contra Filé, Batata) —
+// comportamento padrão, igual sempre foi. UNIDADE é contagem (a
+// "gramas" da ficha técnica na real guarda quantas UNIDADES daquele
+// ingrediente o prato leva, ex: Coxinha 5 = 5 coxinhas por prato, não
+// 5 gramas) — pra item que não se pesa, se conta (Pastel, Coxinha,
+// Camafeu, Costelinha Suína...).
+enum IngredientUnidade {
+  KG
+  UNIDADE
+}
+
+// Um ingrediente/insumo (ex: "Contra Filé", "Batata") cadastrado pela
+// loja — existe pra poder somar o consumo do MESMO insumo em vários
+// pratos diferentes (ex: Contra Filé aparece na Chapa de Contra Filé e
+// também no Espeto de Contra Filé; o relatório de consumo soma os dois).
+// nomeChave normaliza (maiúsculo/sem espaço duplicado) só pra evitar
+// cadastrar "Contra Filé" e "CONTRA FILE" como coisas diferentes.
+model Ingredient {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  nome      String
+  nomeChave String
+
+  unidadeMedida IngredientUnidade @default(KG)
+
+  // Peso (em gramas) de UMA peça/pacote inteiro desse ingrediente — ex:
+  // uma picanha inteira ~1200g, um pacote de batata frita porcionado
+  // 400g. Só faz sentido pra ingrediente KG; opcional (null = não sei
+  // converter esse ingrediente em "quantas peças/pacotes comprar", só
+  // mostra o KG mesmo). Usado pra além do KG total, sugerir também
+  // "quantas peças/pacotes" comprar (arredondando pra cima).
+  pesoUnidadeGramas Decimal? @db.Decimal(10, 2)
+
+  // Marca se esse ingrediente é uma proteína/carne (Picanha, Ancho, Filé
+  // Mignon, Costelinha Suína...). Usado pra filtrar a Lista de Compra:
+  // só entra proteína OU ingrediente contado por UNIDADE (Pastel,
+  // Coxinha, Camafeu, Costelinha...) — o resto (acompanhamento sem
+  // gramatura relevante, tipo arroz, salada) fica de fora da sugestão de
+  // compra. Não afeta a aba Ingredientes normal, só a Lista de Compra.
+  isProteina Boolean @default(false)
+
+  // Porção "padrão" de corte desse ingrediente (em gramas) — ex: 200
+  // pra Ancho/Picanha/Baby Beef/Filé Mignon, que a loja sempre porciona
+  // em pedaços de 200g. Usado só na visão "Tamanho" da Lista de Compra
+  // pra normalizar gramaturas diferentes da ficha técnica na MESMA
+  // porção: qualquer prato com gramas >= porção padrão vira N porções
+  // (arredondando pro inteiro mais próximo — ex: 400g e 350g de Filé
+  // Mignon viram "2x 200g"), tudo somado numa linha só. Gramas MENOR que
+  // a porção padrão (ex: Filé Mignon 100g do Kids) não mescla — fica
+  // como porção própria, diferente da porção adulta. Opcional (null =
+  // não normaliza, cada gramatura vira sua própria linha, como antes).
+  porcaoPadraoGramas Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+
+  recipeItems ProductRecipeItem[]
+
+  @@unique([storeId, nomeChave])
+  @@index([storeId])
+}
+
+// Uma linha da "ficha técnica" de um prato vendido: quanto de UM
+// ingrediente aquele prato leva (ex: "Chapa de Contra Filé" leva 400g de
+// Batata + 400g de Contra Filé = duas linhas). produtoChave referencia o
+// mesmo produto normalizado usado em ProductSalesEntry — não há FK direta
+// porque a receita é cadastrada independente de ter vindo alguma venda
+// daquele produto ainda.
+//
+// O campo "gramas" é lido de dois jeitos, dependendo do
+// Ingredient.unidadeMedida do ingrediente da linha (não muda o nome da
+// coluna pra não precisar migrar dado já digitado):
+//   - ingrediente KG (padrão): "gramas" é peso mesmo. Consumo no
+//     período = soma, pra cada prato vendido que usa esse ingrediente,
+//     quantidadeVendida * gramas / 1000 (kg).
+//   - ingrediente UNIDADE (Pastel, Coxinha, Costelinha...): "gramas" na
+//     real guarda quantas UNIDADES o prato leva (ex: 5 = 5 coxinhas).
+//     Consumo no período = quantidadeVendida * gramas, direto, sem
+//     dividir por 1000 (é contagem, não peso).
+model ProductRecipeItem {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  produtoChave String
+  produto      String
+
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  gramas Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, produtoChave, ingredientId])
+  @@index([storeId, produtoChave])
+  @@index([ingredientId])
+}
+
+// Cópia de segurança das fichas técnicas de UMA loja, tirada bem antes de
+// rodar uma importação em massa (planilha) que substitui receitas
+// existentes. Guarda só a última — cada nova importação sobrescreve esta
+// linha — o suficiente pra um "desfazer" de um nível (voltar pro estado
+// de antes da última importação em massa). snapshot é a lista completa
+// de ProductRecipeItem da loja no momento do backup, desnormalizada
+// (nome do ingrediente em vez de ID) pra não depender de nada que possa
+// ter sido apagado depois.
+model ProductRecipeImportBackup {
+  id String @id @default(uuid())
+
+  storeId String @unique
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  snapshot Json
+
+  createdAt DateTime @default(now())
+}
+
 // Dados sensíveis (folha de pagamento) — acesso restrito a
 // ADMINISTRATIVO/PROPRIETARIO tanto no backend (RolesGuard) quanto na aba
 // do frontend.
@@ -1199,6 +1393,12 @@ model TaskOccurrence {
   confirmedAt   DateTime?
   confirmedById String?
 
+  // Quando e quem cancelou essa ocorrência (ex: não vai rolar hoje por
+  // algum motivo) — só quem cria/gerencia tarefas pode cancelar, o
+  // responsável não (ele só inicia/conclui a dele).
+  cancelledAt   DateTime?
+  cancelledById String?
+
   // Observação e anexo deixados por quem confirmou — opcionais, só quando
   // fizer sentido pra aquela ocorrência específica (ex: "faltou material",
   // com foto do problema).
@@ -1214,6 +1414,7 @@ model TaskOccurrence {
 
   task        Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   confirmedBy User? @relation("TaskOccurrenceConfirmedBy", fields: [confirmedById], references: [id])
+  cancelledBy User? @relation("TaskOccurrenceCancelledBy", fields: [cancelledById], references: [id])
 
   whatsappMessages WhatsappOutboundMessage[]
 
@@ -1223,18 +1424,25 @@ model TaskOccurrence {
   @@index([status])
 }
 
-// Tipo de aviso mandado por WhatsApp — hoje só existe um, mas o campo já
-// deixa pronto pra outros avisos (aprovação, alerta etc.) usarem o mesmo
-// mecanismo de pergunta/resposta no futuro.
+// Tipo de aviso mandado por WhatsApp — o campo já deixa pronto pra outros
+// avisos (aprovação, alerta etc.) usarem o mesmo mecanismo de
+// pergunta/resposta no futuro.
 enum WhatsappMessageKind {
   TASK_ASSIGNED
+  TASK_OVERDUE
+  // Lembrete manual — alguém que gerencia tarefas clicou em "Notificar
+  // WhatsApp" no card da ocorrência pra cutucar o responsável na hora,
+  // sem esperar o cron de atraso.
+  TASK_REMINDER
 }
 
 // Registro de uma mensagem de WhatsApp mandada pelo sistema, guardado pra
 // conseguir interpretar a resposta da pessoa (webhook manda só telefone +
 // texto — é aqui que a gente descobre "resposta de quê"). taskOccurrenceId
-// só é preenchido quando kind = TASK_ASSIGNED; outros tipos futuros podem
-// precisar de outro campo de vínculo.
+// é preenchido em TASK_ASSIGNED (aviso de nova tarefa), TASK_OVERDUE (aviso
+// de atraso) e TASK_REMINDER (lembrete manual) — os três giram em torno de
+// uma ocorrência específica; outros tipos futuros podem precisar de outro
+// campo de vínculo.
 model WhatsappOutboundMessage {
   id String @id @default(uuid())
 

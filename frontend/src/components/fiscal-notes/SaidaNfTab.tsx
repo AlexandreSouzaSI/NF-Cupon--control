@@ -19,6 +19,14 @@ import { toast } from 'sonner';
 // total de cada mês sempre correto — nunca corta um mês ao meio.
 const MONTHS_PER_PAGE = 3;
 
+// O backend aceita no máximo 200 arquivos por requisição
+// (FilesInterceptor('files', 200, ...) em outgoing-sales-nf.controller.ts).
+// Pra quem sobe milhares de XML de uma vez, a tela quebra a seleção em
+// lotes menores que isso e manda um de cada vez — com folga suficiente
+// pra também não estourar o limite de tamanho do corpo da requisição no
+// proxy (Nginx) na frente do backend em produção.
+const UPLOAD_BATCH_SIZE = 100;
+
 type OutgoingSalesNf = {
     id: string;
     chaveAcesso: string;
@@ -64,6 +72,9 @@ export function SaidaNfTab() {
         { month: string; total: number }[]
     >([]);
     const [monthPage, setMonthPage] = useState(1);
+    const [uploadProgress, setUploadProgress] = useState<
+        { done: number; total: number; batch: number; batchCount: number } | null
+    >(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,50 +137,107 @@ export function SaidaNfTab() {
 
         if (!fileList || fileList.length === 0) return;
 
-        const formData = new FormData();
-        formData.append('storeId', store.id);
+        const allFiles = Array.from(fileList);
 
-        Array.from(fileList).forEach((file) => formData.append('files', file));
+        const batches: File[][] = [];
+        for (let i = 0; i < allFiles.length; i += UPLOAD_BATCH_SIZE) {
+            batches.push(allFiles.slice(i, i + UPLOAD_BATCH_SIZE));
+        }
+
+        let totalImported = 0;
+        const allErrors: { fileName: string; reason: string }[] = [];
+        // Por mês, cada lote já devolve o total recalculado com tudo que
+        // já entrou até aquele ponto (não é só o pedaço desse lote) — o
+        // valor do último lote que tocou o mês é o valor certo, então só
+        // sobrescreve por chave em vez de somar.
+        const revenueByMonth = new Map<string, number>();
+
+        setUploading(true);
+        setImportErrors([]);
+        setRevenueUpdated([]);
+        setUploadProgress({
+            done: 0,
+            total: allFiles.length,
+            batch: 0,
+            batchCount: batches.length,
+        });
 
         try {
-            setUploading(true);
-            setImportErrors([]);
-            setRevenueUpdated([]);
+            for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
 
-            const response = await api.post(
-                '/outgoing-sales-nf/import-xml',
-                formData,
-                { headers: { 'Content-Type': 'multipart/form-data' } },
-            );
+                const formData = new FormData();
+                formData.append('storeId', store.id);
+                batch.forEach((file) => formData.append('files', file));
 
-            const result = response.data as {
-                imported: number;
-                errors: { fileName: string; reason: string }[];
-                revenueUpdated: { month: string; total: number }[];
-            };
+                try {
+                    const response = await api.post(
+                        '/outgoing-sales-nf/import-xml',
+                        formData,
+                        { headers: { 'Content-Type': 'multipart/form-data' } },
+                    );
 
-            if (result.imported > 0) {
-                toast.success(
-                    `${result.imported} NF(s) de venda importada(s). Faturamento atualizado.`,
-                );
-                setRevenueUpdated(result.revenueUpdated);
+                    const result = response.data as {
+                        imported: number;
+                        errors: { fileName: string; reason: string }[];
+                        revenueUpdated: { month: string; total: number }[];
+                    };
+
+                    totalImported += result.imported;
+                    allErrors.push(...result.errors);
+
+                    for (const entry of result.revenueUpdated) {
+                        revenueByMonth.set(entry.month, entry.total);
+                    }
+                } catch (error: any) {
+                    // Um lote falhar (ex: rede caiu no meio) não pode travar
+                    // o resto — registra o problema pra esses arquivos e
+                    // segue pro próximo lote.
+                    const message =
+                        error?.response?.data?.message ||
+                        'Falha ao enviar esse lote (rede ou servidor).';
+
+                    batch.forEach((file) =>
+                        allErrors.push({
+                            fileName: file.name,
+                            reason: Array.isArray(message)
+                                ? message.join(', ')
+                                : message,
+                        }),
+                    );
+                }
+
+                setUploadProgress({
+                    done: Math.min((i + 1) * UPLOAD_BATCH_SIZE, allFiles.length),
+                    total: allFiles.length,
+                    batch: i + 1,
+                    batchCount: batches.length,
+                });
             }
 
-            if (result.errors.length > 0) {
-                setImportErrors(result.errors);
+            if (totalImported > 0) {
+                toast.success(
+                    `${totalImported} NF(s) de venda importada(s). Faturamento atualizado.`,
+                );
+                setRevenueUpdated(
+                    Array.from(revenueByMonth.entries()).map(([month, total]) => ({
+                        month,
+                        total,
+                    })),
+                );
+            }
+
+            if (allErrors.length > 0) {
+                setImportErrors(allErrors);
                 toast.error(
-                    `${result.errors.length} arquivo(s) não puderam ser importados.`,
+                    `${allErrors.length} arquivo(s) não puderam ser importados.`,
                 );
             }
 
             await loadNotes();
-        } catch (error: any) {
-            const message =
-                error?.response?.data?.message || 'Erro ao importar os XMLs.';
-
-            toast.error(Array.isArray(message) ? message.join(', ') : message);
         } finally {
             setUploading(false);
+            setUploadProgress(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     }
@@ -233,6 +301,26 @@ export function SaidaNfTab() {
                         />
                     </label>
                 </div>
+
+                {uploadProgress && (
+                    <div className="mb-3 space-y-2 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-3">
+                        <p className="text-sm font-medium text-blue-500">
+                            Enviando lote {uploadProgress.batch} de{' '}
+                            {uploadProgress.batchCount} — {uploadProgress.done} de{' '}
+                            {uploadProgress.total} arquivos
+                        </p>
+                        <div className="h-2 overflow-hidden rounded-full bg-blue-500/10">
+                            <div
+                                className="h-full rounded-full bg-blue-500 transition-all"
+                                style={{
+                                    width: `${Math.round(
+                                        (uploadProgress.done / uploadProgress.total) * 100,
+                                    )}%`,
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {revenueUpdated.length > 0 && (
                     <div className="mb-3 space-y-1 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3">

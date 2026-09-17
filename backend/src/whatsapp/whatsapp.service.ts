@@ -6,10 +6,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { normalizePhone } from '../common/phone.util';
 import {
     TASK_OCCURRENCE_CREATED_EVENT,
+    TASK_OCCURRENCE_OVERDUE_EVENT,
+    TASK_OCCURRENCE_REMINDER_EVENT,
     WHATSAPP_TASK_START_EVENT,
 } from '../common/events';
 import type {
     TaskOccurrenceCreatedEvent,
+    TaskOccurrenceOverdueEvent,
+    TaskOccurrenceReminderEvent,
     WhatsappTaskStartEvent,
 } from '../common/events';
 import { WHATSAPP_PROVIDER } from './whatsapp-provider.interface';
@@ -57,6 +61,20 @@ export class WhatsappService {
         await this.sendTaskAssigned(payload);
     }
 
+    // Mesma ideia, mas pro aviso de atraso — dispara quando o cron vira
+    // uma ocorrência pendente pra "Atrasada" (ver src/common/events.ts).
+    @OnEvent(TASK_OCCURRENCE_OVERDUE_EVENT)
+    async handleTaskOccurrenceOverdue(payload: TaskOccurrenceOverdueEvent) {
+        await this.sendTaskOverdue(payload);
+    }
+
+    // Lembrete manual — alguém que gerencia tarefas clicou em "Notificar
+    // WhatsApp" no card da ocorrência (ver src/common/events.ts).
+    @OnEvent(TASK_OCCURRENCE_REMINDER_EVENT)
+    async handleTaskOccurrenceReminder(payload: TaskOccurrenceReminderEvent) {
+        await this.sendTaskReminder(payload);
+    }
+
     // Não lança erro se a pessoa não tem telefone cadastrado — só não
     // manda nada (o aviso dentro do app, via NotificationsService, continua
     // funcionando normal de qualquer forma).
@@ -98,6 +116,83 @@ export class WhatsappService {
         });
     }
 
+    // Mesma lógica de sendTaskAssigned, mas pro aviso de atraso — dispara
+    // quando o cron vira uma ocorrência pendente pra "Atrasada" (uma vez
+    // só, já que o cron só processa ocorrência PENDING — depois de virar
+    // LATE ela não entra de novo no filtro, então não duplica aviso).
+    private async sendTaskOverdue(params: TaskOccurrenceOverdueEvent) {
+        if (!params.phone) return;
+
+        const phone = normalizePhone(params.phone);
+
+        const text = [
+            `⏰ Tarefa atrasada: *${params.title}*`,
+            `Prazo era ${params.dueDateLabel} e ainda não foi iniciada.`,
+            '',
+            'Responda "iniciar" pra começar agora.',
+        ].join('\n');
+
+        let providerMessageId: string | undefined;
+
+        try {
+            const result = await this.provider.sendText(phone, text);
+            providerMessageId = result.providerMessageId;
+        } catch (error: any) {
+            this.logger.warn(
+                `Falha ao enviar WhatsApp de atraso pra ${phone}: ${error?.message || error}`,
+            );
+        }
+
+        await this.prisma.whatsappOutboundMessage.create({
+            data: {
+                userId: params.userId,
+                phone,
+                kind: WhatsappMessageKind.TASK_OVERDUE,
+                taskOccurrenceId: params.taskOccurrenceId,
+                text,
+                providerMessageId,
+            },
+        });
+    }
+
+    // Mesma lógica de sendTaskAssigned, mas pro lembrete manual disparado
+    // pelo botão "Notificar WhatsApp" — quem gerencia tarefas pode mandar
+    // quantas vezes quiser, não é uma vez só como o de atraso.
+    private async sendTaskReminder(params: TaskOccurrenceReminderEvent) {
+        if (!params.phone) return;
+
+        const phone = normalizePhone(params.phone);
+
+        const text = [
+            `🔔 Lembrete: tarefa pendente: *${params.title}*`,
+            `Prazo: ${params.dueDateLabel}`,
+            '',
+            'Responda "iniciar" pra começar agora.',
+        ].join('\n');
+
+        let providerMessageId: string | undefined;
+
+        try {
+            const result = await this.provider.sendText(phone, text);
+            providerMessageId = result.providerMessageId;
+        } catch (error: any) {
+            this.logger.warn(
+                `Falha ao enviar lembrete de WhatsApp pra ${phone}: ${error?.message || error}`,
+            );
+        }
+
+        await this.prisma.whatsappOutboundMessage.create({
+            data: {
+                userId: params.userId,
+                phone,
+                kind: WhatsappMessageKind.TASK_REMINDER,
+                taskOccurrenceId: params.taskOccurrenceId,
+                text,
+                providerMessageId,
+            },
+        });
+    }
+
     // Chamado pelo controller do webhook, já com o payload específico do
     // provedor traduzido pra { phone, text }. Acha a mensagem mais recente
     // ainda sem resposta pra esse telefone e confere se o texto bate com
@@ -124,7 +219,14 @@ export class WhatsappService {
                 normalizedText.startsWith(`${keyword} `),
         );
 
-        if (!isStart || pending.kind !== WhatsappMessageKind.TASK_ASSIGNED) {
+        // Aviso de nova tarefa, de atraso e lembrete manual todos convidam
+        // a responder "iniciar" — os três viram o mesmo startOccurrence().
+        const isTaskStartContext =
+            pending.kind === WhatsappMessageKind.TASK_ASSIGNED ||
+            pending.kind === WhatsappMessageKind.TASK_OVERDUE ||
+            pending.kind === WhatsappMessageKind.TASK_REMINDER;
+
+        if (!isStart || !isTaskStartContext) {
             // Guarda a resposta mesmo sem reconhecer, pra dar pra olhar
             // depois (ex: relatório de mensagens não reconhecidas).
             await this.prisma.whatsappOutboundMessage.update({
