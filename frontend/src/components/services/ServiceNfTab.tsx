@@ -1047,6 +1047,8 @@ export function ServiceNfTab() {
                 <NfViewerModal
                     title="NF de serviço"
                     viewUrl={`/services/incoming-nf/${viewingIncomingId}/view`}
+                    danfeUrl={`/services/incoming-nf/${viewingIncomingId}/danfe`}
+                    xmlUrl={`/services/incoming-nf/${viewingIncomingId}/xml`}
                     onClose={() => setViewingIncomingId(null)}
                 />
             )}
@@ -1055,6 +1057,8 @@ export function ServiceNfTab() {
                 <NfViewerModal
                     title="NF de serviço"
                     viewUrl={`/services/${viewingServiceId}/view`}
+                    danfeUrl={`/services/${viewingServiceId}/danfe`}
+                    xmlUrl={`/services/${viewingServiceId}/xml`}
                     onClose={() => setViewingServiceId(null)}
                 />
             )}

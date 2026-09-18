@@ -5,9 +5,14 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { IngredientUnidade, Prisma, UserRole } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as XLSX from 'xlsx';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+    PRODUCT_SALES_IMPORTED_EVENT,
+    type ProductSalesImportedEvent,
+} from '../common/events';
 
 // Normaliza pra facilitar agrupar o mesmo produto entre importações
 // diferentes (e, mais pra frente, casar com o nome do item na NF de
@@ -347,7 +352,10 @@ function parseDataExportacao(texto: unknown): Date | null {
 
 @Injectable()
 export class ProductSalesService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private eventEmitter: EventEmitter2,
+    ) { }
 
     private getAllowedStoreIds(user: any): string[] | undefined {
         if (
@@ -513,6 +521,14 @@ export class ProductSalesService {
                 _count: { select: { entries: true } },
             },
         });
+
+        // Quem escuta decide o que fazer (hoje: baixa automática de
+        // estoque, ver src/common/events.ts) — este service não sabe
+        // nada sobre Estoque.
+        this.eventEmitter.emit(PRODUCT_SALES_IMPORTED_EVENT, {
+            storeId,
+            productSalesImportId: importCriado.id,
+        } satisfies ProductSalesImportedEvent);
 
         return importCriado;
     }

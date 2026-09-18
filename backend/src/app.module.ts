@@ -30,6 +30,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { BillCategoriesModule } from './bill-categories/bill-categories.module';
 import { DemoModule } from './demo/demo.module';
 import { ProductSalesModule } from './product-sales/product-sales.module';
+import { EstoqueModule } from './estoque/estoque.module';
 
 @Module({
   imports: [
@@ -63,7 +64,8 @@ import { ProductSalesModule } from './product-sales/product-sales.module';
     WhatsappModule,
     BillCategoriesModule,
     DemoModule,
-    ProductSalesModule
+    ProductSalesModule,
+    EstoqueModule
   ],
   controllers: [AppController],
   providers: [AppService],

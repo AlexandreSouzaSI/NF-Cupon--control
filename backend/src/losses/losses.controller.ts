@@ -7,6 +7,7 @@ import {
     Patch,
     Post,
     Query,
+    Res,
     UploadedFile,
     UseGuards,
     UseInterceptors,
@@ -16,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
 import { extname, join } from 'path';
+import type { Response } from 'express';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -159,14 +161,51 @@ export class LossesController {
         return this.lossesService.viewLossNfe(id, user);
     }
 
+    @Get('nfe/:id/danfe')
+    async downloadLossNfeDanfe(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.lossesService.downloadLossNfeDanfe(id, user);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="danfe-perda-${id}.pdf"`,
+        });
+        res.send(buffer);
+    }
+
+    @Get('nfe/:id/xml')
+    async downloadLossNfeXml(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const { buffer, filename } = await this.lossesService.downloadLossNfeXml(id, user);
+
+        res.set({
+            'Content-Type': 'application/xml',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+        });
+        res.send(buffer);
+    }
+
     @Get('nfe/:id')
     async findLossNfeById(@Param('id') id: string, @CurrentUser() user: any) {
         return this.lossesService.findLossNfeById(id, user);
     }
 
+    // Body.justificativa só é obrigatório quando a NF já está AUTORIZADA
+    // na Sefaz (aí dispara o evento de cancelamento de verdade) — pra
+    // rascunho/rejeitada não precisa, o service ignora.
     @Patch('nfe/:id/cancel')
-    async cancelLossNfe(@Param('id') id: string, @CurrentUser() user: any) {
-        return this.lossesService.cancelLossNfeDraft(id, user);
+    async cancelLossNfe(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Body('justificativa') justificativa?: string,
+    ) {
+        return this.lossesService.cancelLossNfeDraft(id, user, justificativa);
     }
 
     // Envia de verdade pro webservice de autorização da Sefaz (sempre

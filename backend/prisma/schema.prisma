@@ -319,6 +319,8 @@ model User {
 
   productSalesImportsImported ProductSalesImport[] @relation("ProductSalesImportImportedBy")
 
+  stockMovementsCreated StockMovement[] @relation("StockMovementCreatedBy")
+
   pushSubscriptions PushSubscription[]
   whatsappMessages  WhatsappOutboundMessage[]
 }
@@ -418,12 +420,15 @@ model Store {
   // Proprietário/Administrativo da própria loja não vê nem muda. Lojas
   // novas nascem com tudo ligado (default abaixo) — é uma lista negativa
   // na prática: você desliga só o que aquele cliente não contratou.
-  enabledModules StoreModule[] @default([COMPRAS, NOTAS_FISCAIS, SERVICOS, TRIBUTOS, PERDAS, CONTAS_A_PAGAR, TAREFAS, RELATORIOS, FUNCIONARIOS, FREELANCERS, PRODUTOS])
+  enabledModules StoreModule[] @default([COMPRAS, NOTAS_FISCAIS, SERVICOS, TRIBUTOS, PERDAS, CONTAS_A_PAGAR, TAREFAS, RELATORIOS, FUNCIONARIOS, FREELANCERS, PRODUTOS, ESTOQUE])
 
-  productSalesImports ProductSalesImport[]
-  ingredients         Ingredient[]
-  productRecipeItems  ProductRecipeItem[]
-  recipeImportBackup  ProductRecipeImportBackup?
+  productSalesImports       ProductSalesImport[]
+  ingredients               Ingredient[]
+  productRecipeItems        ProductRecipeItem[]
+  recipeImportBackup        ProductRecipeImportBackup?
+  stockItems                StockItem[]
+  stockMovements            StockMovement[]
+  stockSupplierItemMappings StockSupplierItemMapping[]
 }
 
 // Módulos que podem ser ligados/desligados por loja (painel restrito ao
@@ -443,6 +448,7 @@ enum StoreModule {
   FUNCIONARIOS
   FREELANCERS
   PRODUTOS
+  ESTOQUE
 }
 
 model UserStore {
@@ -923,6 +929,11 @@ model IncomingGoodsNf {
   accepted Boolean @default(false)
   billId   String?
 
+  // Preenchido quando o usuário termina de ligar os itens dessa NF a
+  // itens do Estoque (ver StockMovement, origem NF_COMPRA) — só pra UI
+  // mostrar "já vinculado" sem precisar contar StockMovement toda hora.
+  stockLinkedAt DateTime?
+
   store      Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
   purchase   Purchase?      @relation(fields: [purchaseId], references: [id])
   bill       Bill?          @relation("IncomingGoodsNfBill", fields: [billId], references: [id])
@@ -1095,6 +1106,7 @@ model Ingredient {
   createdAt DateTime @default(now())
 
   recipeItems ProductRecipeItem[]
+  stockItem   StockItem?
 
   @@unique([storeId, nomeChave])
   @@index([storeId])
@@ -1156,6 +1168,138 @@ model ProductRecipeImportBackup {
   snapshot Json
 
   createdAt DateTime @default(now())
+}
+
+// Um item físico de estoque — matéria-prima ou produto de revenda —
+// cadastrado pela loja. É um catálogo À PARTE do Ingredient (que serve
+// pra ficha técnica/consumo de venda, não pra saldo físico): nem todo
+// insumo de receita precisa de controle de estoque, e nem todo item de
+// estoque (ex: descartável, produto de revenda) entra em alguma receita.
+// ingredientId liga esse item a um Ingredient já cadastrado — só esse
+// vínculo permite a baixa automática (ver StockMovement, origem
+// CONSUMO_VENDA) calcular o consumo pela venda e descontar daqui. Sem
+// vínculo, o item só entra/sai manualmente ou por NF.
+model StockItem {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  nome      String
+  nomeChave String
+  categoria String?
+
+  unidadeMedida IngredientUnidade @default(KG)
+
+  quantidadeAtual    Decimal  @default(0) @db.Decimal(12, 3)
+  // Custo médio ponderado — recalculado a cada ENTRADA que vier com
+  // valorTotal preenchido. Opcional porque nem toda entrada informa
+  // valor (ex: planilha modelo com quantidade mas sem valor).
+  valorMedioUnitario Decimal? @db.Decimal(12, 4)
+
+  // Vínculo 1:1 opcional com a ficha técnica (Produtos → Ingredientes).
+  // Ver comentário do model acima.
+  ingredientId String?     @unique
+  ingredient   Ingredient? @relation(fields: [ingredientId], references: [id])
+
+  // Estoque mínimo — abaixo disso o item entra na Lista de Compra do
+  // Estoque (ver endpoint /estoque/lista-compra), com a quantidade
+  // sugerida sendo a diferença até aqui. Opcional (null = item não
+  // entra em nenhuma sugestão de compra, mesmo zerado).
+  estoqueMinimo Decimal? @db.Decimal(12, 3)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements        StockMovement[]
+  supplierMappings StockSupplierItemMapping[]
+
+  @@unique([storeId, nomeChave])
+  @@index([storeId])
+}
+
+// "Aprendizado" de qual item de estoque corresponde à descrição de um
+// item de NF de UM fornecedor específico — criado/atualizado
+// automaticamente toda vez que um vínculo NF→Estoque é confirmado (ver
+// EstoqueService.vincularNfAoEstoque). Da próxima vez que o MESMO
+// fornecedor (por CNPJ) mandar uma NF com item de descrição igual, a
+// tela de vínculo já vem com a sugestão pré-preenchida — só falta
+// confirmar ou editar. Chave por (loja, CNPJ do emitente, descrição
+// normalizada do item), não por produto/NCM, porque é assim que o item
+// aparece identificado na NF.
+model StockSupplierItemMapping {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  issuerCnpj     String
+  descricaoChave String
+
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, issuerCnpj, descricaoChave])
+  @@index([storeId])
+  @@index([stockItemId])
+}
+
+enum StockMovementType {
+  ENTRADA
+  SAIDA
+}
+
+// De onde veio o lançamento — só pra mostrar contexto na tela de
+// movimentações (ex: "gerado pela NF X" ou "baixa automática da
+// importação Y"), não muda o efeito no saldo.
+enum StockMovementOrigin {
+  NF_COMPRA // vínculo manual com item de NF de mercadoria aceita
+  MANUAL // lançamento avulso (entrada ou ajuste/baixa manual, item por item)
+  IMPORTACAO_PLANILHA // planilha modelo (Nome/Categoria/Quantidade/Valor)
+  CONSUMO_VENDA // baixa automática calculada a partir da importação de vendas (aba Produtos)
+}
+
+// Ledger de entradas/saídas de UM StockItem. sourceRef é uma chave
+// natural opcional (formato livre por origem, ex:
+// "nf:<incomingGoodsNfId>:item:3" ou
+// "venda:<productSalesImportId>:item:<stockItemId>") usada só pra deixar
+// idempotente reprocessar a mesma origem (reabrir o vínculo de uma NF já
+// vinculada, ou o listener de uma importação de vendas que rodou de
+// novo) — sem ela, cada replay duplicaria o lançamento. Lançamento
+// manual não tem sourceRef (null).
+model StockMovement {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  tipo   StockMovementType
+  origem StockMovementOrigin
+
+  quantidade Decimal  @db.Decimal(12, 3)
+  valorTotal Decimal? @db.Decimal(12, 2)
+
+  sourceRef  String?
+  observacao String?
+
+  data DateTime @default(now())
+
+  createdById String?
+  createdBy   User?   @relation("StockMovementCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([storeId, sourceRef])
+  @@index([storeId])
+  @@index([stockItemId])
 }
 
 // Dados sensíveis (folha de pagamento) — acesso restrito a
@@ -1550,6 +1694,18 @@ model LossNfe {
   xmlFileUrl    String? // XML assinado, guardado em disco (mesmo padrão das outras NF-e)
   protocolo     String? // nProt devolvido pela Sefaz quando autorizada
   statusMessage String? // cStat/xMotivo do último retorno, só pra diagnóstico
+
+  // Reforma Tributária (IBS/CBS, Nota Técnica 2025.002) — obrigatório em
+  // produção pra Lucro Real/Presumido desde ago/2026. "410" = Imunidade e
+  // não incidência (sugestão padrão pra baixa de perda, que não é uma
+  // operação comercial de verdade), mas fica editável por nota porque só
+  // o contador pode confirmar o enquadramento certo caso a caso — mesma
+  // lógica já usada pro CFOP. cClassTrib "410030" = "Estorno de crédito
+  // por perecimento/deterioração/roubo/furto/extravio" — único código
+  // que a Sefaz aceita combinado com tpNFDebito=07 (regra UB14-70); ver
+  // aviso completo em loss-nfe-builder.ts.
+  cstIbsCbs  String @default("410")
+  cClassTrib String @default("410030")
 
   createdById String
   createdAt   DateTime @default(now())

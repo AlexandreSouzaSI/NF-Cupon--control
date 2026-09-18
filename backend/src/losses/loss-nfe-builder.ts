@@ -29,7 +29,16 @@ import type { LoadedCertificate } from '../stores/sefaz-nfse-client';
 //   - se é necessário destacar ICMS/estornar crédito de ICMS/PIS/COFINS
 //     aproveitado na entrada (Ajuste SINIEF 20/2026 mudou a regra de "sem
 //     destaque" pra "destaque, se for o caso") — este builder NÃO calcula
-//     estorno de crédito, monta os itens como não tributados/isentos.
+//     estorno de crédito, monta os itens como não tributados/isentos;
+//   - se o CST/cClassTrib do IBS/CBS (grupo <IBSCBS>, Reforma Tributária —
+//     Nota Técnica 2025.002, obrigatória em produção pro Lucro Real desde
+//     ago/2026) está correto pro caso de uso — o padrão aqui é CST 410
+//     (Imunidade e não incidência) com cClassTrib "410001" de EXEMPLO,
+//     ambos editáveis por nota. Essa parte do XML foi montada a partir de
+//     pesquisa em blogs/informes técnicos de jan/2026, NÃO validada ainda
+//     contra o XSD oficial da Sefaz nem testada em homologação — antes de
+//     emitir em produção, valide a NF gerada em homologação e confira com
+//     o contador se os valores batem com a tabela oficial cClassTrib.
 export type LossNfeItem = {
     descricao: string;
     // NCM (8 dígitos) — obrigatório pela Sefaz. Se o produto perdido não
@@ -74,6 +83,12 @@ export type BuildLossNfeParams = {
     // mas o contador pode pedir outro CFOP conforme o caso (ex: roubo/furto,
     // regras específicas por UF). Sem valor informado, cai no padrão.
     cfop?: string;
+    // CST e cClassTrib do IBS/CBS (Reforma Tributária, NT 2025.002) —
+    // mesma lógica do CFOP: sugestão padrão editável, nunca fixa no
+    // código, porque só o contador confirma o enquadramento certo.
+    // Ver aviso completo no topo do arquivo.
+    cstIbsCbs?: string;
+    cClassTrib?: string;
 };
 
 export type BuiltLossNfe = {
@@ -84,6 +99,28 @@ export type BuiltLossNfe = {
 
 const DEFAULT_NCM = '21069090';
 export const CFOP_BAIXA_PERDA_PADRAO = '5927';
+
+// CST 410 = "Imunidade e não incidência" (tabela oficial de CST-IBS/CBS,
+// Informe Técnico RT 2025.002) — sugestão padrão pra baixa de perda, já
+// que não há circulação econômica de mercadoria de verdade.
+//
+// cClassTrib "410030" = "Estorno de crédito por perecimento/deterioração/
+// roubo/furto/extravio" — É O ÚNICO cClassTrib que a Sefaz aceita
+// combinado com tpNFDebito=07 (regra UB14-70, rejeição 1200 -
+// "cClassTrib incompatível com o tipo de Nota de Débito"). Tentamos antes
+// o "410031" (usado por outros sistemas como atalho pra estoque sem
+// crédito prévio), mas a Sefaz rejeitou mesmo assim — pra Nota de
+// Débito tipo 07 especificamente, só 410030 passa na validação.
+//
+// 410030 exige o grupo <gEstornoCred> (valores de IBS/CBS estornados) em
+// vez do <gIBSCBS> genérico de cálculo — ver buildDetXml. Como o sistema
+// não rastreia quanto de crédito foi apropriado na compra original (e,
+// na prática, a maioria das compras em 2026 ainda não vem com IBS/CBS
+// destacado — período de transição), os valores ficam zerados: não há
+// nada pra estornar de verdade ainda, só formaliza a nota no formato que
+// a Sefaz exige.
+export const CST_IBS_CBS_PADRAO = '410';
+export const CCLASSTRIB_PADRAO = '410030';
 
 // Código do IBGE da UF — mesma tabela usada em sefaz-nfe-client.ts, mas
 // duplicada aqui (arquivo pequeno, sem valor em criar acoplamento só por
@@ -187,6 +224,8 @@ function buildDetXml(
     nItem: number,
     crt: 1 | 3,
     cfop: string,
+    cstIbsCbs: string,
+    cClassTrib: string,
 ): { xml: string; vProd: number } {
     const vUnCom = round2(item.valorUnitario);
     const vProd = round2(item.quantidade * vUnCom);
@@ -201,11 +240,69 @@ function buildDetXml(
             ? `<ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102>`
             : `<ICMS40><orig>0</orig><CST>40</CST></ICMS40>`;
 
+    // Grupo IBS/CBS (Reforma Tributária, NT 2025.002) — período de
+    // convivência com ICMS/PIS/COFINS (ambos coexistem na nota até a
+    // extinção total em 2033), por isso fica ao lado dos grupos antigos
+    // acima, não no lugar deles.
+    //
+    // Estrutura conferida contra o XML de exemplo oficial da Receita
+    // Federal (schema PL_010b_NT2025_002_v1.30/procNFe_v4.00.xsd,
+    // publicado em gov.br/receitafederal, manual "Documento XML NFe"):
+    // cClassTrib é filho direto de <IBSCBS> (irmão de <CST>, ANTES de
+    // <gIBSCBS>) e <gIBSCBS> precisa do totalizador <vIBS> entre
+    // <gIBSMun> e <gCBS>.
+    //
+    // MAS: a Sefaz rejeitou (1021 - "Grupo IBS/CBS informado indevidamente")
+    // quando o <gIBSCBS> era enviado junto com CST 410 (Imunidade e não
+    // incidência) — a "Tabela de Indicadores do CST" do Informe Técnico
+    // 2025.002 define, por CST, se o grupo de cálculo pode/deve ser
+    // enviado. Pra CSTs que representam ausência total de fato gerador
+    // (400=Isenção, 410=Imunidade/não incidência), o grupo <gIBSCBS> NÃO
+    // deve ser enviado, só <CST> + <cClassTrib>.
+    //
+    // E pra cClassTrib 410030 especificamente ("Estorno de crédito por
+    // perecimento/deterioração/roubo/furto/extravio" — o único aceito
+    // junto com tpNFDebito=07, ver aviso no topo do arquivo), a Sefaz
+    // exige em vez disso o grupo <gEstornoCred> com os valores de IBS/CBS
+    // estornados. Como o sistema não rastreia crédito apropriado na
+    // compra original (a maioria das compras em 2026 ainda não destaca
+    // IBS/CBS), os valores ficam zerados — não há nada pra estornar de
+    // verdade ainda, só formaliza a nota no formato que a Sefaz exige.
+    //
+    // IMPORTANTE — o leiaute oficial (Sankhya, doc de Nota de Débito tipo
+    // 07) também pede um <DFeReferenciado><chaveAcesso> por item,
+    // apontando pra NF de compra original do produto perdido. O sistema
+    // ainda não guarda esse vínculo (ProductLoss não sabe de qual compra
+    // veio cada item) — se a Sefaz rejeitar por falta desse campo, essa é
+    // a próxima peça a implementar.
+    const cstsSemGrupoDeCalculo = ['400', '410'];
+    const ehEstornoPorPerda = cClassTrib.trim() === '410030';
+    const precisaGrupoDeCalculo =
+        !ehEstornoPorPerda && !cstsSemGrupoDeCalculo.includes(cstIbsCbs.trim());
+
+    const ibsCbsXml =
+        `<IBSCBS>` +
+        `<CST>${escapeXml(cstIbsCbs)}</CST>` +
+        `<cClassTrib>${escapeXml(cClassTrib)}</cClassTrib>` +
+        (ehEstornoPorPerda
+            ? `<gEstornoCred><vIBSEstCred>0.00</vIBSEstCred><vCBSEstCred>0.00</vCBSEstCred></gEstornoCred>`
+            : precisaGrupoDeCalculo
+              ? `<gIBSCBS>` +
+                `<vBC>0.00</vBC>` +
+                `<gIBSUF><pIBSUF>0.00</pIBSUF><vIBSUF>0.00</vIBSUF></gIBSUF>` +
+                `<gIBSMun><pIBSMun>0.00</pIBSMun><vIBSMun>0.00</vIBSMun></gIBSMun>` +
+                `<vIBS>0.00</vIBS>` +
+                `<gCBS><pCBS>0.00</pCBS><vCBS>0.00</vCBS></gCBS>` +
+                `</gIBSCBS>`
+              : '') +
+        `</IBSCBS>`;
+
     const impostoXml =
         `<imposto>` +
         `<ICMS>${icmsXml}</ICMS>` +
         `<PIS><PISNT><CST>08</CST></PISNT></PIS>` +
         `<COFINS><COFINSNT><CST>08</CST></COFINSNT></COFINS>` +
+        ibsCbsXml +
         `</imposto>`;
 
     const prodXml =
@@ -226,8 +323,14 @@ function buildDetXml(
         `<indTot>1</indTot>` +
         `</prod>`;
 
+    // vItem (valor total do item, NT 2025.002) — campo novo, filho direto
+    // de <det>, depois de <imposto>. No exemplo oficial da Receita
+    // Federal é igual ao vProd do item (sem desconto/acréscimo por item
+    // nessa nota).
+    const vItemXml = `<vItem>${vProd.toFixed(2)}</vItem>`;
+
     return {
-        xml: `<det nItem="${nItem}">${prodXml}${impostoXml}</det>`,
+        xml: `<det nItem="${nItem}">${prodXml}${impostoXml}${vItemXml}</det>`,
         vProd,
     };
 }
@@ -241,8 +344,12 @@ function buildInfNFeXml(params: BuildLossNfeParams, chaveAcesso: string): string
     const cUF = ufToCode(store.uf);
     const cnpjDigits = store.cnpj.replace(/\D/g, '');
     const cfop = (params.cfop || CFOP_BAIXA_PERDA_PADRAO).trim();
+    const cstIbsCbs = (params.cstIbsCbs || CST_IBS_CBS_PADRAO).trim();
+    const cClassTrib = (params.cClassTrib || CCLASSTRIB_PADRAO).trim();
 
-    const detsBuilt = itens.map((item, index) => buildDetXml(item, index + 1, store.crt, cfop));
+    const detsBuilt = itens.map((item, index) =>
+        buildDetXml(item, index + 1, store.crt, cfop, cstIbsCbs, cClassTrib),
+    );
     const detsXml = detsBuilt.map((d) => d.xml).join('');
     const vProdTotal = round2(detsBuilt.reduce((sum, d) => sum + d.vProd, 0));
 
@@ -335,7 +442,35 @@ function buildInfNFeXml(params: BuildLossNfeParams, chaveAcesso: string): string
         `<vCOFINS>0.00</vCOFINS>` +
         `<vOutro>0.00</vOutro>` +
         `<vNF>${vProdTotal.toFixed(2)}</vNF>` +
-        `</ICMSTot></total>`;
+        `</ICMSTot>` +
+        // Totalizador do IBS/CBS (NT 2025.002) — nomes e campos conferidos
+        // contra o XML de exemplo oficial da Receita Federal (ver aviso
+        // detalhado em buildDetXml): dentro de <gIBS>/<gCBS> os subgrupos
+        // se chamam <gIBSUF>/<gIBSMun>/<gCBS> (SEM sufixo "Tot" — a versão
+        // anterior deste arquivo usava gIBSUFTot/gIBSMunTot/gCBSTot, que
+        // não existem no schema), e cada um precisa de vCredPres e
+        // vCredPresCondSus além de vDif/vDevTrib. Com CST 410 (padrão)
+        // tudo fica zerado.
+        `<IBSCBSTot>` +
+        `<vBCIBSCBS>0.00</vBCIBSCBS>` +
+        `<gIBS>` +
+        `<gIBSUF><vDif>0.00</vDif><vDevTrib>0.00</vDevTrib><vIBSUF>0.00</vIBSUF></gIBSUF>` +
+        `<gIBSMun><vDif>0.00</vDif><vDevTrib>0.00</vDevTrib><vIBSMun>0.00</vIBSMun></gIBSMun>` +
+        `<vIBS>0.00</vIBS>` +
+        `<vCredPres>0.00</vCredPres>` +
+        `<vCredPresCondSus>0.00</vCredPresCondSus>` +
+        `</gIBS>` +
+        `<gCBS>` +
+        `<vDif>0.00</vDif><vDevTrib>0.00</vDevTrib><vCBS>0.00</vCBS>` +
+        `<vCredPres>0.00</vCredPres>` +
+        `<vCredPresCondSus>0.00</vCredPresCondSus>` +
+        `</gCBS>` +
+        `</IBSCBSTot>` +
+        // vNFTot (valor total da NF, NT 2025.002) — campo novo, filho
+        // direto de <total>, depois de <IBSCBSTot>. Mesmo valor de vNF
+        // no ICMSTot, já que essa nota não tem outras despesas.
+        `<vNFTot>${vProdTotal.toFixed(2)}</vNFTot>` +
+        `</total>`;
 
     // modFrete=9 (sem transporte/sem frete) — não há movimentação de
     // mercadoria de verdade, é só a baixa formal.

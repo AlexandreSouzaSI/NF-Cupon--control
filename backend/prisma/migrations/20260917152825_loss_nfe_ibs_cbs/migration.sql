@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "LossNfe" ADD COLUMN     "cClassTrib" TEXT NOT NULL DEFAULT '410001',
+ADD COLUMN     "cstIbsCbs" TEXT NOT NULL DEFAULT '410';

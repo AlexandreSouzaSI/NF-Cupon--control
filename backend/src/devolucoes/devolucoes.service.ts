@@ -10,7 +10,14 @@ import { join } from 'path';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { loadCertificate } from '../stores/sefaz-nfse-client';
-import { parseFullNfeForView, type NfeView } from '../stores/sefaz-nfe-client';
+import {
+    parseFullNfeForView,
+    sendAutorizacaoNfe,
+    consultarReciboNfe,
+    sendCancelamentoNfe,
+    type NfeView,
+} from '../stores/sefaz-nfe-client';
+import { buildDanfePdf } from '../common/danfe-builder';
 import {
     buildAndSignDevolucaoNfe,
     type BuiltDevolucaoNfe,
@@ -410,6 +417,101 @@ export class DevolucoesService {
         return { ...devolucaoNfe, valorTotal: built.valorTotal };
     }
 
+    // Envia de verdade o rascunho assinado pro webservice de autorização
+    // da Sefaz (NFeAutorizacao4) — mesmo padrão já usado pela LossNfe
+    // (ver losses.service.ts). SEMPRE em homologação por enquanto
+    // (devolucaoNfe.ambiente já nasce como 2 em createDevolucaoDraft) —
+    // nada aqui muda isso; emitir em produção de verdade precisa ser uma
+    // decisão explícita revisada com o contador.
+    //
+    // Suporta ser chamado mais de uma vez pro mesmo rascunho: se a
+    // tentativa anterior ficou "pendente" (lote aceito mas Sefaz ainda
+    // processando), em vez de reenviar o lote (o que geraria duplicidade
+    // de evento) extrai o número do recibo salvo no statusMessage e só
+    // consulta o resultado de novo.
+    async sendDevolucaoNfeToSefaz(id: string, user: any) {
+        const devolucaoNfe = await this.findDevolucaoNfeById(id, user);
+
+        if (!MANAGE_ROLES.includes(user.role)) {
+            throw new ForbiddenException(
+                'Só a gestão pode enviar uma NF de devolução pra Sefaz.',
+            );
+        }
+
+        // REJEITADA também pode ser reenviada: uma rejeição pode ter sido
+        // um erro de leitura da resposta aqui do nosso lado (bug de
+        // parsing, problema de rede etc.), não necessariamente uma
+        // rejeição de verdade da Sefaz — e como é sempre homologação,
+        // reenviar não tem risco fiscal. Só AUTORIZADA e CANCELADA ficam
+        // travadas de vez.
+        if (
+            devolucaoNfe.status !== 'RASCUNHO' &&
+            devolucaoNfe.status !== 'ENVIADA' &&
+            devolucaoNfe.status !== 'REJEITADA'
+        ) {
+            throw new BadRequestException(
+                `Essa NF já está com status "${devolucaoNfe.status}" — só dá pra enviar rascunhos, reenviar rejeitadas ou consultar um envio pendente.`,
+            );
+        }
+
+        if (!devolucaoNfe.xmlFileUrl) {
+            throw new BadRequestException('NF de devolução sem XML assinado — isso não deveria acontecer.');
+        }
+
+        const store = await this.prisma.store.findUnique({ where: { id: devolucaoNfe.storeId } });
+
+        if (!store?.uf) {
+            throw new BadRequestException('Loja sem UF cadastrada — complete o cadastro fiscal antes de enviar.');
+        }
+
+        const certificate = await this.prisma.storeCertificate.findUnique({
+            where: { storeId: devolucaoNfe.storeId },
+        });
+
+        if (!certificate) {
+            throw new BadRequestException('Essa loja não tem certificado digital cadastrado.');
+        }
+
+        const cert = loadCertificate(certificate.filePath, {
+            cipher: certificate.passwordCipher,
+            iv: certificate.passwordIv,
+            authTag: certificate.passwordAuthTag,
+        });
+
+        const tpAmb = (devolucaoNfe.ambiente === 1 ? 1 : 2) as 1 | 2;
+
+        // Já tentou antes e ficou pendente — em vez de reenviar (risco de
+        // duplicidade), extrai o recibo salvo e só consulta de novo.
+        const reciboMatch = devolucaoNfe.status === 'ENVIADA'
+            ? devolucaoNfe.statusMessage?.match(/recibo (\d+)/)
+            : null;
+
+        const result = reciboMatch
+            ? await consultarReciboNfe(cert, { uf: store.uf, tpAmb, nRec: reciboMatch[1] })
+            : await sendAutorizacaoNfe(cert, {
+                uf: store.uf,
+                tpAmb,
+                nfeXmlAssinado: readFileSync(
+                    join(process.cwd(), devolucaoNfe.xmlFileUrl.replace(/^\//, '')),
+                    'utf-8',
+                ),
+            });
+
+        const newStatus =
+            result.status === 'autorizada' ? 'AUTORIZADA' :
+                result.status === 'rejeitada' ? 'REJEITADA' :
+                    'ENVIADA';
+
+        return this.prisma.devolucaoNfe.update({
+            where: { id },
+            data: {
+                status: newStatus,
+                protocolo: result.protocolo,
+                statusMessage: result.message,
+            },
+        });
+    }
+
     async findDevolucaoNfes(user: any, storeId?: string) {
         const allowedStoreIds = this.getAllowedStoreIds(user);
 
@@ -491,22 +593,107 @@ export class DevolucoesService {
         };
     }
 
-    // Cancela um rascunho de devolução — só permitido enquanto ainda é
-    // RASCUNHO (não enviado pra Sefaz), já que depois de autorizada o
-    // cancelamento exige o evento próprio (110111), que ainda não existe
-    // nesse sistema (fica pra quando a Fase 3 - envio de autorização -
-    // for implementada). Libera as quantidades pra poderem ser
-    // devolvidas de novo em outra NF.
-    async cancelDraft(id: string, user: any) {
+    // DANFE simplificado em PDF (ver aviso em danfe-builder.ts) — reusa o
+    // mesmo parse já usado por viewDevolucaoNfe.
+    async downloadDevolucaoNfeDanfe(id: string, user: any): Promise<Buffer> {
+        const view = await this.viewDevolucaoNfe(id, user);
+        return buildDanfePdf('NF de Devolução', view);
+    }
+
+    // XML original assinado — aqui é a própria NF-e que o GestIA emitiu e
+    // enviou pra Sefaz (diferente de Entrada/Serviço, não veio de fora),
+    // então é o documento fiscal oficial mesmo, não uma aproximação.
+    async downloadDevolucaoNfeXml(
+        id: string,
+        user: any,
+    ): Promise<{ buffer: Buffer; filename: string }> {
+        const devolucaoNfe = await this.findDevolucaoNfeById(id, user);
+
+        if (!devolucaoNfe.xmlFileUrl) {
+            throw new NotFoundException('XML dessa NF ainda não foi gerado/assinado.');
+        }
+
+        const relativePath = devolucaoNfe.xmlFileUrl.replace(/^\/uploads\//, '');
+        const filePath = join(process.cwd(), 'uploads', relativePath);
+
+        if (!existsSync(filePath)) {
+            throw new NotFoundException('Arquivo XML não encontrado no servidor.');
+        }
+
+        return {
+            buffer: readFileSync(filePath),
+            filename: `nfe-devolucao-${devolucaoNfe.chaveAcesso || id}.xml`,
+        };
+    }
+
+    // Cancela uma devolução. Mesma lógica de duas portas usada em
+    // LossNfe (ver losses.service.ts):
+    // - RASCUNHO: nunca existiu pra Sefaz, só marca CANCELADA localmente.
+    // - AUTORIZADA: exige o evento de cancelamento (110111) de verdade,
+    //   com justificativa de 15-255 caracteres, só marcando CANCELADA se
+    //   a Sefaz homologar (cStat 135/155).
+    async cancelDraft(id: string, user: any, justificativa?: string) {
         const devolucaoNfe = await this.findDevolucaoNfeById(id, user);
 
         if (!MANAGE_ROLES.includes(user.role)) {
             throw new ForbiddenException('Só a gestão pode cancelar uma NF de devolução.');
         }
 
-        if (devolucaoNfe.status !== 'RASCUNHO') {
+        if (devolucaoNfe.status === 'AUTORIZADA') {
+            if (!justificativa?.trim()) {
+                throw new BadRequestException(
+                    'Informe a justificativa do cancelamento (mínimo 15 caracteres) — a Sefaz exige.',
+                );
+            }
+
+            if (!devolucaoNfe.protocolo) {
+                throw new BadRequestException(
+                    'Essa NF não tem protocolo de autorização registrado — não dá pra cancelar.',
+                );
+            }
+
+            const store = await this.prisma.store.findUnique({ where: { id: devolucaoNfe.storeId } });
+
+            if (!store?.uf) {
+                throw new BadRequestException('Loja sem UF cadastrada.');
+            }
+
+            const certificate = await this.prisma.storeCertificate.findUnique({
+                where: { storeId: devolucaoNfe.storeId },
+            });
+
+            if (!certificate) {
+                throw new BadRequestException('Essa loja não tem certificado digital cadastrado.');
+            }
+
+            const cert = loadCertificate(certificate.filePath, {
+                cipher: certificate.passwordCipher,
+                iv: certificate.passwordIv,
+                authTag: certificate.passwordAuthTag,
+            });
+
+            const result = await sendCancelamentoNfe(cert, {
+                uf: store.uf,
+                cnpj: store.cnpj || '',
+                chaveAcesso: devolucaoNfe.chaveAcesso || '',
+                nProt: devolucaoNfe.protocolo,
+                xJust: justificativa,
+                tpAmb: (devolucaoNfe.ambiente === 1 ? 1 : 2) as 1 | 2,
+            });
+
+            if (!result.success) {
+                throw new BadRequestException(result.message);
+            }
+
+            return this.prisma.devolucaoNfe.update({
+                where: { id },
+                data: { status: 'CANCELADA', statusMessage: result.message },
+            });
+        }
+
+        if (devolucaoNfe.status !== 'RASCUNHO' && devolucaoNfe.status !== 'REJEITADA') {
             throw new BadRequestException(
-                'Só é possível cancelar uma devolução que ainda está em rascunho (não enviada pra Sefaz).',
+                `Essa NF já está com status "${devolucaoNfe.status}" — não dá pra cancelar assim.`,
             );
         }
 

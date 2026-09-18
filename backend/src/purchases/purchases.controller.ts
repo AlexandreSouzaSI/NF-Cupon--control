@@ -312,6 +312,38 @@ export class PurchasesController {
         return this.purchasesService.viewIncomingGoodsNf(id, user);
     }
 
+    @Get('incoming-goods-nf/:id/danfe')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
+    async downloadIncomingGoodsNfDanfe(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.purchasesService.downloadIncomingGoodsNfDanfe(id, user);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="danfe-entrada-${id}.pdf"`,
+        });
+        res.send(buffer);
+    }
+
+    @Get('incoming-goods-nf/:id/xml')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
+    async downloadIncomingGoodsNfXml(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const { buffer, filename } = await this.purchasesService.downloadIncomingGoodsNfXml(id, user);
+
+        res.set({
+            'Content-Type': 'application/xml',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+        });
+        res.send(buffer);
+    }
+
     @Get(':id')
     async findOne(
         @Param('id') id: string,

@@ -15,10 +15,14 @@ import {
     parseFullNfeForView,
     sendAutorizacaoNfe,
     consultarReciboNfe,
+    sendCancelamentoNfe,
     type NfeView,
 } from '../stores/sefaz-nfe-client';
+import { buildDanfePdf } from '../common/danfe-builder';
 import {
     buildAndSignLossNfe,
+    CST_IBS_CBS_PADRAO,
+    CCLASSTRIB_PADRAO,
     type BuiltLossNfe,
     type LossNfeStoreData,
 } from './loss-nfe-builder';
@@ -481,6 +485,8 @@ export class LossesService {
                 // fica opcional aqui; se não vier, o builder usa o padrão
                 // sugerido (5927).
                 cfop: dto.cfop?.trim() || undefined,
+                cstIbsCbs: dto.cstIbsCbs?.trim() || undefined,
+                cClassTrib: dto.cClassTrib?.trim() || undefined,
                 itens: losses.map((loss) => ({
                     descricao: loss.description,
                     ncm: loss.ncm || undefined,
@@ -510,6 +516,8 @@ export class LossesService {
                     issueDate: new Date(),
                     justificativa: dto.justificativa.trim(),
                     xmlFileUrl: `/uploads/losses-nfe/${fileName}`,
+                    cstIbsCbs: dto.cstIbsCbs?.trim() || CST_IBS_CBS_PADRAO,
+                    cClassTrib: dto.cClassTrib?.trim() || CCLASSTRIB_PADRAO,
                     createdById: user.id,
                 },
             }),
@@ -702,16 +710,105 @@ export class LossesService {
         };
     }
 
-    // Cancela um rascunho de NF de perda — só permitido enquanto ainda é
-    // RASCUNHO (não enviado pra Sefaz); depois de autorizada exigiria o
-    // evento de cancelamento (110111) de verdade, que ainda não existe
-    // aqui (fica pra Fase 3, junto do envio de autorização). Libera as
-    // perdas vinculadas de volta pra lista de elegíveis.
-    async cancelLossNfeDraft(id: string, user: any) {
+    // DANFE simplificado em PDF (ver aviso em danfe-builder.ts) — reusa o
+    // mesmo parse já usado por viewLossNfe, só troca o formato de saída.
+    async downloadLossNfeDanfe(id: string, user: any): Promise<Buffer> {
+        const view = await this.viewLossNfe(id, user);
+        return buildDanfePdf('NF de Perda (baixa de estoque)', view);
+    }
+
+    // XML original assinado — a própria NF-e emitida pelo GestIA e enviada
+    // pra Sefaz, documento fiscal oficial (não uma aproximação nossa).
+    async downloadLossNfeXml(
+        id: string,
+        user: any,
+    ): Promise<{ buffer: Buffer; filename: string }> {
+        const lossNfe = await this.findLossNfeById(id, user);
+
+        if (!lossNfe.xmlFileUrl) {
+            throw new NotFoundException('XML dessa NF ainda não foi gerado/assinado.');
+        }
+
+        const relativePath = lossNfe.xmlFileUrl.replace(/^\/uploads\//, '');
+        const filePath = join(process.cwd(), 'uploads', relativePath);
+
+        if (!existsSync(filePath)) {
+            throw new NotFoundException('Arquivo XML não encontrado no servidor.');
+        }
+
+        return {
+            buffer: readFileSync(filePath),
+            filename: `nfe-perda-${lossNfe.chaveAcesso || id}.xml`,
+        };
+    }
+
+    // Cancela uma NF de perda. Dois caminhos bem diferentes:
+    // - RASCUNHO/REJEITADA: nunca existiu pra Sefaz de verdade, então só
+    //   marca CANCELADA localmente e libera as perdas vinculadas — igual
+    //   sempre foi.
+    // - AUTORIZADA: a nota tem valor fiscal real na Sefaz, então cancelar
+    //   exige enviar o evento de cancelamento (110111) de verdade, com
+    //   justificativa de 15 a 255 caracteres. Só marca CANCELADA aqui se a
+    //   Sefaz de fato homologar o cancelamento (cStat 135/155) — rejeição
+    //   não muda o status, pra não mentir que cancelou algo que continua
+    //   valendo pra Sefaz.
+    async cancelLossNfeDraft(id: string, user: any, justificativa?: string) {
         const lossNfe = await this.findLossNfeById(id, user);
 
         if (!MANAGE_ROLES.includes(user.role)) {
             throw new ForbiddenException('Só a gestão pode cancelar uma NF de perda.');
+        }
+
+        if (lossNfe.status === 'AUTORIZADA') {
+            if (!justificativa?.trim()) {
+                throw new BadRequestException(
+                    'Informe a justificativa do cancelamento (mínimo 15 caracteres) — a Sefaz exige.',
+                );
+            }
+
+            if (!lossNfe.protocolo) {
+                throw new BadRequestException(
+                    'Essa NF não tem protocolo de autorização registrado — não dá pra cancelar.',
+                );
+            }
+
+            const store = await this.prisma.store.findUnique({ where: { id: lossNfe.storeId } });
+
+            if (!store?.uf) {
+                throw new BadRequestException('Loja sem UF cadastrada.');
+            }
+
+            const certificate = await this.prisma.storeCertificate.findUnique({
+                where: { storeId: lossNfe.storeId },
+            });
+
+            if (!certificate) {
+                throw new BadRequestException('Essa loja não tem certificado digital cadastrado.');
+            }
+
+            const cert = loadCertificate(certificate.filePath, {
+                cipher: certificate.passwordCipher,
+                iv: certificate.passwordIv,
+                authTag: certificate.passwordAuthTag,
+            });
+
+            const result = await sendCancelamentoNfe(cert, {
+                uf: store.uf,
+                cnpj: store.cnpj || '',
+                chaveAcesso: lossNfe.chaveAcesso || '',
+                nProt: lossNfe.protocolo,
+                xJust: justificativa,
+                tpAmb: (lossNfe.ambiente === 1 ? 1 : 2) as 1 | 2,
+            });
+
+            if (!result.success) {
+                throw new BadRequestException(result.message);
+            }
+
+            return this.prisma.lossNfe.update({
+                where: { id },
+                data: { status: 'CANCELADA', statusMessage: result.message },
+            });
         }
 
         // REJEITADA também pode ser cancelada — libera as perdas vinculadas
@@ -719,7 +816,7 @@ export class LossesService {
         // problema no XML que causou a rejeição).
         if (lossNfe.status !== 'RASCUNHO' && lossNfe.status !== 'REJEITADA') {
             throw new BadRequestException(
-                'Só é possível cancelar uma NF de perda que ainda está em rascunho ou foi rejeitada (não enviada/autorizada pra valer na Sefaz).',
+                `Essa NF já está com status "${lossNfe.status}" — não dá pra cancelar assim.`,
             );
         }
 

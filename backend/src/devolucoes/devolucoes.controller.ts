@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { StoreModule, UserRole } from '@prisma/client';
+import type { Response } from 'express';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -48,13 +49,57 @@ export class DevolucoesController {
         return this.devolucoesService.viewDevolucaoNfe(id, user);
     }
 
+    @Get(':id/danfe')
+    async downloadDanfe(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.devolucoesService.downloadDevolucaoNfeDanfe(id, user);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="danfe-devolucao-${id}.pdf"`,
+        });
+        res.send(buffer);
+    }
+
+    @Get(':id/xml')
+    async downloadXml(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const { buffer, filename } = await this.devolucoesService.downloadDevolucaoNfeXml(id, user);
+
+        res.set({
+            'Content-Type': 'application/xml',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+        });
+        res.send(buffer);
+    }
+
     @Get(':id')
     async findOne(@Param('id') id: string, @CurrentUser() user: any) {
         return this.devolucoesService.findDevolucaoNfeById(id, user);
     }
 
+    // Body.justificativa só é obrigatório quando a NF já está AUTORIZADA
+    // na Sefaz (dispara o evento de cancelamento de verdade).
     @Patch(':id/cancel')
-    async cancel(@Param('id') id: string, @CurrentUser() user: any) {
-        return this.devolucoesService.cancelDraft(id, user);
+    async cancel(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Body('justificativa') justificativa?: string,
+    ) {
+        return this.devolucoesService.cancelDraft(id, user, justificativa);
+    }
+
+    // Envia de verdade pro webservice de autorização da Sefaz (sempre
+    // homologação por enquanto — ver comentário no service). Pode ser
+    // chamado de novo se a tentativa anterior ficou "pendente".
+    @Post(':id/send')
+    async send(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.devolucoesService.sendDevolucaoNfeToSefaz(id, user);
     }
 }

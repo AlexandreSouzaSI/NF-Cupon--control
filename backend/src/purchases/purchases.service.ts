@@ -40,6 +40,7 @@ import {
     ufToCode,
     type NfeView,
 } from '../stores/sefaz-nfe-client';
+import { buildDanfePdf } from '../common/danfe-builder';
 import { sleep } from '../common/sleep.util';
 import { derivePaymentDefaults } from '../common/bill-payment-defaults.util';
 
@@ -1897,6 +1898,48 @@ export class PurchasesService {
                 situacao: incoming.situacao,
             },
             nf: parsed,
+        };
+    }
+
+    // DANFE simplificado em PDF (ver aviso em danfe-builder.ts) — reusa o
+    // mesmo parse já usado por viewIncomingGoodsNf.
+    async downloadIncomingGoodsNfDanfe(incomingNfId: string, user: any): Promise<Buffer> {
+        const view = await this.viewIncomingGoodsNf(incomingNfId, user);
+        return buildDanfePdf('NF-e de Entrada', view);
+    }
+
+    // XML original da NF-e (documento com validade fiscal — o PDF acima é
+    // só uma representação nossa pra conferência, não o DANFE oficial com
+    // código de barras). Pra chegar no DANFE oficial mesmo, a chave de
+    // acesso (44 dígitos) pode ser consultada em nfe.fazenda.gov.br.
+    async downloadIncomingGoodsNfXml(
+        incomingNfId: string,
+        user: any,
+    ): Promise<{ buffer: Buffer; filename: string }> {
+        const incoming = await this.prisma.incomingGoodsNf.findUnique({
+            where: { id: incomingNfId },
+        });
+
+        if (!incoming) {
+            throw new NotFoundException('Documento não encontrado.');
+        }
+
+        this.ensureStoreAccess(incoming.storeId, user);
+
+        if (!incoming.fileUrl) {
+            throw new NotFoundException('XML original não disponível pra essa NF.');
+        }
+
+        const relativePath = incoming.fileUrl.replace(/^\/uploads\//, '');
+        const filePath = join(process.cwd(), 'uploads', relativePath);
+
+        if (!existsSync(filePath)) {
+            throw new NotFoundException('Arquivo XML não encontrado no servidor.');
+        }
+
+        return {
+            buffer: readFileSync(filePath),
+            filename: `nfe-${incoming.chaveAcesso || incomingNfId}.xml`,
         };
     }
 }

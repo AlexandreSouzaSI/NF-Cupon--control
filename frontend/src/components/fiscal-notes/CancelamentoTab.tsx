@@ -247,6 +247,16 @@ export function CancelamentoTab() {
                             ? `/losses/nfe/${viewing.id}/view`
                             : `/devolucoes/${viewing.id}/view`
                     }
+                    danfeUrl={
+                        viewing.kind === 'PERDA'
+                            ? `/losses/nfe/${viewing.id}/danfe`
+                            : `/devolucoes/${viewing.id}/danfe`
+                    }
+                    xmlUrl={
+                        viewing.kind === 'PERDA'
+                            ? `/losses/nfe/${viewing.id}/xml`
+                            : `/devolucoes/${viewing.id}/xml`
+                    }
                     onClose={() => setViewing(null)}
                 />
             )}

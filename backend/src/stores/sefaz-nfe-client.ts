@@ -528,12 +528,26 @@ export async function sendManifestacao(
 
     // Se mesmo com o fallback de reparse (ver findNode) o cStat continuar
     // vazio, algo na resposta tem um formato que a gente ainda não
-    // previu — loga o corpo bruto pra dar pra diagnosticar direto pelos
-    // logs do servidor em vez de só ver "motivo desconhecido" na tela.
+    // previu (normalmente um SOAP Fault, não uma rejeição fiscal) — extrai
+    // o motivo legível do fault (mesma lógica usada em
+    // buildUnrecognizedResponseMessage) em vez de só mostrar "motivo
+    // desconhecido" na tela, e ainda loga o corpo bruto pro caso de faltar
+    // detalhe.
     if (!cStat) {
         console.error(
             `[sendManifestacao] cStat vazio na resposta da Sefaz (chave ${params.chaveAcesso}). Corpo bruto: ${truncate(response.body, 3000)}`,
         );
+    }
+
+    if (!cStat) {
+        const faultReason = extractSoapFaultReason(response.body);
+
+        return {
+            success: false,
+            message: faultReason
+                ? `Erro de comunicação com a Sefaz ao manifestar (não é rejeição fiscal): ${faultReason}`
+                : `Resposta da Sefaz em formato não reconhecido ao manifestar (HTTP ${response.status}). Detalhe técnico: ${truncate(response.body, 800)}`,
+        };
     }
 
     return {
@@ -542,7 +556,174 @@ export async function sendManifestacao(
         xMotivo,
         message: success
             ? `Ciência da operação registrada (${cStat} - ${xMotivo}).`
-            : `Sefaz rejeitou a manifestação (${cStat || '?'} - ${xMotivo || 'motivo desconhecido'}).`,
+            : `Sefaz rejeitou a manifestação (${cStat} - ${xMotivo || 'motivo desconhecido'}).`,
+    };
+}
+
+// ---------------------------------------------------------------------
+// Cancelamento de NF-e (evento 110111)
+//
+// Só se aplica a NF-e que o próprio GestIA emitiu e a Sefaz já autorizou
+// (LossNfe/DevolucaoNfe com status AUTORIZADA) — cancelar uma nota já
+// autorizada é diferente de só descartar um rascunho (que nunca chegou a
+// existir pra Sefaz). Usa o MESMO webservice de recepção de eventos da
+// manifestação (NFeRecepcaoEvento4), só troca o tpEvento e o conteúdo do
+// detEvento. Exige o nProt (protocolo devolvido na autorização) e uma
+// justificativa de 15 a 255 caracteres — a Sefaz rejeita sem isso.
+//
+// Prazo: por norma o cancelamento só é aceito dentro de 24h (algumas UFs
+// toleram um pouco mais) depois da autorização — passado esse prazo a
+// Sefaz rejeita e a correção precisa ser feita por outro meio (evento de
+// carta de correção não se aplica a notas sem venda de verdade como essa).
+export async function sendCancelamentoNfe(
+    cert: LoadedCertificate,
+    params: {
+        uf: string;
+        cnpj: string;
+        chaveAcesso: string;
+        nProt: string;
+        xJust: string;
+        nSeqEvento?: number;
+        tpAmb?: 1 | 2;
+    },
+): Promise<ManifestacaoResult> {
+    const tpEvento = '110111';
+    const nSeqEvento = params.nSeqEvento || 1;
+    const tpAmb = params.tpAmb || 1;
+    const cnpjDigits = params.cnpj.replace(/\D/g, '');
+    const cUF = ufToCode(params.uf);
+
+    const xJust = params.xJust.trim();
+
+    if (xJust.length < 15 || xJust.length > 255) {
+        return {
+            success: false,
+            message: `Justificativa do cancelamento precisa ter entre 15 e 255 caracteres (tem ${xJust.length}).`,
+        };
+    }
+
+    const idEvento = `ID${tpEvento}${params.chaveAcesso}${String(nSeqEvento).padStart(2, '0')}`;
+
+    const infEventoXml =
+        `<infEvento Id="${idEvento}">` +
+        `<cOrgao>${cUF}</cOrgao>` +
+        `<tpAmb>${tpAmb}</tpAmb>` +
+        `<CNPJ>${cnpjDigits}</CNPJ>` +
+        `<chNFe>${params.chaveAcesso}</chNFe>` +
+        `<dhEvento>${formatDhEventoBrasilia(new Date())}</dhEvento>` +
+        `<tpEvento>${tpEvento}</tpEvento>` +
+        `<nSeqEvento>${nSeqEvento}</nSeqEvento>` +
+        `<verEvento>1.00</verEvento>` +
+        `<detEvento versao="1.00">` +
+        `<descEvento>Cancelamento</descEvento>` +
+        `<nProt>${escapeXml(params.nProt)}</nProt>` +
+        `<xJust>${escapeXml(xJust)}</xJust>` +
+        `</detEvento>` +
+        `</infEvento>`;
+
+    const eventoXml = `<evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">${infEventoXml}</evento>`;
+
+    let signedEvento: string;
+
+    try {
+        const { privateKeyPem, certPem } = extractKeyAndCertPem(cert);
+
+        const sig = new SignedXml({
+            privateKey: privateKeyPem,
+            publicCert: certPem,
+            signatureAlgorithm: 'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+            canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
+        });
+
+        sig.addReference({
+            xpath: "//*[local-name(.)='infEvento']",
+            transforms: [
+                'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
+                'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
+            ],
+            digestAlgorithm: 'http://www.w3.org/2000/09/xmldsig#sha1',
+        });
+
+        sig.computeSignature(eventoXml, {
+            location: {
+                reference: "//*[local-name(.)='infEvento']",
+                action: 'after',
+            },
+        });
+
+        signedEvento = sig.getSignedXml();
+    } catch (error: any) {
+        return {
+            success: false,
+            message: `Erro ao assinar o evento de cancelamento: ${error?.message || error}`,
+        };
+    }
+
+    const idLote = String(Date.now()).slice(-15);
+    const envEventoXml = `<envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00"><idLote>${idLote}</idLote>${signedEvento}</envEvento>`;
+
+    const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeRecepcaoEvento xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">
+      <nfeDadosMsg>${envEventoXml}</nfeDadosMsg>
+    </nfeRecepcaoEvento>
+  </soap12:Body>
+</soap12:Envelope>`;
+
+    const url = getRecepcaoEventoUrl(params.uf);
+
+    let response: RawResponse;
+
+    try {
+        response = await soapPost(url, soapEnvelope, cert, RECEPCAO_EVENTO_ACTION);
+    } catch (error: any) {
+        return {
+            success: false,
+            message: `Erro de conexão com a Sefaz (${url}): ${error?.message || error}`,
+        };
+    }
+
+    let parsed: any;
+
+    try {
+        parsed = parser.parse(response.body);
+    } catch {
+        return {
+            success: false,
+            message: `Resposta da Sefaz não é um XML válido (HTTP ${response.status}): ${truncate(response.body)}`,
+        };
+    }
+
+    const infEventoResp = findNode(parsed, 'infEvento');
+    const cStat = extractText(infEventoResp?.cStat) || extractText(findNode(parsed, 'cStat'));
+    const xMotivo =
+        extractText(infEventoResp?.xMotivo) || extractText(findNode(parsed, 'xMotivo'));
+
+    // 135 = evento registrado e vinculado à NF-e (cancelamento homologado);
+    // 155 = cancelamento homologado fora do prazo (algumas UFs aceitam
+    // assim mesmo, registrando a ressalva). Qualquer outro código é
+    // rejeição de verdade.
+    const success = cStat === '135' || cStat === '155';
+
+    if (!cStat) {
+        const faultReason = extractSoapFaultReason(response.body);
+
+        return {
+            success: false,
+            message: faultReason
+                ? `Erro de comunicação com a Sefaz ao cancelar (não é rejeição fiscal): ${faultReason}`
+                : `Resposta da Sefaz em formato não reconhecido ao cancelar (HTTP ${response.status}). Detalhe técnico: ${truncate(response.body, 800)}`,
+        };
+    }
+
+    return {
+        success,
+        cStat,
+        xMotivo,
+        message: success
+            ? `Cancelamento registrado na Sefaz (${cStat} - ${xMotivo}).`
+            : `Sefaz rejeitou o cancelamento (${cStat} - ${xMotivo || 'motivo desconhecido'}).`,
     };
 }
 

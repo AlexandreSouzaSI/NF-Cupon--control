@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { api, API_URL } from '@/lib/api';
-import { ExternalLink, FileWarning, Landmark, Loader2, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { Download, ExternalLink, FileCode, FileWarning, Landmark, Loader2, X } from 'lucide-react';
 
 type NfeAddress = {
     logradouro?: string;
@@ -93,6 +94,15 @@ type ViewResponse = {
 type NfViewerModalProps = {
     title: string;
     viewUrl: string;
+    // Endpoint .../danfe correspondente (mesma base do viewUrl, trocando
+    // /view por /danfe) — opcional só por segurança, mas hoje todo
+    // chamador já tem essa rota disponível no backend.
+    danfeUrl?: string;
+    // Endpoint .../xml — devolve o XML original (o documento que tem
+    // validade fiscal de verdade; o "DANFE" acima é só uma representação
+    // nossa pra conferência, ver aviso em danfe-builder.ts). Também
+    // opcional pelo mesmo motivo do danfeUrl.
+    xmlUrl?: string;
     onClose: () => void;
 };
 
@@ -143,10 +153,12 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 // organizada em vez do XML cru. Detecta sozinho se o retorno é de NF de
 // mercadoria (emitente/destinatario/itens) ou de serviço
 // (prestador/tomador/valores) pra desenhar a seção certa.
-export function NfViewerModal({ title, viewUrl, onClose }: NfViewerModalProps) {
+export function NfViewerModal({ title, viewUrl, danfeUrl, xmlUrl, onClose }: NfViewerModalProps) {
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<ViewResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [downloadingDanfe, setDownloadingDanfe] = useState(false);
+    const [downloadingXml, setDownloadingXml] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -182,6 +194,89 @@ export function NfViewerModal({ title, viewUrl, onClose }: NfViewerModalProps) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
 
+    async function handleDownloadDanfe() {
+        if (!danfeUrl) return;
+
+        try {
+            setDownloadingDanfe(true);
+
+            const response = await api.get(danfeUrl, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = 'danfe.pdf';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error: any) {
+            let message = 'Erro ao gerar a DANFE.';
+            const data = error?.response?.data;
+
+            if (data instanceof Blob) {
+                try {
+                    const text = await data.text();
+                    const parsed = JSON.parse(text);
+                    message = Array.isArray(parsed?.message)
+                        ? parsed.message.join(', ')
+                        : parsed?.message || message;
+                } catch {
+                    // mantém a mensagem genérica
+                }
+            }
+
+            toast.error(message);
+        } finally {
+            setDownloadingDanfe(false);
+        }
+    }
+
+    async function handleDownloadXml() {
+        if (!xmlUrl) return;
+
+        try {
+            setDownloadingXml(true);
+
+            const response = await api.get(xmlUrl, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = 'nf.xml';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error: any) {
+            let message = 'Erro ao baixar o XML original.';
+            const data = error?.response?.data;
+
+            if (data instanceof Blob) {
+                try {
+                    const text = await data.text();
+                    const parsed = JSON.parse(text);
+                    message = Array.isArray(parsed?.message)
+                        ? parsed.message.join(', ')
+                        : parsed?.message || message;
+                } catch {
+                    // mantém a mensagem genérica
+                }
+            }
+
+            toast.error(message);
+        } finally {
+            setDownloadingXml(false);
+        }
+    }
+
+    const canDownloadDanfe =
+        !!danfeUrl && !loading && !error && !!data && data.source !== 'nenhum';
+    const canDownloadXml =
+        !!xmlUrl && !loading && !error && !!data && data.source === 'xml';
+
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
@@ -193,14 +288,46 @@ export function NfViewerModal({ title, viewUrl, onClose }: NfViewerModalProps) {
             }}
         >
             <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl">
-                <div className="sticky top-0 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                <div className="sticky top-0 flex items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
                     <h2 className="text-lg font-bold">{title}</h2>
-                    <button
-                        onClick={onClose}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    >
-                        <X size={16} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {canDownloadXml && (
+                            <button
+                                onClick={handleDownloadXml}
+                                disabled={downloadingXml}
+                                title="Baixar o XML original — o documento que realmente tem validade fiscal (o DANFE ao lado é só uma representação nossa pra conferência)"
+                                className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-500 hover:bg-blue-500/20 disabled:opacity-60"
+                            >
+                                {downloadingXml ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                    <FileCode size={14} />
+                                )}
+                                Baixar XML
+                            </button>
+                        )}
+                        {canDownloadDanfe && (
+                            <button
+                                onClick={handleDownloadDanfe}
+                                disabled={downloadingDanfe}
+                                title="Baixar DANFE simplificado — PDF gerado pelo GestIA pra conferência interna, não é o layout oficial (sem código de barras). Pra pegar o documento no layout oficial, use o XML."
+                                className="inline-flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-500 hover:bg-orange-500/20 disabled:opacity-60"
+                            >
+                                {downloadingDanfe ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                    <Download size={14} />
+                                )}
+                                Baixar DANFE
+                            </button>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="p-5">

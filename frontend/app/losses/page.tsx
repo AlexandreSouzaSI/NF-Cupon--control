@@ -826,6 +826,8 @@ function NfPerdaTab() {
     const [selected, setSelected] = useState<Record<string, boolean>>({});
     const [justificativa, setJustificativa] = useState('');
     const [cfop, setCfop] = useState('5927');
+    const [cstIbsCbs, setCstIbsCbs] = useState('410');
+    const [cClassTrib, setCClassTrib] = useState('410030');
     const [loading, setLoading] = useState(true);
     const [emitting, setEmitting] = useState(false);
     const [nfes, setNfes] = useState<LossNfe[]>([]);
@@ -921,12 +923,16 @@ function NfPerdaTab() {
                 lossIds: selectedIds,
                 justificativa: justificativa.trim(),
                 cfop: cfop.trim() || undefined,
+                cstIbsCbs: cstIbsCbs.trim() || undefined,
+                cClassTrib: cClassTrib.trim() || undefined,
             });
 
             toast.success('NF de perda gerada e assinada (homologação).');
             setSelected({});
             setJustificativa('');
             setCfop('5927');
+            setCstIbsCbs('410');
+            setCClassTrib('410030');
             await loadEligible();
             await loadNfes();
         } catch (error: any) {
@@ -963,15 +969,34 @@ function NfPerdaTab() {
     }
 
     async function handleCancelNfe(nfe: LossNfe) {
-        const confirmed = confirm(
-            'Cancelar esse rascunho de NF de perda? As perdas vinculadas voltam a ficar disponíveis pra entrar em outra NF.',
-        );
-        if (!confirmed) return;
+        let justificativa: string | undefined;
+
+        if (nfe.status === 'AUTORIZADA') {
+            const input = window.prompt(
+                'Essa NF já está autorizada na Sefaz — cancelar dispara o evento de cancelamento de verdade.\n\n' +
+                'Descreva o motivo do cancelamento (mínimo 15 caracteres):',
+            );
+            if (!input) return;
+            if (input.trim().length < 15) {
+                toast.error('A justificativa precisa ter pelo menos 15 caracteres.');
+                return;
+            }
+            justificativa = input.trim();
+        } else {
+            const confirmed = confirm(
+                'Cancelar esse rascunho de NF de perda? As perdas vinculadas voltam a ficar disponíveis pra entrar em outra NF.',
+            );
+            if (!confirmed) return;
+        }
 
         try {
             setCancelingId(nfe.id);
-            await api.patch(`/losses/nfe/${nfe.id}/cancel`);
-            toast.success('NF de perda cancelada.');
+            await api.patch(`/losses/nfe/${nfe.id}/cancel`, { justificativa });
+            toast.success(
+                nfe.status === 'AUTORIZADA'
+                    ? 'Cancelamento registrado na Sefaz.'
+                    : 'NF de perda cancelada.',
+            );
             await loadEligible();
             await loadNfes();
         } catch (error: any) {
@@ -1109,6 +1134,41 @@ function NfPerdaTab() {
                             </p>
                         </div>
 
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    CST IBS/CBS
+                                </label>
+                                <input
+                                    type="text"
+                                    value={cstIbsCbs}
+                                    onChange={(e) => setCstIbsCbs(e.target.value)}
+                                    placeholder="410"
+                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-emerald-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    cClassTrib
+                                </label>
+                                <input
+                                    type="text"
+                                    value={cClassTrib}
+                                    onChange={(e) => setCClassTrib(e.target.value)}
+                                    placeholder="410030"
+                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-emerald-500"
+                                />
+                            </div>
+                        </div>
+                        <p className="-mt-2 text-xs text-zinc-500">
+                            410 (Imunidade e não incidência) é a sugestão
+                            padrão pra baixa de perda — Reforma Tributária
+                            (IBS/CBS), obrigatória em produção pro Lucro
+                            Real desde ago/2026. Confirme com o contador o
+                            código certo antes de emitir em produção.
+                        </p>
+
                         <button
                             data-tour="lossnfe-submit"
                             onClick={handleEmit}
@@ -1232,7 +1292,7 @@ function NfPerdaTab() {
                                                 </button>
                                             )}
 
-                                            {(nfe.status === 'RASCUNHO' || nfe.status === 'REJEITADA') && (
+                                            {(nfe.status === 'RASCUNHO' || nfe.status === 'REJEITADA' || nfe.status === 'AUTORIZADA') && (
                                                 <button
                                                     disabled={cancelingId === nfe.id}
                                                     onClick={() => handleCancelNfe(nfe)}
@@ -1255,6 +1315,8 @@ function NfPerdaTab() {
                 <NfViewerModal
                     title="NF de perda"
                     viewUrl={`/losses/nfe/${viewingNfeId}/view`}
+                    danfeUrl={`/losses/nfe/${viewingNfeId}/danfe`}
+                    xmlUrl={`/losses/nfe/${viewingNfeId}/xml`}
                     onClose={() => setViewingNfeId(null)}
                 />
             )}

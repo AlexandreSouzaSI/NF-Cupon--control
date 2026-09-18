@@ -5,12 +5,14 @@ import {
     Param,
     Post,
     Query,
+    Res,
     UploadedFiles,
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { StoreModule, UserRole } from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -80,5 +82,35 @@ export class OutgoingSalesNfController {
     @Get(':id/view')
     async view(@Param('id') id: string, @CurrentUser() user: any) {
         return this.outgoingSalesNfService.view(id, user);
+    }
+
+    @Get(':id/danfe')
+    async downloadDanfe(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.outgoingSalesNfService.downloadDanfe(id, user);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="danfe-saida-${id}.pdf"`,
+        });
+        res.send(buffer);
+    }
+
+    @Get(':id/xml')
+    async downloadXml(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const { buffer, filename } = await this.outgoingSalesNfService.downloadXml(id, user);
+
+        res.set({
+            'Content-Type': 'application/xml',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+        });
+        res.send(buffer);
     }
 }

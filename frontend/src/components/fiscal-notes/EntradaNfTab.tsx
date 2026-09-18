@@ -876,6 +876,8 @@ export function EntradaNfTab() {
                 <NfViewerModal
                     title="NF de entrada"
                     viewUrl={`/purchases/incoming-goods-nf/${viewingId}/view`}
+                    danfeUrl={`/purchases/incoming-goods-nf/${viewingId}/danfe`}
+                    xmlUrl={`/purchases/incoming-goods-nf/${viewingId}/xml`}
                     onClose={() => setViewingId(null)}
                 />
             )}

@@ -8,9 +8,11 @@ import {
     ArrowLeft,
     CheckCircle2,
     Eye,
+    FileText,
     Loader2,
     PackageX,
     RotateCcw,
+    Send,
     XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -49,10 +51,13 @@ type DevolucaoNfe = {
     status: string;
     numero?: number | null;
     serie?: number | null;
+    ambiente?: number | null;
     chaveAcesso?: string | null;
     motivo: string;
     createdAt: string;
     xmlFileUrl?: string | null;
+    protocolo?: string | null;
+    statusMessage?: string | null;
     incomingGoodsNf?: { issuerName?: string | null; chaveAcesso?: string } | null;
     itens: { descricao: string; quantidade: string; valorTotal: string }[];
 };
@@ -92,6 +97,7 @@ export function DevolucaoTab() {
     const [loadingDevolucoes, setLoadingDevolucoes] = useState(true);
     const [viewingId, setViewingId] = useState<string | null>(null);
     const [cancelingId, setCancelingId] = useState<string | null>(null);
+    const [sendingId, setSendingId] = useState<string | null>(null);
 
     async function loadAcceptedNfs() {
         try {
@@ -264,16 +270,58 @@ export function DevolucaoTab() {
         }
     }
 
-    async function handleCancel(id: string) {
+    async function handleSend(dev: DevolucaoNfe) {
         const confirmed = confirm(
-            'Cancelar esse rascunho de devolução? As quantidades voltam a ficar disponíveis pra devolver de novo.',
+            dev.status === 'ENVIADA'
+                ? 'Consultar de novo o resultado desse envio na Sefaz?'
+                : 'Enviar essa NF de devolução pro webservice da Sefaz (ambiente de homologação, sem valor fiscal)?',
         );
         if (!confirmed) return;
 
         try {
-            setCancelingId(id);
-            await api.patch(`/devolucoes/${id}/cancel`);
-            toast.success('Devolução cancelada.');
+            setSendingId(dev.id);
+            await api.post(`/devolucoes/${dev.id}/send`);
+            toast.success('Envio processado — confira o status abaixo.');
+            await loadDevolucoes();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao enviar pra Sefaz.';
+
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setSendingId(null);
+        }
+    }
+
+    async function handleCancel(dev: DevolucaoNfe) {
+        let justificativa: string | undefined;
+
+        if (dev.status === 'AUTORIZADA') {
+            const input = window.prompt(
+                'Essa NF já está autorizada na Sefaz — cancelar dispara o evento de cancelamento de verdade.\n\n' +
+                'Descreva o motivo do cancelamento (mínimo 15 caracteres):',
+            );
+            if (!input) return;
+            if (input.trim().length < 15) {
+                toast.error('A justificativa precisa ter pelo menos 15 caracteres.');
+                return;
+            }
+            justificativa = input.trim();
+        } else {
+            const confirmed = confirm(
+                'Cancelar esse rascunho de devolução? As quantidades voltam a ficar disponíveis pra devolver de novo.',
+            );
+            if (!confirmed) return;
+        }
+
+        try {
+            setCancelingId(dev.id);
+            await api.patch(`/devolucoes/${dev.id}/cancel`, { justificativa });
+            toast.success(
+                dev.status === 'AUTORIZADA'
+                    ? 'Cancelamento registrado na Sefaz.'
+                    : 'Devolução cancelada.',
+            );
             await loadDevolucoes();
         } catch (error: any) {
             const message =
@@ -426,8 +474,9 @@ export function DevolucaoTab() {
 
                         <p className="text-xs text-zinc-500">
                             A NF de devolução nasce como rascunho assinado, em
-                            ambiente de homologação (sem valor fiscal) — o envio
-                            real pra Sefaz ainda não está automatizado.
+                            ambiente de homologação (teste, sem valor fiscal).
+                            Depois de gerada, use o botão &quot;Enviar pra
+                            Sefaz&quot; na lista abaixo pra enviar de verdade.
                         </p>
 
                         <button
@@ -522,7 +571,8 @@ export function DevolucaoTab() {
                                         <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                             Série {dev.serie ?? '—'} / Número{' '}
                                             {dev.numero ?? '—'} •{' '}
-                                            {formatDate(dev.createdAt)}
+                                            {dev.ambiente === 1 ? 'Produção' : 'Homologação'}{' '}
+                                            • {formatDate(dev.createdAt)}
                                         </p>
                                         <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                             {dev.itens.length} item(ns) •{' '}
@@ -547,14 +597,26 @@ export function DevolucaoTab() {
                                                 {STATUS_LABEL[dev.status] || dev.status}
                                             </span>
                                         </p>
+
+                                        {dev.protocolo && (
+                                            <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-500">
+                                                Protocolo: {dev.protocolo}
+                                            </p>
+                                        )}
+
+                                        {dev.statusMessage && (
+                                            <p className="mt-1 text-xs text-zinc-500">
+                                                {dev.statusMessage}
+                                            </p>
+                                        )}
                                     </div>
 
-                                    <div className="flex flex-wrap gap-3">
+                                    <div className="flex flex-wrap gap-2">
                                         <button
                                             onClick={() => setViewingId(dev.id)}
-                                            className="inline-flex items-center gap-1 text-sm font-medium text-blue-500 hover:underline"
+                                            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-500 hover:bg-emerald-500/20"
                                         >
-                                            <Eye size={14} />
+                                            <CheckCircle2 size={14} />
                                             Visualizar
                                         </button>
 
@@ -563,19 +625,41 @@ export function DevolucaoTab() {
                                                 href={`${API_URL}${dev.xmlFileUrl}`}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="text-sm font-medium text-blue-500 hover:underline"
+                                                className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                             >
-                                                Abrir XML
+                                                <FileText size={14} />
+                                                Ver XML
                                             </a>
                                         )}
 
-                                        {dev.status === 'RASCUNHO' && (
+                                        {(dev.status === 'RASCUNHO' || dev.status === 'ENVIADA' || dev.status === 'REJEITADA') && (
+                                            <button
+                                                disabled={sendingId === dev.id}
+                                                onClick={() => handleSend(dev)}
+                                                className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-500 hover:bg-blue-500/20 disabled:opacity-50"
+                                            >
+                                                {sendingId === dev.id ? (
+                                                    <Loader2 size={14} className="animate-spin" />
+                                                ) : (
+                                                    <Send size={14} />
+                                                )}
+                                                {dev.status === 'ENVIADA'
+                                                    ? 'Consultar resultado'
+                                                    : 'Enviar pra Sefaz'}
+                                            </button>
+                                        )}
+
+                                        {(dev.status === 'RASCUNHO' || dev.status === 'REJEITADA' || dev.status === 'AUTORIZADA') && (
                                             <button
                                                 disabled={cancelingId === dev.id}
-                                                onClick={() => handleCancel(dev.id)}
-                                                className="inline-flex items-center gap-1 text-sm font-medium text-red-400 hover:underline disabled:opacity-50"
+                                                onClick={() => handleCancel(dev)}
+                                                className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 disabled:opacity-50"
                                             >
-                                                <XCircle size={14} />
+                                                {cancelingId === dev.id ? (
+                                                    <Loader2 size={14} className="animate-spin" />
+                                                ) : (
+                                                    <XCircle size={14} />
+                                                )}
                                                 Cancelar
                                             </button>
                                         )}
@@ -598,6 +682,8 @@ export function DevolucaoTab() {
                 <NfViewerModal
                     title="NF de devolução"
                     viewUrl={`/devolucoes/${viewingId}/view`}
+                    danfeUrl={`/devolucoes/${viewingId}/danfe`}
+                    xmlUrl={`/devolucoes/${viewingId}/xml`}
                     onClose={() => setViewingId(null)}
                 />
             )}

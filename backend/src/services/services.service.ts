@@ -26,6 +26,7 @@ import {
     parseNfseXml,
     type NfseView,
 } from '../stores/sefaz-nfse-client';
+import { buildDanfePdf } from '../common/danfe-builder';
 import { sleep } from '../common/sleep.util';
 import { derivePaymentDefaults } from '../common/bill-payment-defaults.util';
 
@@ -1086,6 +1087,52 @@ export class ServicesService {
         };
     }
 
+    // DANFE simplificado em PDF (ver aviso em danfe-builder.ts) — na
+    // verdade é um "DANFSE simplificado" (NFS-e, não NF-e de mercadoria),
+    // mas o botão no frontend usa o mesmo nome genérico "Baixar DANFE"
+    // pra não confundir o usuário com dois termos diferentes.
+    async downloadIncomingNfDanfe(incomingNfId: string, user: any): Promise<Buffer> {
+        const view = await this.viewIncomingNf(incomingNfId, user);
+        return buildDanfePdf('NF de Serviço (NFS-e)', view);
+    }
+
+    // Devolve o XML original da NFS-e, exatamente como veio do ADN — é o
+    // único documento com validade fiscal de verdade (o PDF acima é só uma
+    // representação nossa pra conferência). A partir de 03/08/2026 a API
+    // nacional que gerava o PDF oficial (DANFSe) foi descontinuada (NT
+    // SE/CGNFS-e 008/2026) — quem precisar da DANFSe no layout oficial
+    // pode consultar a chave de acesso em nfse.gov.br/consultapublica.
+    async downloadIncomingNfXml(
+        incomingNfId: string,
+        user: any,
+    ): Promise<{ buffer: Buffer; filename: string }> {
+        const incoming = await this.prisma.incomingServiceNf.findUnique({
+            where: { id: incomingNfId },
+        });
+
+        if (!incoming) {
+            throw new NotFoundException('Documento não encontrado.');
+        }
+
+        this.ensureStoreAccess(incoming.storeId, user);
+
+        if (!incoming.fileUrl) {
+            throw new NotFoundException('XML original não disponível pra essa NF.');
+        }
+
+        const relativePath = incoming.fileUrl.replace(/^\/uploads\//, '');
+        const filePath = join(process.cwd(), 'uploads', relativePath);
+
+        if (!existsSync(filePath)) {
+            throw new NotFoundException('Arquivo XML não encontrado no servidor.');
+        }
+
+        return {
+            buffer: readFileSync(filePath),
+            filename: `nfse-${incoming.numeroNf || incomingNfId}.xml`,
+        };
+    }
+
     // Mesma ideia, mas pra NF anexada manualmente num Serviço já cadastrado
     // (attachNf/uploadNf) — que pode ser XML de NFS-e, mas também pode ser
     // PDF/imagem (upload manual aceita os dois). Só tenta o parser legível
@@ -1122,6 +1169,47 @@ export class ServicesService {
                 serviceDate: service.serviceDate,
             },
             nf: parsed,
+        };
+    }
+
+    // DANFE simplificado em PDF (ver aviso em danfe-builder.ts) — só
+    // funciona de verdade quando o arquivo anexado é XML (fora isso, o
+    // PDF sai só com os campos básicos que o sistema já tinha salvo).
+    async downloadServiceDanfe(id: string, user: any): Promise<Buffer> {
+        const view = await this.viewService(id, user);
+        return buildDanfePdf('NF de Serviço', view);
+    }
+
+    // Mesma ideia de downloadIncomingNfXml, mas pra NF anexada manualmente
+    // num Serviço já cadastrado. Só funciona quando o arquivo salvo é o
+    // próprio XML (upload manual aceita PDF/imagem também — nesse caso não
+    // tem "XML original" pra baixar, o arquivo anexado já é o documento).
+    async downloadServiceXml(
+        id: string,
+        user: any,
+    ): Promise<{ buffer: Buffer; filename: string }> {
+        const service = await this.ensureServiceAccess(id, user);
+
+        if (!service.nfFileUrl) {
+            throw new NotFoundException('Nenhuma NF anexada nesse serviço.');
+        }
+
+        if (!/\.xml$/i.test(service.nfFileUrl)) {
+            throw new NotFoundException(
+                'O arquivo anexado não é um XML (provavelmente já é o próprio PDF/imagem da NF).',
+            );
+        }
+
+        const relativePath = service.nfFileUrl.replace(/^\/uploads\//, '');
+        const filePath = join(process.cwd(), 'uploads', relativePath);
+
+        if (!existsSync(filePath)) {
+            throw new NotFoundException('Arquivo XML não encontrado no servidor.');
+        }
+
+        return {
+            buffer: readFileSync(filePath),
+            filename: service.nfOriginalName || `nfse-servico-${id}.xml`,
         };
     }
 

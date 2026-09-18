@@ -58,3 +58,16 @@ export type TaskOccurrenceReminderEvent = {
     title: string;
     dueDateLabel: string;
 };
+
+// Disparado depois que uma planilha de vendas (aba Produtos) termina de
+// ser importada com sucesso. Quem estiver ouvindo decide o que fazer
+// (hoje: EstoqueService calcula o consumo daquela importação via ficha
+// técnica e baixa dos StockItem vinculados — ver estoque.service.ts).
+// ProductSalesService não sabe nada sobre Estoque, e vice-versa; os dois
+// só se falam por aqui, evitando dependência circular entre os módulos.
+export const PRODUCT_SALES_IMPORTED_EVENT = 'product-sales.imported';
+
+export type ProductSalesImportedEvent = {
+    storeId: string;
+    productSalesImportId: string;
+};

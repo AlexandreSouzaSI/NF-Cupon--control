@@ -10,6 +10,7 @@ import { join } from 'path';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseFullNfeForView, parseFullNfeXml, type NfeView } from '../stores/sefaz-nfe-client';
+import { buildDanfePdf } from '../common/danfe-builder';
 
 // Mesmo padrão dos outros XMLs importados/baixados: fica dentro de
 // /uploads, num diretório próprio pra não misturar com a NF de compra.
@@ -275,6 +276,39 @@ export class OutgoingSalesNfService {
                 situacao: item.situacao,
             },
             nf: parsed,
+        };
+    }
+
+    // DANFE simplificado em PDF (ver aviso em danfe-builder.ts).
+    async downloadDanfe(id: string, user: any): Promise<Buffer> {
+        const view = await this.view(id, user);
+        return buildDanfePdf('NF-e de Saída', view);
+    }
+
+    // XML original — documento com validade fiscal de verdade.
+    async downloadXml(id: string, user: any): Promise<{ buffer: Buffer; filename: string }> {
+        const item = await this.prisma.outgoingSalesNf.findUnique({ where: { id } });
+
+        if (!item) {
+            throw new NotFoundException('NF de venda não encontrada.');
+        }
+
+        this.ensureStoreAccess(item.storeId, user);
+
+        if (!item.fileUrl) {
+            throw new NotFoundException('XML original não disponível pra essa NF.');
+        }
+
+        const relativePath = item.fileUrl.replace(/^\/uploads\//, '');
+        const filePath = join(process.cwd(), 'uploads', relativePath);
+
+        if (!existsSync(filePath)) {
+            throw new NotFoundException('Arquivo XML não encontrado no servidor.');
+        }
+
+        return {
+            buffer: readFileSync(filePath),
+            filename: `nfe-${item.chaveAcesso || id}.xml`,
         };
     }
 

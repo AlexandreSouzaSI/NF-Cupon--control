@@ -460,6 +460,8 @@ export function SaidaNfTab() {
                 <NfViewerModal
                     title="NF de venda"
                     viewUrl={`/outgoing-sales-nf/${viewingId}/view`}
+                    danfeUrl={`/outgoing-sales-nf/${viewingId}/danfe`}
+                    xmlUrl={`/outgoing-sales-nf/${viewingId}/xml`}
                     onClose={() => setViewingId(null)}
                 />
             )}

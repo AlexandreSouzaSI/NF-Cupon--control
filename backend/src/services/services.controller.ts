@@ -266,6 +266,68 @@ export class ServicesController {
         return this.servicesService.viewService(id, user);
     }
 
+    @Get('incoming-nf/:id/danfe')
+    async downloadIncomingNfDanfe(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.servicesService.downloadIncomingNfDanfe(id, user);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="danfe-servico-${id}.pdf"`,
+        });
+        res.send(buffer);
+    }
+
+    // XML original (documento com validade fiscal de verdade — ver aviso em
+    // services.service.ts / danfe-builder.ts).
+    @Get('incoming-nf/:id/xml')
+    async downloadIncomingNfXml(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const { buffer, filename } = await this.servicesService.downloadIncomingNfXml(id, user);
+
+        res.set({
+            'Content-Type': 'application/xml',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+        });
+        res.send(buffer);
+    }
+
+    @Get(':id/danfe')
+    async downloadServiceDanfe(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.servicesService.downloadServiceDanfe(id, user);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="danfe-servico-${id}.pdf"`,
+        });
+        res.send(buffer);
+    }
+
+    @Get(':id/xml')
+    async downloadServiceXml(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const { buffer, filename } = await this.servicesService.downloadServiceXml(id, user);
+
+        res.set({
+            'Content-Type': 'application/xml',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+        });
+        res.send(buffer);
+    }
+
     @Get(':id')
     async findOne(
         @Param('id') id: string,

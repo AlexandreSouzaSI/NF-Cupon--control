@@ -19,6 +19,7 @@ import {
     FileStack,
     HelpCircle,
     Package,
+    Warehouse,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -40,7 +41,8 @@ export type StoreModuleKey =
     | 'RELATORIOS'
     | 'FUNCIONARIOS'
     | 'FREELANCERS'
-    | 'PRODUTOS';
+    | 'PRODUTOS'
+    | 'ESTOQUE';
 
 // Cor de referência visual de cada item — soft (fundo bem clarinho +
 // texto na cor), pra dar uma pista rápida do "tipo" da tela sem gritar.
@@ -170,6 +172,20 @@ export const menu: MenuGroup[] = [
                 badgeKey: 'approvals',
                 color: 'amber',
                 module: 'COMPRAS',
+            },
+            {
+                label: 'Estoque',
+                href: '/estoque',
+                icon: Warehouse,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'ESTOQUISTA',
+                ],
+                color: 'blue',
+                module: 'ESTOQUE',
             },
         ],
     },

@@ -21,4 +21,16 @@ export class CreateLossNfeDto {
     @IsOptional()
     @IsString()
     cfop?: string;
+
+    // CST e cClassTrib do IBS/CBS (Reforma Tributária, NT 2025.002) —
+    // mesma lógica do CFOP: sugestão padrão (410 / 410030) editável, já
+    // que só o contador confirma o enquadramento certo. Ver aviso em
+    // loss-nfe-builder.ts.
+    @IsOptional()
+    @IsString()
+    cstIbsCbs?: string;
+
+    @IsOptional()
+    @IsString()
+    cClassTrib?: string;
 }

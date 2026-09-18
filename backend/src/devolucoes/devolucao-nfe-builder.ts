@@ -6,8 +6,20 @@ import {
     formatDhEventoBrasilia,
     ufToCode,
 } from '../stores/sefaz-nfe-client';
-import { gerarChaveAcesso } from '../losses/loss-nfe-builder';
+import { CST_IBS_CBS_PADRAO, gerarChaveAcesso } from '../losses/loss-nfe-builder';
 import type { LoadedCertificate } from '../stores/sefaz-nfse-client';
+
+// cClassTrib próprio da Devolução — NÃO reaproveita o CCLASSTRIB_PADRAO de
+// loss-nfe-builder.ts, que agora é "410030" (Estorno de crédito por
+// perecimento/deterioração/roubo/furto/extravio), específico pra Nota de
+// Débito tipo 07 (Perda em Estoque, finNFe=6+tpNFDebito=07) — a Sefaz só
+// aceita esse código combinado com esse tipo de nota (regra UB14-70).
+// Devolução é finNFe=4 (não é nota de débito, não tem tpNFDebito), então
+// essa trava não vale aqui, mas usar "410030" mesmo assim seria
+// semanticamente errado (não é uma perda). Fica em "410001" — mesmo
+// valor de exemplo/placeholder de antes, editável por nota, até o
+// contador confirmar o cClassTrib certo pra devolução ao fornecedor.
+const DEVOLUCAO_CCLASSTRIB_PADRAO = '410001';
 
 // ---------------------------------------------------------------------
 // NF-e de devolução de mercadoria (finNFe=4, CFOP na família 5.2xx/5.4xx/
@@ -81,6 +93,11 @@ export type BuildDevolucaoNfeParams = {
     motivo: string;
     itens: DevolucaoNfeItem[];
     dataEmissao?: Date;
+    // CST e cClassTrib do IBS/CBS (Reforma Tributária, NT 2025.002) — mesma
+    // ressalva da LossNfe: sugestão padrão editável, nunca fixa no código,
+    // porque só o contador confirma o enquadramento certo pra devolução.
+    cstIbsCbs?: string;
+    cClassTrib?: string;
 };
 
 export type BuiltDevolucaoNfe = {
@@ -124,7 +141,13 @@ function buildEnderecoXml(
     );
 }
 
-function buildDetXml(item: DevolucaoNfeItem, nItem: number, crt: 1 | 3): { xml: string; vProd: number } {
+function buildDetXml(
+    item: DevolucaoNfeItem,
+    nItem: number,
+    crt: 1 | 3,
+    cstIbsCbs: string,
+    cClassTrib: string,
+): { xml: string; vProd: number } {
     const vUnCom = round2(item.valorUnitario);
     const vProd = round2(item.quantidade * vUnCom);
     const cProd = `DEVOL${String(nItem).padStart(4, '0')}`;
@@ -138,11 +161,42 @@ function buildDetXml(item: DevolucaoNfeItem, nItem: number, crt: 1 | 3): { xml: 
             ? `<ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102>`
             : `<ICMS40><orig>0</orig><CST>40</CST></ICMS40>`;
 
+    // Grupo IBS/CBS (Reforma Tributária, NT 2025.002) — mesma estrutura já
+    // corrigida e conferida contra o XML de exemplo oficial da Receita
+    // Federal em loss-nfe-builder.ts: cClassTrib é filho direto de
+    // <IBSCBS> (ANTES de <gIBSCBS>), e <gIBSCBS> precisa do totalizador
+    // <vIBS> entre <gIBSMun> e <gCBS>.
+    //
+    // E, assim como na LossNfe: pra CST 400 (Isenção) e 410 (Imunidade e
+    // não incidência) — os únicos usados hoje na Devolução, que não é
+    // operação tributável de verdade — o grupo <gIBSCBS> NÃO pode ser
+    // enviado (Sefaz rejeita com 1021 - "Grupo IBS/CBS informado
+    // indevidamente"), só <CST> + <cClassTrib>. Ver aviso completo em
+    // loss-nfe-builder.ts.
+    const cstsSemGrupoDeCalculo = ['400', '410'];
+    const precisaGrupoDeCalculo = !cstsSemGrupoDeCalculo.includes(cstIbsCbs.trim());
+
+    const ibsCbsXml =
+        `<IBSCBS>` +
+        `<CST>${escapeXml(cstIbsCbs)}</CST>` +
+        `<cClassTrib>${escapeXml(cClassTrib)}</cClassTrib>` +
+        (precisaGrupoDeCalculo
+            ? `<gIBSCBS>` +
+              `<vBC>0.00</vBC>` +
+              `<gIBSUF><pIBSUF>0.00</pIBSUF><vIBSUF>0.00</vIBSUF></gIBSUF>` +
+              `<gIBSMun><pIBSMun>0.00</pIBSMun><vIBSMun>0.00</vIBSMun></gIBSMun>` +
+              `<vIBS>0.00</vIBS>` +
+              `<gCBS><pCBS>0.00</pCBS><vCBS>0.00</vCBS></gCBS>` +
+              `</gIBSCBS>`
+            : '') +
+        `</IBSCBS>`;
+
     const impostoXml =
         `<imposto>` +
         `<ICMS>${icmsXml}</ICMS>` +
         `<PIS><PISNT><CST>08</CST></PISNT></PIS>` +
         `<COFINS><COFINSNT><CST>08</CST></COFINSNT></COFINS>` +
+        ibsCbsXml +
         `</imposto>`;
 
     const prodXml =
@@ -163,8 +217,12 @@ function buildDetXml(item: DevolucaoNfeItem, nItem: number, crt: 1 | 3): { xml: 
         `<indTot>1</indTot>` +
         `</prod>`;
 
+    // vItem (valor total do item, NT 2025.002) — campo novo, filho direto
+    // de <det>, depois de <imposto>.
+    const vItemXml = `<vItem>${vProd.toFixed(2)}</vItem>`;
+
     return {
-        xml: `<det nItem="${nItem}">${prodXml}${impostoXml}</det>`,
+        xml: `<det nItem="${nItem}">${prodXml}${impostoXml}${vItemXml}</det>`,
         vProd,
     };
 }
@@ -175,8 +233,12 @@ function buildInfNFeXml(params: BuildDevolucaoNfeParams, chaveAcesso: string): s
     const cUF = ufToCode(store.uf);
     const cnpjEmit = store.cnpj.replace(/\D/g, '');
     const cnpjDest = fornecedor.cnpj.replace(/\D/g, '');
+    const cstIbsCbs = (params.cstIbsCbs || CST_IBS_CBS_PADRAO).trim();
+    const cClassTrib = (params.cClassTrib || DEVOLUCAO_CCLASSTRIB_PADRAO).trim();
 
-    const detsBuilt = itens.map((item, index) => buildDetXml(item, index + 1, store.crt));
+    const detsBuilt = itens.map((item, index) =>
+        buildDetXml(item, index + 1, store.crt, cstIbsCbs, cClassTrib),
+    );
     const detsXml = detsBuilt.map((d) => d.xml).join('');
     const vProdTotal = round2(detsBuilt.reduce((sum, d) => sum + d.vProd, 0));
 
@@ -264,7 +326,28 @@ function buildInfNFeXml(params: BuildDevolucaoNfeParams, chaveAcesso: string): s
         `<vCOFINS>0.00</vCOFINS>` +
         `<vOutro>0.00</vOutro>` +
         `<vNF>${vProdTotal.toFixed(2)}</vNF>` +
-        `</ICMSTot></total>`;
+        `</ICMSTot>` +
+        // Totalizador do IBS/CBS (NT 2025.002) — mesma estrutura corrigida
+        // do builder de Perda (ver aviso em buildDetXml acima).
+        `<IBSCBSTot>` +
+        `<vBCIBSCBS>0.00</vBCIBSCBS>` +
+        `<gIBS>` +
+        `<gIBSUF><vDif>0.00</vDif><vDevTrib>0.00</vDevTrib><vIBSUF>0.00</vIBSUF></gIBSUF>` +
+        `<gIBSMun><vDif>0.00</vDif><vDevTrib>0.00</vDevTrib><vIBSMun>0.00</vIBSMun></gIBSMun>` +
+        `<vIBS>0.00</vIBS>` +
+        `<vCredPres>0.00</vCredPres>` +
+        `<vCredPresCondSus>0.00</vCredPresCondSus>` +
+        `</gIBS>` +
+        `<gCBS>` +
+        `<vDif>0.00</vDif><vDevTrib>0.00</vDevTrib><vCBS>0.00</vCBS>` +
+        `<vCredPres>0.00</vCredPres>` +
+        `<vCredPresCondSus>0.00</vCredPresCondSus>` +
+        `</gCBS>` +
+        `</IBSCBSTot>` +
+        // vNFTot (valor total da NF, NT 2025.002) — campo novo, filho
+        // direto de <total>, depois de <IBSCBSTot>.
+        `<vNFTot>${vProdTotal.toFixed(2)}</vNFTot>` +
+        `</total>`;
 
     // modFrete=9 (sem transporte declarado aqui — quem leva a mercadoria
     // de volta pro fornecedor varia caso a caso, fica em branco por ora).
