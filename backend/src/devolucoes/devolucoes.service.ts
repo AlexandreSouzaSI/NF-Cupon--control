@@ -41,6 +41,13 @@ const MANAGE_ROLES: UserRole[] = [
     UserRole.GERENTE,
 ];
 
+// Mesmo espírito do normalizarNome usado em outros módulos (estoque,
+// losses, product-sales) — maiúsculo, sem espaço duplicado/nas
+// pontas. Cópia local só pra não criar acoplamento entre módulos.
+function normalizarDescricao(descricao: string): string {
+    return descricao.toString().trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
 @Injectable()
 export class DevolucoesService {
     constructor(private prisma: PrismaService) { }
@@ -68,6 +75,43 @@ export class DevolucoesService {
         if (!allowedStoreIds.includes(storeId)) {
             throw new ForbiddenException('Você não tem acesso a esta loja.');
         }
+    }
+
+    // "Lembrar" o último Motivo usado numa devolução pra um item de
+    // descrição igual — os itens vêm do XML da NF de entrada original
+    // (não tem cadastro próprio), então a chave é a própria descrição
+    // normalizada. Olha os itens de devolução mais recentes da loja e
+    // devolve o motivo (da NF inteira) da primeira devolução cujo item
+    // bate com a descrição.
+    async getLastMotivo(user: any, storeId: string, description: string) {
+        if (!storeId) {
+            throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
+        }
+
+        this.ensureStoreAccess(storeId, user);
+
+        const alvo = description?.trim();
+        if (!alvo) return { motivo: null };
+
+        const chaveAlvo = normalizarDescricao(alvo);
+
+        const recentes = await this.prisma.devolucaoNfeItem.findMany({
+            where: { devolucaoNfe: { storeId } },
+            select: {
+                descricao: true,
+                devolucaoNfe: { select: { motivo: true } },
+            },
+            orderBy: { devolucaoNfe: { createdAt: 'desc' } },
+            take: 300,
+        });
+
+        const match = recentes.find(
+            (item) =>
+                item.devolucaoNfe.motivo?.trim() &&
+                normalizarDescricao(item.descricao) === chaveAlvo,
+        );
+
+        return { motivo: match?.devolucaoNfe.motivo ?? null };
     }
 
     private async determineCrt(storeId: string): Promise<1 | 3> {
@@ -314,7 +358,9 @@ export class DevolucoesService {
         // aqui declaramos tpEmis=1 (emissão normal) isso rejeita com
         // cStat 244 "Processo de Emissão do Contribuinte incompatível com
         // a Série da NF" (aconteceu de verdade com a série 900 da LossNfe).
-        const serie = store.devolucaoNfeSerie ?? 16;
+        // dto.serie deixa o usuário CONFIRMAR (ou trocar) na tela antes de
+        // gerar — se não vier, cai no valor salvo na loja, igual antes.
+        const serie = dto.serie ?? store.devolucaoNfeSerie ?? 16;
         const numero = (store.devolucaoNfeNextNumber ?? 0) + 1;
 
         const storeData: DevolucaoNfeStoreData = {

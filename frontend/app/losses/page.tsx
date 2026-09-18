@@ -236,6 +236,30 @@ function RegistrarTab() {
         );
     }
 
+    // Ao sair do campo de descrição, busca se esse MESMO produto já
+    // teve um "Motivo" usado antes — só preenche se o campo Motivo
+    // ainda estiver vazio (não sobrescreve o que o usuário já digitou),
+    // e continua editável.
+    async function sugerirMotivo(descricao: string) {
+        if (reason.trim() || !descricao.trim()) return;
+
+        const store = getActiveStore();
+        if (!store) return;
+
+        try {
+            const response = await api.get('/losses/last-reason', {
+                params: { storeId: store.id, description: descricao },
+            });
+
+            const encontrado = response.data?.reason;
+            if (encontrado && !reason.trim()) {
+                setReason(encontrado);
+            }
+        } catch {
+            // silencioso — sugestão é só uma conveniência
+        }
+    }
+
     function addItem() {
         setItems((prev) => [...prev, emptyLossItem()]);
     }
@@ -451,7 +475,7 @@ function RegistrarTab() {
                     <input
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
-                        placeholder="Quebra, vencimento, extravio... (vale pra todos os itens dessa foto)"
+                        placeholder="Quebra, vencimento, extravio... (vale pra todos os itens dessa foto — pode vir sugerido do último registro desse produto)"
                         className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
                     />
                 </div>
@@ -486,6 +510,7 @@ function RegistrarTab() {
                                         onChange={(e) =>
                                             updateItem(index, 'description', e.target.value)
                                         }
+                                        onBlur={(e) => sugerirMotivo(e.target.value)}
                                         placeholder="Ex: Heineken long neck"
                                         className="h-11 flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
                                     />
@@ -828,6 +853,7 @@ function NfPerdaTab() {
     const [cfop, setCfop] = useState('5927');
     const [cstIbsCbs, setCstIbsCbs] = useState('410');
     const [cClassTrib, setCClassTrib] = useState('410030');
+    const [serie, setSerie] = useState('');
     const [loading, setLoading] = useState(true);
     const [emitting, setEmitting] = useState(false);
     const [nfes, setNfes] = useState<LossNfe[]>([]);
@@ -876,9 +902,26 @@ function NfPerdaTab() {
         }
     }
 
+    // Série que vai ser usada na próxima NF — só pra mostrar/confirmar
+    // antes de gerar (editável, mas já vem preenchida com o que está
+    // salvo na loja, pra não precisar adivinhar nem descobrir só depois
+    // da rejeição).
+    async function loadSerie() {
+        if (!store) return;
+
+        try {
+            const response = await api.get(`/stores/${store.id}`);
+            const atual = response.data?.lossNfeSerie;
+            setSerie(atual != null ? String(atual) : '1');
+        } catch {
+            setSerie('1');
+        }
+    }
+
     useEffect(() => {
         loadEligible();
         loadNfes();
+        loadSerie();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -909,8 +952,13 @@ function NfPerdaTab() {
             return;
         }
 
+        if (!serie.trim() || Number(serie) <= 0) {
+            toast.error('Confira a Série da NF antes de gerar.');
+            return;
+        }
+
         const confirmed = confirm(
-            `Gerar NF de perda em ambiente de homologação (teste, sem valor fiscal) com ${selectedIds.length} item(ns), totalizando ${formatCurrency(selectedTotal)}?`,
+            `Gerar NF de perda em ambiente de homologação (teste, sem valor fiscal) com ${selectedIds.length} item(ns), totalizando ${formatCurrency(selectedTotal)}? Série ${serie.trim()}.`,
         );
 
         if (!confirmed) return;
@@ -925,6 +973,7 @@ function NfPerdaTab() {
                 cfop: cfop.trim() || undefined,
                 cstIbsCbs: cstIbsCbs.trim() || undefined,
                 cClassTrib: cClassTrib.trim() || undefined,
+                serie: Number(serie),
             });
 
             toast.success('NF de perda gerada e assinada (homologação).');
@@ -935,6 +984,7 @@ function NfPerdaTab() {
             setCClassTrib('410030');
             await loadEligible();
             await loadNfes();
+            await loadSerie();
         } catch (error: any) {
             const message =
                 error?.response?.data?.message || 'Erro ao gerar a NF de perda.';
@@ -1095,6 +1145,24 @@ function NfPerdaTab() {
                             </p>
                             <p className="text-lg font-bold">
                                 {formatCurrency(selectedTotal)}
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                Série
+                            </label>
+                            <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={serie}
+                                onChange={(e) => setSerie(e.target.value)}
+                                className="h-11 w-28 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                            />
+                            <p className="mt-1 text-xs text-zinc-500">
+                                Já vem preenchida com a série salva na loja — confira e
+                                clique em Gerar NF, ou troque antes se precisar.
                             </p>
                         </div>
 

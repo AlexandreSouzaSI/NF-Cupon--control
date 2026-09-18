@@ -30,6 +30,13 @@ import { CreateLossDto } from './dto/create-loss.dto';
 import { CreateLossBatchDto } from './dto/create-loss-batch.dto';
 import { CreateLossNfeDto } from './dto/create-loss-nfe.dto';
 
+// Mesmo espírito do normalizarNome usado em outros módulos (estoque,
+// product-sales) — maiúsculo, sem espaço duplicado/nas pontas. Cópia
+// local só pra não criar acoplamento entre módulos.
+function normalizarDescricao(descricao: string): string {
+    return descricao.toString().trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
 type LossBatchItemInput = {
     description: string;
     quantity: number;
@@ -97,6 +104,37 @@ export class LossesService {
             store: { select: { id: true, name: true } },
             reportedBy: { select: { id: true, name: true } },
         };
+    }
+
+    // "Lembrar" o último Motivo digitado pra um produto — não existe
+    // cadastro de produto aqui (description é texto livre), então a
+    // chave é a própria descrição normalizada (maiúsculo, sem espaço
+    // duplicado). Olha as perdas mais recentes da loja e devolve o
+    // primeiro "reason" não vazio cuja descrição bate.
+    async getLastReason(user: any, storeId: string, description: string) {
+        if (!storeId) {
+            throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
+        }
+
+        this.ensureStoreAccess(storeId, user);
+
+        const alvo = description?.trim();
+        if (!alvo) return { reason: null };
+
+        const chaveAlvo = normalizarDescricao(alvo);
+
+        const recentes = await this.prisma.productLoss.findMany({
+            where: { storeId },
+            select: { description: true, reason: true },
+            orderBy: { createdAt: 'desc' },
+            take: 300,
+        });
+
+        const match = recentes.find(
+            (loss) => loss.reason?.trim() && normalizarDescricao(loss.description) === chaveAlvo,
+        );
+
+        return { reason: match?.reason ?? null };
     }
 
     async create(dto: CreateLossDto, photoUrl: string | undefined, user: any) {
@@ -451,7 +489,9 @@ export class LossesService {
         // declaramos tpEmis=1 (emissão normal), série nessa faixa causa
         // rejeição 244 "Processo de Emissão do Contribuinte incompatível
         // com a Série da NF" — foi exatamente isso que aconteceu com 900.
-        const serie = store.lossNfeSerie ?? 1;
+        // dto.serie deixa o usuário CONFIRMAR (ou trocar) na tela antes de
+        // gerar — se não vier, cai no valor salvo na loja, igual antes.
+        const serie = dto.serie ?? store.lossNfeSerie ?? 1;
         const numero = (store.lossNfeNextNumber ?? 0) + 1;
 
         const storeData: LossNfeStoreData = {

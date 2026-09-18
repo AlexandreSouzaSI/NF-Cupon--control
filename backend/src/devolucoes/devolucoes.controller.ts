@@ -44,6 +44,19 @@ export class DevolucoesController {
         return this.devolucoesService.findDevolucaoNfes(user, storeId);
     }
 
+    // Último "Motivo" usado numa devolução envolvendo esse mesmo item
+    // (por descrição, vinda do XML da NF de entrada) — pré-preenche o
+    // campo "Motivo da devolução", editável. Precisa vir antes de
+    // ":id/view" pra "last-motivo" não ser interpretado como um id.
+    @Get('last-motivo')
+    async getLastMotivo(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+        @Query('description') description: string,
+    ) {
+        return this.devolucoesService.getLastMotivo(user, storeId, description);
+    }
+
     @Get(':id/view')
     async view(@Param('id') id: string, @CurrentUser() user: any) {
         return this.devolucoesService.viewDevolucaoNfe(id, user);

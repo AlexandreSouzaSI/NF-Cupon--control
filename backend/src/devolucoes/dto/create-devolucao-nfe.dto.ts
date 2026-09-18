@@ -1,4 +1,12 @@
-import { ArrayMinSize, IsArray, IsString, ValidateNested } from 'class-validator';
+import {
+    ArrayMinSize,
+    IsArray,
+    IsInt,
+    IsOptional,
+    IsString,
+    Min,
+    ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { CreateDevolucaoItemDto } from './create-devolucao-item.dto';
@@ -17,6 +25,15 @@ export class CreateDevolucaoNfeDto {
     // pro infCpl do XML.
     @IsString()
     motivo!: string;
+
+    // Série mostrada (editável) na tela de Devolução, já vindo
+    // preenchida com store.devolucaoNfeSerie — se não vier, cai no valor
+    // salvo na loja (ver devolucoes.service.ts).
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    serie?: number;
 
     @IsArray()
     @ArrayMinSize(1)

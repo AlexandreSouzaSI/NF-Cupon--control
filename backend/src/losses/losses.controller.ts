@@ -121,6 +121,18 @@ export class LossesController {
         });
     }
 
+    // Última "Motivo" digitada pra esse mesmo produto (por descrição) —
+    // usado pra pré-preencher o campo no formulário de registrar perda,
+    // editável, sem obrigar o usuário a redigitar o motivo de sempre.
+    @Get('last-reason')
+    async getLastReason(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+        @Query('description') description: string,
+    ) {
+        return this.lossesService.getLastReason(user, storeId, description);
+    }
+
     @Get('monthly-report')
     async monthlyReport(
         @CurrentUser() user: any,

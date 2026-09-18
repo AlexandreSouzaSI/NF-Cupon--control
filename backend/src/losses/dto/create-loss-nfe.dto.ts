@@ -1,4 +1,5 @@
-import { ArrayMinSize, IsArray, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMinSize, IsArray, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateLossNfeDto {
     @IsString()
@@ -8,6 +9,16 @@ export class CreateLossNfeDto {
     @ArrayMinSize(1)
     @IsString({ each: true })
     lossIds!: string[];
+
+    // Série mostrada (editável) na tela de Gerar NF, já vindo preenchida
+    // com store.lossNfeSerie — se o usuário não mudar nada, o resultado é
+    // idêntico ao comportamento antigo. Se vier, sobrescreve o valor
+    // salvo na loja (ver losses.service.ts).
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    serie?: number;
 
     // Motivo da baixa (perecimento, quebra, roubo/furto etc.) — vira o
     // texto de infAdFisco na NF-e, exigido pelo Ajuste SINIEF 49/2025. Se

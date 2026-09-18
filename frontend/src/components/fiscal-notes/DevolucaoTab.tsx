@@ -91,6 +91,7 @@ export function DevolucaoTab() {
     const [itemsOptions, setItemsOptions] = useState<DevolucaoItemOption[]>([]);
     const [selected, setSelected] = useState<Record<number, SelectedItem>>({});
     const [motivo, setMotivo] = useState('');
+    const [serie, setSerie] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     const [devolucoes, setDevolucoes] = useState<DevolucaoNfe[]>([]);
@@ -137,9 +138,26 @@ export function DevolucaoTab() {
         }
     }
 
+    // Série que vai ser usada na próxima NF de devolução — só pra
+    // mostrar/confirmar antes de gerar (editável, já vem preenchida com
+    // o que está salvo na loja).
+    async function loadSerie() {
+        const store = getActiveStore();
+        if (!store) return;
+
+        try {
+            const response = await api.get(`/stores/${store.id}`);
+            const atual = response.data?.devolucaoNfeSerie;
+            setSerie(atual != null ? String(atual) : '16');
+        } catch {
+            setSerie('16');
+        }
+    }
+
     useEffect(() => {
         loadAcceptedNfs();
         loadDevolucoes();
+        loadSerie();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -169,6 +187,30 @@ export function DevolucaoTab() {
         }
     }
 
+    // Ao marcar um item, busca se esse MESMO item (por descrição) já
+    // teve um "Motivo" usado numa devolução anterior — se o campo ainda
+    // estiver vazio, pré-preenche (editável, o usuário troca se achar
+    // que não bate).
+    async function sugerirMotivoPorItem(descricao: string) {
+        if (motivo.trim()) return;
+
+        const store = getActiveStore();
+        if (!store || !descricao?.trim()) return;
+
+        try {
+            const response = await api.get('/devolucoes/last-motivo', {
+                params: { storeId: store.id, description: descricao },
+            });
+
+            const encontrado = response.data?.motivo;
+            if (encontrado && !motivo.trim()) {
+                setMotivo(encontrado);
+            }
+        } catch {
+            // silencioso — sugestão é só uma conveniência
+        }
+    }
+
     function toggleItem(item: DevolucaoItemOption, checked: boolean) {
         const disponivel = (item.quantidade || 0) - item.quantidadeJaDevolvida;
 
@@ -182,6 +224,10 @@ export function DevolucaoTab() {
                 }
                 : { ...prev[item.nItemOrigem], checked: false },
         }));
+
+        if (checked) {
+            sugerirMotivoPorItem(item.descricao);
+        }
     }
 
     function updateQuantidade(nItem: number, quantidade: number) {
@@ -243,6 +289,11 @@ export function DevolucaoTab() {
             return;
         }
 
+        if (!serie.trim() || Number(serie) <= 0) {
+            toast.error('Confira a Série da NF antes de gerar.');
+            return;
+        }
+
         try {
             setSubmitting(true);
 
@@ -251,6 +302,7 @@ export function DevolucaoTab() {
                 incomingGoodsNfId: selectedNfId,
                 motivo: motivo.trim(),
                 itens: itensParaEnviar,
+                serie: Number(serie),
             });
 
             toast.success('Rascunho da NF de devolução criado.');
@@ -259,6 +311,7 @@ export function DevolucaoTab() {
             setSelected({});
             setMotivo('');
             await loadDevolucoes();
+            await loadSerie();
         } catch (error: any) {
             const message =
                 error?.response?.data?.message ||
@@ -461,6 +514,22 @@ export function DevolucaoTab() {
                     )}
 
                     <div className="mt-5 space-y-3">
+                        <label className="block text-sm font-medium">
+                            Série
+                            <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={serie}
+                                onChange={(e) => setSerie(e.target.value)}
+                                className="mt-1 h-10 w-28 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
+                            />
+                        </label>
+                        <p className="text-xs text-zinc-500">
+                            Já vem preenchida com a série salva na loja — confira e
+                            clique em Gerar, ou troque antes se precisar.
+                        </p>
+
                         <label className="block text-sm font-medium">
                             Motivo da devolução
                             <textarea
