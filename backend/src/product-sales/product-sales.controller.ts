@@ -282,13 +282,29 @@ export class ProductSalesController {
         @Body('pesoUnidadeGramas') pesoUnidadeGramas?: number | null,
         @Body('isProteina') isProteina?: boolean,
         @Body('porcaoPadraoGramas') porcaoPadraoGramas?: number | null,
+        @Body('categoriaLista') categoriaLista?: string | null,
+        @Body('ordemLista') ordemLista?: number | null,
     ) {
         return this.productSalesService.atualizarConfigIngrediente(user, id, {
             unidadeMedida,
             pesoUnidadeGramas,
             isProteina,
             porcaoPadraoGramas,
+            categoriaLista,
+            ordemLista,
         });
+    }
+
+    // Cria/ajusta de uma vez os ingredientes-padrão da lista fornecida
+    // pelo chefe de produção (Proteínas e Cortes / Feijoada / Noite de
+    // petiscos), marcando categoria e ordem certas — ver comentário no
+    // service (LISTA_PADRAO_PROTEINAS).
+    @Post('ingredients/import-lista-padrao')
+    async importarListaPadrao(
+        @CurrentUser() user: any,
+        @Body('storeId') storeId: string,
+    ) {
+        return this.productSalesService.importarListaPadrao(user, storeId);
     }
 
     // Consumo total por ingrediente (KG), somando todos os pratos

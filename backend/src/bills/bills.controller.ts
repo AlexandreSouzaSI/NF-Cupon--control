@@ -109,6 +109,53 @@ export class BillsController {
         res.send(buffer);
     }
 
+    // Convênio do Sicredi usado pra montar o cabeçalho do arquivo CNAB —
+    // único pra empresa toda, por isso não recebe storeId. Restrito a
+    // Proprietário/Administrativo dentro do service (dado bancário
+    // sensível). Precisam vir antes de ":id" pelo mesmo motivo do
+    // /report/today acima.
+    @Get('batch-payment/config')
+    async getPaymentBatchConfig(@CurrentUser() user: any) {
+        return this.billsService.getPaymentBatchConfig(user);
+    }
+
+    @Put('batch-payment/config')
+    async savePaymentBatchConfig(
+        @Body()
+        body: {
+            convenioCode: string;
+            agencia: string;
+            agenciaDv?: string;
+            conta: string;
+            contaDv?: string;
+            companyName: string;
+            companyCnpj: string;
+        },
+        @CurrentUser() user: any,
+    ) {
+        return this.billsService.savePaymentBatchConfig(user, body);
+    }
+
+    // Gera o .txt de remessa CNAB 240 com as contas de "hoje" (boleto +
+    // PIX) pra subir no internet banking do Sicredi.
+    @Get('batch-payment/generate')
+    async generateBatchPayment(
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const { conteudo, resumo } =
+            await this.billsService.generateBatchPaymentFile(user);
+
+        res.set({
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Content-Disposition': `attachment; filename="cnab240-sicredi-${new Date()
+                .toISOString()
+                .slice(0, 10)}.txt"`,
+            'X-Batch-Summary': encodeURIComponent(JSON.stringify(resumo)),
+        });
+        res.send(conteudo);
+    }
+
     @Get(':id')
     async findOne(
         @Param('id') id: string,
@@ -155,6 +202,17 @@ export class BillsController {
         @CurrentUser() user: any,
     ) {
         return this.billsService.toggleQueueToday(id, user);
+    }
+
+    // "Colocar todas as vencidas em pagamentos de hoje" de uma vez —
+    // botão individual (acima) continua existindo pra marcar/desmarcar
+    // uma conta só.
+    @Patch('queue-today/overdue')
+    async queueAllOverdueToday(
+        @CurrentUser() user: any,
+        @Body('storeId') storeId?: string,
+    ) {
+        return this.billsService.queueAllOverdueToday(user, storeId);
     }
 
     @Post('upload')

@@ -32,6 +32,7 @@ import { DemoModule } from './demo/demo.module';
 import { ProductSalesModule } from './product-sales/product-sales.module';
 import { EstoqueModule } from './estoque/estoque.module';
 import { FinancialDashboardModule } from './financial-dashboard/financial-dashboard.module';
+import { FiscalDashboardModule } from './fiscal-dashboard/fiscal-dashboard.module';
 
 @Module({
   imports: [
@@ -67,7 +68,8 @@ import { FinancialDashboardModule } from './financial-dashboard/financial-dashbo
     DemoModule,
     ProductSalesModule,
     EstoqueModule,
-    FinancialDashboardModule
+    FinancialDashboardModule,
+    FiscalDashboardModule
   ],
   controllers: [AppController],
   providers: [AppService],

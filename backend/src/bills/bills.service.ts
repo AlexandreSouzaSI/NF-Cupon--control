@@ -17,6 +17,11 @@ import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { parseOfx } from './ofx-parser';
 import { buildTodayReportPdf } from './bills-report-builder';
+import {
+    buildCnab240Remessa,
+    BoletoPagamento,
+    PixPagamento,
+} from './cnab240-sicredi-builder';
 
 @Injectable()
 export class BillsService {
@@ -561,6 +566,52 @@ export class BillsService {
         });
     }
 
+    // "Colocar todas as vencidas em pagamentos de hoje" — mesma regra do
+    // botão individual (toggleQueueToday), só que em massa: pega toda
+    // conta OPEN com dueDate no passado e ainda não marcada, e marca de
+    // uma vez. Não mexe em quem já estava marcada (fica como estava) nem
+    // em conta paga/cancelada. "Vencida" aqui é sempre calculado pela
+    // dueDate (não existe um cron que grava status=OVERDUE no banco — o
+    // enum existe mas hoje bill.status só vira OPEN/PAID/CANCELED).
+    async queueAllOverdueToday(user: any, storeId?: string) {
+        if (!this.canManageBills(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para gerenciar contas a pagar.',
+            );
+        }
+
+        if (storeId) {
+            this.ensureStoreAccess(storeId, user);
+        }
+
+        const allowedStoreIds = this.getAllowedStoreIds(user);
+
+        const vencidas = await this.prisma.bill.findMany({
+            where: {
+                status: BillStatus.OPEN,
+                queuedForPaymentAt: null,
+                dueDate: { lt: this.startOfToday() },
+                storeId:
+                    storeId ||
+                    (allowedStoreIds ? { in: allowedStoreIds } : undefined),
+            },
+            select: { id: true },
+        });
+
+        if (vencidas.length === 0) {
+            return { total: 0, ids: [] };
+        }
+
+        const ids = vencidas.map((bill) => bill.id);
+
+        await this.prisma.bill.updateMany({
+            where: { id: { in: ids } },
+            data: { queuedForPaymentAt: new Date() },
+        });
+
+        return { total: ids.length, ids };
+    }
+
     // Lista usada no relatório do dia: contas com vencimento hoje +
     // vencidas que alguém marcou manualmente pra entrar nos pagamentos de
     // hoje (toggleQueueToday) — mesmo critério do filtro "Hoje" da tela.
@@ -671,6 +722,205 @@ export class BillsService {
         }
 
         return { transactions };
+    }
+
+    // Só Proprietário/Administrativo mexem no convênio bancário — é dado
+    // sensível (identifica a conta da empresa no Sicredi) e usado por
+    // todas as lojas ao mesmo tempo (convênio único, não é por loja).
+    private canManagePaymentBatch(user: any) {
+        return [UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO].includes(
+            user.role,
+        );
+    }
+
+    async getPaymentBatchConfig(user: any) {
+        if (!this.canManagePaymentBatch(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para ver a configuração de pagamento em lote.',
+            );
+        }
+
+        return this.prisma.paymentBatchConfig.findFirst({
+            orderBy: { updatedAt: 'desc' },
+        });
+    }
+
+    async savePaymentBatchConfig(
+        user: any,
+        body: {
+            convenioCode: string;
+            agencia: string;
+            agenciaDv?: string;
+            conta: string;
+            contaDv?: string;
+            companyName: string;
+            companyCnpj: string;
+        },
+    ) {
+        if (!this.canManagePaymentBatch(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para alterar a configuração de pagamento em lote.',
+            );
+        }
+
+        if (
+            !body.convenioCode ||
+            !body.agencia ||
+            !body.conta ||
+            !body.companyName ||
+            !body.companyCnpj
+        ) {
+            throw new BadRequestException(
+                'Preencha código do convênio, agência, conta, nome da empresa e CNPJ.',
+            );
+        }
+
+        // Único registro pra empresa toda — se já existe, atualiza; se não,
+        // cria. Evita ficar acumulando linha velha a cada edição.
+        const existing = await this.prisma.paymentBatchConfig.findFirst({
+            orderBy: { updatedAt: 'desc' },
+        });
+
+        const data = {
+            convenioCode: body.convenioCode,
+            agencia: body.agencia,
+            agenciaDv: body.agenciaDv || null,
+            conta: body.conta,
+            contaDv: body.contaDv || null,
+            companyName: body.companyName,
+            companyCnpj: body.companyCnpj,
+            updatedById: user.id || user.userId,
+        };
+
+        if (existing) {
+            return this.prisma.paymentBatchConfig.update({
+                where: { id: existing.id },
+                data,
+            });
+        }
+
+        return this.prisma.paymentBatchConfig.create({ data });
+    }
+
+    // Monta o arquivo CNAB 240 de remessa com as contas marcadas pra
+    // "pagamentos de hoje" (mesmo critério de findTodayBills/relatório do
+    // dia) — em todas as lojas que o usuário tem acesso, porque o
+    // convênio é único pra empresa toda (não dá pra gerar 1 arquivo por
+    // loja separado). Só entram boleto (tem código de barras) e PIX (tem
+    // chave) — são as 2 formas que o usuário pediu; qualquer outra forma
+    // de pagamento (cartão, dinheiro, etc.) fica de fora do arquivo e
+    // aparece em "ignoradas" pro usuário saber que precisa pagar por
+    // fora.
+    async generateBatchPaymentFile(user: any) {
+        if (!this.canManagePaymentBatch(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para gerar o lançamento em lote.',
+            );
+        }
+
+        const convenio = await this.prisma.paymentBatchConfig.findFirst({
+            orderBy: { updatedAt: 'desc' },
+        });
+
+        if (!convenio) {
+            throw new BadRequestException(
+                'Configure o convênio do Sicredi antes de gerar o arquivo (Contas a Pagar → Lançamento em lote).',
+            );
+        }
+
+        const bills = await this.findTodayBills(user);
+
+        const pendentes = bills.filter(
+            (bill) => bill.paymentMethod === 'BANK_SLIP' || bill.paymentMethod === 'PIX',
+        );
+
+        const boletos: BoletoPagamento[] = [];
+        const pixPagamentos: PixPagamento[] = [];
+        const ignoradas: { id: string; description: string; motivo: string }[] =
+            [];
+
+        const hoje = new Date();
+
+        for (const bill of bills) {
+            if (bill.paymentMethod === 'BANK_SLIP') {
+                if (!bill.barcode) {
+                    ignoradas.push({
+                        id: bill.id,
+                        description: bill.description,
+                        motivo: 'Boleto sem código de barras cadastrado.',
+                    });
+                    continue;
+                }
+
+                boletos.push({
+                    billId: bill.id,
+                    barcode: bill.barcode,
+                    value: Number(bill.value),
+                    dueDate: bill.dueDate,
+                    paymentDate: hoje,
+                    beneficiary: bill.beneficiary || bill.supplier?.name || null,
+                    description: bill.description,
+                });
+            } else if (bill.paymentMethod === 'PIX') {
+                if (!bill.pixKey) {
+                    ignoradas.push({
+                        id: bill.id,
+                        description: bill.description,
+                        motivo: 'PIX sem chave cadastrada.',
+                    });
+                    continue;
+                }
+
+                pixPagamentos.push({
+                    billId: bill.id,
+                    value: Number(bill.value),
+                    paymentDate: hoje,
+                    beneficiary: bill.beneficiary || bill.supplier?.name || null,
+                    bankName: bill.bankName,
+                    bankAgency: bill.bankAgency,
+                    bankAccount: bill.bankAccount,
+                    pixKey: bill.pixKey,
+                    description: bill.description,
+                });
+            } else {
+                ignoradas.push({
+                    id: bill.id,
+                    description: bill.description,
+                    motivo:
+                        'Forma de pagamento não entra no lote (só boleto e PIX por enquanto).',
+                });
+            }
+        }
+
+        if (boletos.length === 0 && pixPagamentos.length === 0) {
+            throw new BadRequestException(
+                'Nenhuma conta de hoje é boleto ou PIX com os dados bancários completos — nada pra incluir no lote.',
+            );
+        }
+
+        const conteudo = buildCnab240Remessa(
+            {
+                bankCode: convenio.bankCode,
+                convenioCode: convenio.convenioCode,
+                agencia: convenio.agencia,
+                agenciaDv: convenio.agenciaDv,
+                conta: convenio.conta,
+                contaDv: convenio.contaDv,
+                companyName: convenio.companyName,
+                companyCnpj: convenio.companyCnpj,
+            },
+            boletos,
+            pixPagamentos,
+        );
+
+        return {
+            conteudo,
+            resumo: {
+                totalBoletos: boletos.length,
+                totalPix: pixPagamentos.length,
+                ignoradas,
+            },
+        };
     }
 
     private defaultInclude() {

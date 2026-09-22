@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 
 import { AppLayout } from '../../../src/components/app-layout';
 import { api, API_URL } from '@/lib/api';
-import { canManagePurchaseBilling, getUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
 
 type PurchaseItem = {
     id: string;
@@ -310,12 +310,6 @@ function PurchaseDetailPageInner() {
     const openReceiptOnLoad = searchParams.get('receive') === '1';
 
     const user = getUser();
-
-    // "Aceitar e gerar conta a pagar" (Criar Conta a Pagar) é função do
-    // Administrativo/Proprietário/Financeiro/Admin Master — Estoquista só
-    // recebe a compra, não vê essa seção. Espelha canManagePurchaseBilling
-    // do backend (purchases.service.ts).
-    const userCanManageBilling = canManagePurchaseBilling(user);
 
     const [purchase, setPurchase] =
         useState<PurchaseDetail | null>(null);
@@ -1376,26 +1370,14 @@ function PurchaseDetailPageInner() {
                         <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                             <div className="mb-5 flex items-center justify-between">
                                 <div>
-                                    {userCanManageBilling && (
-                                        <>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    router.push(
-                                                        `/bills/new?purchaseId=${purchase.id}`,
-                                                    )
-                                                }
-                                                className="mt-5 rounded-xl bg-cyan-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-cyan-700"
-                                            >
-                                                Criar Conta a Pagar
-                                            </button>
+                                    <h3 className="text-lg font-bold">
+                                        Contas a pagar
+                                    </h3>
 
-                                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                                Boleto, PIX, cartão ou lançamento
-                                                sem boleto.
-                                            </p>
-                                        </>
-                                    )}
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                        Gerada ao conciliar a NF com a
+                                        compra.
+                                    </p>
                                 </div>
 
                                 <Wallet className="text-cyan-400" />
@@ -1409,9 +1391,9 @@ function PurchaseDetailPageInner() {
                                     </p>
 
                                     <p className="mt-1 text-sm text-orange-400/70">
-                                        Depois do recebimento e da NF,
-                                        o financeiro deve registrar o
-                                        pagamento.
+                                        Concilie a NF com esta compra
+                                        (lista de Compras) pra gerar a
+                                        conta a pagar automaticamente.
                                     </p>
                                 </div>
                             ) : (

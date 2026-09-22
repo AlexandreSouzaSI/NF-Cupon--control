@@ -11,7 +11,13 @@ async function bootstrap() {
       AppModule,
     );
 
-  app.enableCors();
+  app.enableCors({
+    // X-Batch-Summary: resumo do lançamento em lote (Sicredi) que vem
+    // junto do download do .txt — sem isso o navegador bloqueia o
+    // frontend de ler esse header numa resposta cross-origin (Contas a
+    // Pagar → botão "Gerar lançamento em lote").
+    exposedHeaders: ['X-Batch-Summary'],
+  });
 
   // Atrás do Nginx (produção), sem isso req.ip sempre devolve o IP do
   // próprio servidor, não o do visitante — quebraria o controle de teste

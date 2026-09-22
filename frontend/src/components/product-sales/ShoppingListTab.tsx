@@ -28,12 +28,67 @@ type IngredienteSugestao = {
     ingrediente: string;
     unidadeMedida: UnidadeMedida;
     pesoUnidadeGramas: number | null;
+    categoriaLista: string | null;
+    ordemLista: number | null;
     pico: number;
     sugestao: number;
     unidadesEquivalentesSugestao: number | null;
     ocorrencias: number;
     periodoPico: Periodo | null;
 };
+
+// Ordem fixa das categorias da Lista de Compra, do jeito que o chefe de
+// produção organiza o pedido — categorias fora dessa lista (nome livre
+// digitado na aba Ingredientes) aparecem depois, em ordem alfabética;
+// ingrediente sem categoria (categoriaLista null) cai em "Outros", por
+// último.
+const CATEGORIA_ORDEM_PADRAO = [
+    'Proteínas e Cortes',
+    'Feijoada',
+    'Noite de petiscos',
+];
+const CATEGORIA_OUTROS = 'Outros';
+
+function agruparPorCategoria(itens: IngredienteSugestao[]) {
+    const grupos = new Map<string, IngredienteSugestao[]>();
+
+    for (const item of itens) {
+        const chave = item.categoriaLista?.trim() || CATEGORIA_OUTROS;
+        const lista = grupos.get(chave);
+        if (lista) lista.push(item);
+        else grupos.set(chave, [item]);
+    }
+
+    for (const lista of grupos.values()) {
+        lista.sort((a, b) => {
+            const ordemA = a.ordemLista ?? Number.MAX_SAFE_INTEGER;
+            const ordemB = b.ordemLista ?? Number.MAX_SAFE_INTEGER;
+            if (ordemA !== ordemB) return ordemA - ordemB;
+            return a.ingrediente.localeCompare(b.ingrediente, 'pt-BR');
+        });
+    }
+
+    const chavesRestantes = [...grupos.keys()]
+        .filter(
+            (chave) =>
+                !CATEGORIA_ORDEM_PADRAO.includes(chave) &&
+                chave !== CATEGORIA_OUTROS,
+        )
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    const ordemFinal = [
+        ...CATEGORIA_ORDEM_PADRAO,
+        ...chavesRestantes,
+        CATEGORIA_OUTROS,
+    ];
+
+    return ordemFinal
+        .filter((categoria) => grupos.has(categoria))
+        .map((categoria) => ({
+            categoria,
+            itens: grupos.get(categoria) as IngredienteSugestao[],
+        }));
+}
 
 // "Opções vendidas": pico + margens por PRODUTO exato, do jeito que a
 // loja já controlava numa planilha manual (nome do prato como vendido,
@@ -544,64 +599,67 @@ export function ShoppingListTab() {
 
                     {visao === 'INGREDIENTES' && (
                         <>
-                            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-zinc-200 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800">
-                                            <th className="px-4 py-3 font-medium">Ingrediente</th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Pico registrado
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Sugestão (+{MARGEM_TEXTO})
-                                            </th>
-                                            <th className="px-4 py-3 text-left font-medium">
-                                                Período do pico
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                                        {ingredientes.length === 0 ? (
-                                            <tr>
-                                                <td
-                                                    colSpan={4}
-                                                    className="px-4 py-8 text-center text-xs text-zinc-500"
-                                                >
-                                                    Nenhum ingrediente apurado nesse período.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            ingredientes.map((item) => (
-                                                <tr key={item.ingredienteId}>
-                                                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-white">
-                                                        {item.ingrediente}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right text-zinc-500">
-                                                        {formatarQuantidade(item.pico, item.unidadeMedida)}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                                                        {formatarQuantidade(
-                                                            item.sugestao,
-                                                            item.unidadeMedida,
-                                                            item.unidadesEquivalentesSugestao,
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-left text-xs text-zinc-500">
-                                                        {item.periodoPico
-                                                            ? formatarNomePadraoImportacao(
-                                                                null,
-                                                                item.periodoPico.periodoInicio,
-                                                                item.periodoPico.periodoFim,
-                                                                '—',
-                                                            )
-                                                            : '—'}
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                            {ingredientes.length === 0 ? (
+                                <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+                                    Nenhum ingrediente apurado nesse período.
+                                </div>
+                            ) : (
+                                agruparPorCategoria(ingredientes).map((grupo) => (
+                                    <div key={grupo.categoria} className="space-y-2">
+                                        <h4 className="px-1 text-sm font-bold text-zinc-900 dark:text-white">
+                                            {grupo.categoria}
+                                        </h4>
+
+                                        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b border-zinc-200 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800">
+                                                        <th className="px-4 py-3 font-medium">Ingrediente</th>
+                                                        <th className="px-4 py-3 text-right font-medium">
+                                                            Pico registrado
+                                                        </th>
+                                                        <th className="px-4 py-3 text-right font-medium">
+                                                            Sugestão (+{MARGEM_TEXTO})
+                                                        </th>
+                                                        <th className="px-4 py-3 text-left font-medium">
+                                                            Período do pico
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                                    {grupo.itens.map((item) => (
+                                                        <tr key={item.ingredienteId}>
+                                                            <td className="px-4 py-3 font-medium text-zinc-900 dark:text-white">
+                                                                {item.ingrediente}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-zinc-500">
+                                                                {formatarQuantidade(item.pico, item.unidadeMedida)}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                                                {formatarQuantidade(
+                                                                    item.sugestao,
+                                                                    item.unidadeMedida,
+                                                                    item.unidadesEquivalentesSugestao,
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-left text-xs text-zinc-500">
+                                                                {item.periodoPico
+                                                                    ? formatarNomePadraoImportacao(
+                                                                        null,
+                                                                        item.periodoPico.periodoInicio,
+                                                                        item.periodoPico.periodoFim,
+                                                                        '—',
+                                                                    )
+                                                                    : '—'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
 
                             <p className="text-xs text-zinc-500">
                                 Cada linha soma TUDO que leva aquele
@@ -613,7 +671,12 @@ export function ShoppingListTab() {
                                 (em kg ou unidades, conforme configurado na
                                 aba Ingredientes). A sugestão soma{' '}
                                 {MARGEM_TEXTO} em cima desse pico — é o
-                                número pra porcionar/preparar.
+                                número pra porcionar/preparar. Os grupos
+                                (Proteínas e Cortes, Feijoada, Noite de
+                                petiscos...) e a ordem de cada item dentro
+                                deles vêm da categoria configurada na aba
+                                Ingredientes — ingrediente sem categoria cai
+                                em &quot;Outros&quot;.
                             </p>
                         </>
                     )}

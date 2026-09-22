@@ -113,6 +113,17 @@ export function canManagePurchaseBilling(user: AuthUser | null) {
     );
 }
 
+// Convênio bancário (Sicredi) pra gerar o lançamento em lote — espelha
+// canManagePaymentBatch() do backend (bills.service.ts). Só
+// Proprietário/Administrativo (+Admin Master) veem a tela de
+// configuração e o botão de gerar o arquivo.
+export function canManagePaymentBatch(user: AuthUser | null) {
+    if (!user) return false;
+    if (user.isAdminMaster) return true;
+
+    return ['ADMINISTRATIVO', 'PROPRIETARIO'].includes(user.role);
+}
+
 export function getToken() {
     return Cookies.get('token');
 }

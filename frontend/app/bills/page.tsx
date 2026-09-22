@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     AlertTriangle,
+    Banknote,
     Building2,
     Calendar,
     CalendarDays,
@@ -21,6 +22,7 @@ import {
     Plus,
     ReceiptText,
     Search,
+    Settings,
     SlidersHorizontal,
     Wallet,
     X,
@@ -30,6 +32,11 @@ import { toast } from 'sonner';
 import { AppLayout } from '../../src/components/app-layout';
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
+import { canManagePaymentBatch, getUser } from '@/lib/auth';
+import {
+    BatchPaymentModal,
+    BatchPaymentSummaryModal,
+} from '../../src/components/bills/BatchPaymentModal';
 
 type Store = {
     id: string;
@@ -452,6 +459,18 @@ function BillsPageInner() {
         new Set(),
     );
     const [downloadingReport, setDownloadingReport] = useState(false);
+    const [queuingAllOverdue, setQueuingAllOverdue] = useState(false);
+
+    const currentUser = getUser();
+    const podeGerenciarLote = canManagePaymentBatch(currentUser);
+
+    const [showBatchConfig, setShowBatchConfig] = useState(false);
+    const [generatingBatch, setGeneratingBatch] = useState(false);
+    const [batchSummary, setBatchSummary] = useState<{
+        totalBoletos: number;
+        totalPix: number;
+        ignoradas: { id: string; description: string; motivo: string }[];
+    } | null>(null);
 
     function toggleExpanded(id: string) {
         setExpandedIds((current) => {
@@ -751,6 +770,32 @@ function BillsPageInner() {
         }
     }
 
+    async function queueAllOverdueToday() {
+        try {
+            setQueuingAllOverdue(true);
+
+            const response = await api.patch('/bills/queue-today/overdue', {
+                storeId: getActiveStore()?.id || undefined,
+            });
+
+            const total = response.data?.total ?? 0;
+
+            toast.success(
+                total > 0
+                    ? `${total} conta(s) vencida(s) incluída(s) nos pagamentos de hoje.`
+                    : 'Nenhuma conta vencida pra incluir — já estavam todas marcadas.',
+            );
+            await loadBills();
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data?.message ||
+                'Erro ao incluir as vencidas nos pagamentos de hoje.',
+            );
+        } finally {
+            setQueuingAllOverdue(false);
+        }
+    }
+
     async function downloadTodayReport() {
         try {
             setDownloadingReport(true);
@@ -796,6 +841,62 @@ function BillsPageInner() {
         }
     }
 
+    async function generateBatchPayment() {
+        try {
+            setGeneratingBatch(true);
+
+            const response = await api.get('/bills/batch-payment/generate', {
+                responseType: 'blob',
+            });
+
+            const blobUrl = window.URL.createObjectURL(
+                new Blob([response.data]),
+            );
+
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `cnab240-sicredi-${new Date()
+                .toISOString()
+                .slice(0, 10)}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.URL.revokeObjectURL(blobUrl);
+
+            const summaryHeader = response.headers?.['x-batch-summary'];
+
+            if (summaryHeader) {
+                try {
+                    setBatchSummary(
+                        JSON.parse(decodeURIComponent(summaryHeader)),
+                    );
+                } catch {
+                    // sem resumo, mas o arquivo já baixou — segue o jogo
+                }
+            }
+        } catch (error: any) {
+            let message = 'Erro ao gerar o lançamento em lote.';
+            const data = error?.response?.data;
+
+            if (data instanceof Blob) {
+                try {
+                    const text = await data.text();
+                    const parsed = JSON.parse(text);
+                    message = Array.isArray(parsed?.message)
+                        ? parsed.message.join(', ')
+                        : parsed?.message || message;
+                } catch {
+                    // mantém a mensagem padrão
+                }
+            }
+
+            toast.error(message);
+        } finally {
+            setGeneratingBatch(false);
+        }
+    }
+
     return (
         <AppLayout title="Contas a Pagar">
             <div className="space-y-6">
@@ -812,6 +913,31 @@ function BillsPageInner() {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
+                        {podeGerenciarLote && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBatchConfig(true)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-5 py-3 font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                    title="Configurar convênio Sicredi"
+                                >
+                                    <Settings size={18} />
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={generateBatchPayment}
+                                    disabled={generatingBatch}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-5 py-3 font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                                >
+                                    <Banknote size={18} />
+                                    {generatingBatch
+                                        ? 'Gerando...'
+                                        : 'Gerar lançamento em lote'}
+                                </button>
+                            </>
+                        )}
+
                         <button
                             type="button"
                             onClick={downloadTodayReport}
@@ -900,6 +1026,29 @@ function BillsPageInner() {
                         );
                     })}
                 </section>
+
+                {periodTotals.OVERDUE.count > 0 && (
+                    <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 dark:bg-red-500/[0.06]">
+                        <p className="text-sm text-red-600 dark:text-red-400">
+                            {periodTotals.OVERDUE.count} conta(s) vencida(s)
+                            no total — inclua todas de uma vez nos
+                            pagamentos de hoje, ou use o botão individual
+                            de cada conta na lista abaixo.
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={queueAllOverdueToday}
+                            disabled={queuingAllOverdue}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                        >
+                            <Clock size={14} />
+                            {queuingAllOverdue
+                                ? 'Incluindo...'
+                                : 'Colocar todas vencidas para hoje'}
+                        </button>
+                    </section>
+                )}
 
                 <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                     <div className="flex flex-col gap-3 sm:flex-row">
@@ -1075,6 +1224,17 @@ function BillsPageInner() {
                     )}
                 </section>
             </div>
+
+            {showBatchConfig && (
+                <BatchPaymentModal onClose={() => setShowBatchConfig(false)} />
+            )}
+
+            {batchSummary && (
+                <BatchPaymentSummaryModal
+                    resumo={batchSummary}
+                    onClose={() => setBatchSummary(null)}
+                />
+            )}
         </AppLayout>
     );
 }

@@ -208,6 +208,16 @@ export const menu: MenuGroup[] = [
         group: 'Fiscal',
         items: [
             {
+                label: 'Dashboard Fiscal',
+                href: '/fiscal-dashboard',
+                icon: BarChart3,
+                // Mostra valor (NF entrada/serviço, faturamento, perdas) —
+                // mesmo grupo de perfis do Dashboard Financeiro.
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
+                color: 'purple',
+                module: 'NOTAS_FISCAIS',
+            },
+            {
                 label: 'Cupons e NF',
                 href: '/fiscal-documents',
                 icon: Receipt,

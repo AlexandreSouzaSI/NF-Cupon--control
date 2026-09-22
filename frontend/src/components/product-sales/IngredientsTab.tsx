@@ -7,6 +7,7 @@ import {
     Check,
     ChevronDown,
     ChevronUp,
+    ClipboardList,
     Loader2,
     Pencil,
     Scale,
@@ -30,6 +31,8 @@ type IngredienteConsumo = {
     pesoUnidadeGramas: number | null;
     isProteina: boolean;
     porcaoPadraoGramas: number | null;
+    categoriaLista: string | null;
+    ordemLista: number | null;
     quantidade: number;
     totalKg: number;
     unidadesEquivalentes: number | null;
@@ -40,6 +43,20 @@ type IngredientsSummary = {
     totalIngredientes: number;
     totalKg: number;
     ingredientes: IngredienteConsumo[];
+};
+
+// Ingrediente cru como vem de GET /product-sales/ingredients (todos os
+// já cadastrados na loja, com ou sem consumo apurado — Decimal serializa
+// como string, por isso Number(...) na hora de usar).
+type IngredientRaw = {
+    id: string;
+    nome: string;
+    unidadeMedida: UnidadeMedida;
+    pesoUnidadeGramas: string | number | null;
+    isProteina: boolean;
+    porcaoPadraoGramas: string | number | null;
+    categoriaLista: string | null;
+    ordemLista: number | null;
 };
 
 function formatarKg(valor: number) {
@@ -85,7 +102,10 @@ export function IngredientsTab({
     const [formPeso, setFormPeso] = useState('');
     const [formProteina, setFormProteina] = useState(false);
     const [formPorcaoPadrao, setFormPorcaoPadrao] = useState('');
+    const [formCategoria, setFormCategoria] = useState('');
+    const [formOrdem, setFormOrdem] = useState('');
     const [salvando, setSalvando] = useState(false);
+    const [importandoPadrao, setImportandoPadrao] = useState(false);
 
     async function load() {
         const store = getActiveStore();
@@ -94,11 +114,62 @@ export function IngredientsTab({
         try {
             setLoading(true);
 
-            const response = await api.get('/product-sales/ingredients-summary', {
-                params: { storeId: store.id, importId: importId || undefined },
-            });
+            // Junta os DOIS: ingredients-summary só traz quem já teve
+            // consumo apurado no recorte atual; ingredients traz TODOS os
+            // já cadastrados na loja (inclusive os recém-criados pelo
+            // botão "Importar lista padrão", que ainda não têm receita
+            // vinculada) — sem isso, um ingrediente novo sem venda ainda
+            // ficaria invisível e impossível de configurar aqui.
+            const [summaryResponse, allResponse] = await Promise.all([
+                api.get('/product-sales/ingredients-summary', {
+                    params: { storeId: store.id, importId: importId || undefined },
+                }),
+                api.get('/product-sales/ingredients', {
+                    params: { storeId: store.id },
+                }),
+            ]);
 
-            setDados(response.data);
+            const summary: IngredientsSummary = summaryResponse.data;
+            const todos: IngredientRaw[] = allResponse.data || [];
+
+            const jaListados = new Set(summary.ingredientes.map((i) => i.ingredienteId));
+
+            const semConsumo: IngredienteConsumo[] = todos
+                .filter((raw) => !jaListados.has(raw.id))
+                .map((raw) => ({
+                    ingredienteId: raw.id,
+                    ingrediente: raw.nome,
+                    unidadeMedida: raw.unidadeMedida,
+                    pesoUnidadeGramas:
+                        raw.pesoUnidadeGramas != null ? Number(raw.pesoUnidadeGramas) : null,
+                    isProteina: raw.isProteina,
+                    porcaoPadraoGramas:
+                        raw.porcaoPadraoGramas != null ? Number(raw.porcaoPadraoGramas) : null,
+                    categoriaLista: raw.categoriaLista,
+                    ordemLista: raw.ordemLista,
+                    quantidade: 0,
+                    totalKg: 0,
+                    unidadesEquivalentes: null,
+                    pratos: [],
+                }))
+                .sort((a, b) => a.ingrediente.localeCompare(b.ingrediente, 'pt-BR'));
+
+            const categoriaPorId = new Map(
+                todos.map((raw) => [raw.id, { categoriaLista: raw.categoriaLista, ordemLista: raw.ordemLista }]),
+            );
+
+            setDados({
+                totalIngredientes: summary.totalIngredientes + semConsumo.length,
+                totalKg: summary.totalKg,
+                ingredientes: [
+                    ...summary.ingredientes.map((item) => ({
+                        ...item,
+                        categoriaLista: categoriaPorId.get(item.ingredienteId)?.categoriaLista ?? null,
+                        ordemLista: categoriaPorId.get(item.ingredienteId)?.ordemLista ?? null,
+                    })),
+                    ...semConsumo,
+                ],
+            });
         } catch (error) {
             console.error(error);
         } finally {
@@ -111,6 +182,32 @@ export function IngredientsTab({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshKey, importId]);
 
+    async function importarListaPadrao() {
+        const store = getActiveStore();
+        if (!store) return;
+
+        try {
+            setImportandoPadrao(true);
+
+            const response = await api.post(
+                '/product-sales/ingredients/import-lista-padrao',
+                { storeId: store.id },
+            );
+
+            toast.success(
+                `${response.data?.totalImportado ?? 0} ingrediente(s) da lista padrão criado(s)/ajustado(s).`,
+            );
+            await load();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message ||
+                'Erro ao importar a lista padrão.';
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setImportandoPadrao(false);
+        }
+    }
+
     function iniciarEdicao(item: IngredienteConsumo) {
         setEditandoId(item.ingredienteId);
         setFormUnidade(item.unidadeMedida);
@@ -119,6 +216,8 @@ export function IngredientsTab({
         setFormPorcaoPadrao(
             item.porcaoPadraoGramas ? String(item.porcaoPadraoGramas) : '',
         );
+        setFormCategoria(item.categoriaLista || '');
+        setFormOrdem(item.ordemLista != null ? String(item.ordemLista) : '');
     }
 
     function cancelarEdicao() {
@@ -138,6 +237,8 @@ export function IngredientsTab({
                     formUnidade === 'KG' && formPorcaoPadrao
                         ? Number(formPorcaoPadrao)
                         : null,
+                categoriaLista: formCategoria.trim() || null,
+                ordemLista: formOrdem !== '' ? Number(formOrdem) : null,
             });
 
             toast.success('Ingrediente atualizado.');
@@ -167,7 +268,7 @@ export function IngredientsTab({
                     <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
                         <Scale size={18} />
                     </div>
-                    <p className="text-xs text-zinc-500">Ingredientes com consumo apurado</p>
+                    <p className="text-xs text-zinc-500">Ingredientes cadastrados</p>
                     <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-white">
                         {loading ? '...' : dados?.totalIngredientes ?? 0}
                     </p>
@@ -186,16 +287,40 @@ export function IngredientsTab({
                 </div>
             </div>
 
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="text-xs text-zinc-500">
+                    Cria/ajusta de uma vez os ingredientes da lista padrão do
+                    chefe de produção (Proteínas e Cortes, Feijoada, Noite de
+                    petiscos), já marcados como proteína e na categoria/ordem
+                    certas — não duplica quem já existir.
+                </p>
+
+                <button
+                    onClick={importarListaPadrao}
+                    disabled={importandoPadrao}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                >
+                    {importandoPadrao ? (
+                        <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                        <ClipboardList size={14} />
+                    )}
+                    Importar lista padrão
+                </button>
+            </div>
+
             {loading ? (
                 <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
                     Carregando...
                 </div>
             ) : !dados || dados.ingredientes.length === 0 ? (
                 <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-                    Nenhum consumo apurado ainda — configure a ficha técnica
-                    dos pratos na aba &quot;Produtos&quot; (botão &quot;Configurar&quot;
-                    em cada item) pra ver o consumo de cada ingrediente aqui,
-                    somando todos os pratos que usam ele.
+                    Nenhum ingrediente cadastrado ainda — configure a ficha
+                    técnica dos pratos na aba &quot;Produtos&quot; (botão
+                    &quot;Configurar&quot; em cada item) pra ver o consumo de
+                    cada ingrediente aqui, ou use o botão &quot;Importar lista
+                    padrão&quot; acima pra já criar os itens da lista do
+                    chefe de produção.
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -236,6 +361,11 @@ export function IngredientsTab({
                                                 {item.isProteina && (
                                                     <span className="ml-1 rounded-md bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400">
                                                         PROTEÍNA
+                                                    </span>
+                                                )}
+                                                {item.categoriaLista && (
+                                                    <span className="ml-1 rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-purple-600 dark:text-purple-400">
+                                                        {item.categoriaLista}
                                                     </span>
                                                 )}
                                             </td>
@@ -280,6 +410,31 @@ export function IngredientsTab({
                                                                 className="w-40 rounded-lg border border-amber-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-amber-500/40"
                                                             />
                                                         )}
+
+                                                        <select
+                                                            value={formCategoria}
+                                                            onChange={(e) => setFormCategoria(e.target.value)}
+                                                            title="Seção do pedido pro fornecedor, como o chefe de produção organiza a Lista de Compra."
+                                                            className="rounded-lg border border-purple-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-purple-500/40"
+                                                        >
+                                                            <option value="">Sem categoria (Outros)</option>
+                                                            <option value="Proteínas e Cortes">
+                                                                Proteínas e Cortes
+                                                            </option>
+                                                            <option value="Feijoada">Feijoada</option>
+                                                            <option value="Noite de petiscos">
+                                                                Noite de petiscos
+                                                            </option>
+                                                        </select>
+
+                                                        <input
+                                                            type="number"
+                                                            value={formOrdem}
+                                                            onChange={(e) => setFormOrdem(e.target.value)}
+                                                            placeholder="Ordem"
+                                                            title="Posição desse item dentro da categoria na Lista de Compra (menor primeiro)."
+                                                            className="w-20 rounded-lg border border-purple-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-purple-500/40"
+                                                        />
 
                                                         <label
                                                             title="Marca esse ingrediente como proteína/carne — só proteína (ou item por unidade, tipo Pastel/Coxinha) entra na Lista de Compra."

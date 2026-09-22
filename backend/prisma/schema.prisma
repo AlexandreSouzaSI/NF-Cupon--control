@@ -315,7 +315,8 @@ model User {
   deletionRequestsCreated  DeletionRequest[] @relation("DeletionRequestedBy")
   deletionRequestsReviewed DeletionRequest[] @relation("DeletionReviewedBy")
 
-  bankStatementImports BankStatementImport[]
+  bankStatementImports       BankStatementImport[]
+  paymentBatchConfigsUpdated PaymentBatchConfig[]
 
   taxRegimeConfigsCreated  TaxRegimeConfig[] @relation("TaxRegimeConfigCreatedBy")
   revenueEntriesCreated    RevenueEntry[]    @relation("RevenueEntryCreatedBy")
@@ -756,6 +757,31 @@ model Bill {
   @@index([pixKey])
 }
 
+// Dados do Convênio de Pagamentos no Sicredi — usados só pra montar o
+// cabeçalho do arquivo CNAB 240 de "lançamento em lote" (pagar boletos e
+// PIX de uma vez, subindo o arquivo no Sicredi). Único registro pra toda
+// a empresa (não é por loja) — o serviço sempre lê/atualiza a linha mais
+// recente. Não são credenciais de acesso (não dá pra logar com isso),
+// só identificação bancária exigida pelo layout do banco.
+model PaymentBatchConfig {
+  id String @id @default(uuid())
+
+  bankCode String @default("748") // Sicredi
+
+  convenioCode String // código do Convênio de Pagamentos no Sicredi
+  agencia      String
+  agenciaDv    String?
+  conta        String
+  contaDv      String?
+
+  companyName String
+  companyCnpj String
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?    @relation(fields: [updatedById], references: [id])
+}
+
 // Categoria livre da conta a pagar (ex.: Revenda, Matéria-prima,
 // Manutenção...) — cadastrada na hora (igual Fornecedor: digita e cria se
 // não existir). A ideia é que, com o tempo, cada Fornecedor tenha um
@@ -1139,6 +1165,16 @@ model Ingredient {
   // como porção própria, diferente da porção adulta. Opcional (null =
   // não normaliza, cada gramatura vira sua própria linha, como antes).
   porcaoPadraoGramas Decimal? @db.Decimal(10, 2)
+
+  // Agrupamento da Lista de Compra por seção do pedido pro fornecedor,
+  // do jeito que o chefe de produção organiza (ex: "Proteínas e Cortes",
+  // "Feijoada", "Noite de petiscos"). String livre (não enum Prisma) pra
+  // não exigir migração toda vez que uma seção for renomeada/adicionada.
+  // null = ingrediente sem categoria definida, cai no grupo "Outros" no
+  // fim da lista. ordemLista é a posição dentro dessa categoria (menor
+  // primeiro); null/empate cai por ordem alfabética.
+  categoriaLista String?
+  ordemLista     Int?
 
   createdAt DateTime @default(now())
 

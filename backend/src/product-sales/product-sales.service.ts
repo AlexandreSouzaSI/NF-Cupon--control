@@ -151,6 +151,63 @@ const MARGEM_SEGURANCA_SUGESTAO = 0.2;
 // partir do pico automaticamente em vez de digitada à mão toda vez.
 const MARGENS_OPCOES_VENDIDAS = [0.1, 0.2, 0.3];
 
+// Lista padrão de proteínas/cortes passada pelo chefe de produção,
+// usada pelo botão "Importar lista padrão" (aba Ingredientes) pra
+// criar/ajustar de uma vez os Ingredient dessa loja com a categoria e a
+// ordem certas (ver importarListaPadrao). Mesma lista pra qualquer
+// loja — hoje usada em Anchieta e Contagem. A ordem dentro do array
+// É a ordem de exibição na Lista de Compra (ordemLista).
+const LISTA_PADRAO_PROTEINAS: { categoria: string; nome: string }[] = [
+    // Proteínas e Cortes
+    ...[
+        'Ancho (200g)',
+        'Baby bife (200g)',
+        'Bacon em cubos',
+        'Camarão (180g)',
+        'Carne cozida',
+        'Carne seca (180g)',
+        'Ceviche Salmão',
+        'Ceviche tilápia',
+        'Costela desfiada',
+        'Costela suína (barbecue)',
+        'Fígado (350g)',
+        'Filé mignon (130g)',
+        'Filé mignon (200g)',
+        'Filé mignon cubos',
+        'Frango (350g)',
+        'Linguiça caipira',
+        'Linguiça de costela',
+        'Picanha (200g)',
+        'Salmão (200g)',
+        'Tilápia (130g)',
+        'Tilápia (350g)',
+        'Carpaccio',
+        'Torresmo (400g)',
+    ].map((nome) => ({ categoria: 'Proteínas e Cortes', nome })),
+    // Feijoada
+    ...[
+        'Bacon',
+        'Costelinha',
+        'Linguiça calabresa',
+        'Lombo suíno',
+        'Pezinho suíno',
+        'Pernil suíno',
+        'Boi',
+        'Linguiça Toscana',
+        'Frango (coxa ou filé de peito)',
+    ].map((nome) => ({ categoria: 'Feijoada', nome })),
+    // Noite de petiscos
+    ...[
+        'Boi',
+        'Fígado',
+        'Filé de Frango',
+        'Linguiça Toscana',
+        'Tilápia',
+        'Torresmo',
+        'Linguiça Calabresa',
+    ].map((nome) => ({ categoria: 'Noite de petiscos', nome })),
+];
+
 // Divide o mês em 3 partes pra comparar períodos parecidos entre si —
 // início de mês costuma vender diferente de fim de mês (ex: perto do
 // pagamento). A sugestão pro próximo período que cai no início do mês
@@ -906,6 +963,8 @@ export class ProductSalesService {
             pesoUnidadeGramas?: number | null;
             isProteina?: boolean;
             porcaoPadraoGramas?: number | null;
+            categoriaLista?: string | null;
+            ordemLista?: number | null;
         },
     ) {
         const ingredient = await this.prisma.ingredient.findUnique({
@@ -944,7 +1003,73 @@ export class ProductSalesService {
                             Number(data.porcaoPadraoGramas) <= 0
                             ? null
                             : Number(data.porcaoPadraoGramas),
+                categoriaLista:
+                    data.categoriaLista === undefined
+                        ? undefined
+                        : data.categoriaLista === null || !data.categoriaLista.trim()
+                            ? null
+                            : data.categoriaLista.trim(),
+                ordemLista:
+                    data.ordemLista === undefined
+                        ? undefined
+                        : data.ordemLista === null || Number.isNaN(Number(data.ordemLista))
+                            ? null
+                            : Number(data.ordemLista),
             },
+        });
+    }
+
+    // Cria (ou ajusta) de uma vez todos os ingredientes da lista padrão
+    // do chefe de produção (LISTA_PADRAO_PROTEINAS) nesta loja: cada
+    // item vira/atualiza um Ingredient com isProteina=true, categoria e
+    // ordem certas. Reaproveita o mesmo find-or-create por nome
+    // normalizado do saveRecipe — se o ingrediente já existir (mesmo
+    // nome normalizado), só ajusta categoria/ordem/isProteina, sem
+    // duplicar nem mexer em receitas já vinculadas a ele.
+    async importarListaPadrao(user: any, storeId: string) {
+        if (!storeId) {
+            throw new BadRequestException(
+                'Selecione uma loja ativa no topo do sistema.',
+            );
+        }
+
+        this.ensureStoreAccess(storeId, user);
+
+        const ordemPorCategoria = new Map<string, number>();
+
+        return this.prisma.$transaction(async (tx) => {
+            const resultado: { nome: string; categoria: string }[] = [];
+
+            for (const item of LISTA_PADRAO_PROTEINAS) {
+                const ordem = ordemPorCategoria.get(item.categoria) ?? 0;
+                ordemPorCategoria.set(item.categoria, ordem + 1);
+
+                const nomeChave = normalizarProduto(item.nome);
+
+                await tx.ingredient.upsert({
+                    where: { storeId_nomeChave: { storeId, nomeChave } },
+                    update: {
+                        isProteina: true,
+                        categoriaLista: item.categoria,
+                        ordemLista: ordem,
+                    },
+                    create: {
+                        storeId,
+                        nome: item.nome,
+                        nomeChave,
+                        isProteina: true,
+                        categoriaLista: item.categoria,
+                        ordemLista: ordem,
+                    },
+                });
+
+                resultado.push({ nome: item.nome, categoria: item.categoria });
+            }
+
+            return {
+                totalImportado: resultado.length,
+                itens: resultado,
+            };
         });
     }
 
@@ -1532,6 +1657,8 @@ export class ProductSalesService {
             ingrediente: string;
             unidadeMedida: IngredientUnidade;
             pesoUnidadeGramas: number | null;
+            categoriaLista: string | null;
+            ordemLista: number | null;
             pico: number;
             sugestao: number;
             unidadesEquivalentesSugestao: number | null;
@@ -1622,6 +1749,8 @@ export class ProductSalesService {
                             pesoUnidadeGramas: true,
                             isProteina: true,
                             porcaoPadraoGramas: true,
+                            categoriaLista: true,
+                            ordemLista: true,
                         },
                     },
                 },
@@ -1730,7 +1859,13 @@ export class ProductSalesService {
         >();
         const infoPorIngrediente = new Map<
             string,
-            { nome: string; unidadeMedida: IngredientUnidade; pesoUnidadeGramas: number | null }
+            {
+                nome: string;
+                unidadeMedida: IngredientUnidade;
+                pesoUnidadeGramas: number | null;
+                categoriaLista: string | null;
+                ordemLista: number | null;
+            }
         >();
 
         // "Tamanho": quantidade vendida por (ingrediente + tamanho de
@@ -1760,6 +1895,8 @@ export class ProductSalesService {
                 pesoUnidadeGramas: item.ingredient.pesoUnidadeGramas
                     ? Number(item.ingredient.pesoUnidadeGramas)
                     : null,
+                categoriaLista: item.ingredient.categoriaLista,
+                ordemLista: item.ingredient.ordemLista,
             });
 
             const gramas = Number(item.gramas);
@@ -1846,6 +1983,8 @@ export class ProductSalesService {
                     ingrediente: info?.nome || '',
                     unidadeMedida: info?.unidadeMedida || IngredientUnidade.KG,
                     pesoUnidadeGramas: info?.pesoUnidadeGramas ?? null,
+                    categoriaLista: info?.categoriaLista ?? null,
+                    ordemLista: info?.ordemLista ?? null,
                     pico,
                     sugestao,
                     unidadesEquivalentesSugestao:
@@ -1923,6 +2062,8 @@ export class ProductSalesService {
                 ingrediente: string;
                 unidadeMedida: IngredientUnidade;
                 pesoUnidadeGramas: number | null;
+                categoriaLista: string | null;
+                ordemLista: number | null;
                 pico: number;
                 sugestao: number;
                 ocorrencias: number;
@@ -1950,6 +2091,8 @@ export class ProductSalesService {
                     ingrediente: item.ingrediente,
                     unidadeMedida: item.unidadeMedida,
                     pesoUnidadeGramas: item.pesoUnidadeGramas,
+                    categoriaLista: item.categoriaLista,
+                    ordemLista: item.ordemLista,
                     pico: item.pico,
                     sugestao: item.sugestao,
                     ocorrencias: item.ocorrencias,
