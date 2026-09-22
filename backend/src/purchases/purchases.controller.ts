@@ -18,7 +18,12 @@ import { existsSync, mkdirSync } from 'fs';
 import { extname, join } from 'path';
 import type { Response } from 'express';
 import archiver from 'archiver';
-import { PurchaseCategory, PurchaseStatus, StoreModule } from '@prisma/client';
+import {
+    PurchaseCategory,
+    PurchasePaymentStatus,
+    PurchaseStatus,
+    StoreModule,
+} from '@prisma/client';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -30,6 +35,7 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { CreateFiscalDocumentDto } from './dto/create-fiscal-document.dto';
 import { ReceivePurchaseDto } from './dto/receive-purchase.dto';
 import { AcceptIncomingNfDto } from './dto/accept-incoming-nf.dto';
+import { LinkIncomingGoodsNfDto } from './dto/link-incoming-goods-nf.dto';
 
 const uploadPath = join(process.cwd(), 'uploads', 'fiscal-documents');
 
@@ -138,6 +144,17 @@ export class PurchasesController {
         return this.purchasesService.findPendingApprovals(user);
     }
 
+    // Dashboard próprio de Compras — precisa vir antes de "@Get(':id')" pra
+    // "dashboard-summary" não ser interpretado como um id de compra.
+    @Get('dashboard-summary')
+    async dashboardSummary(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId?: string,
+        @Query('month') month?: string,
+    ) {
+        return this.purchasesService.dashboardSummary(user, storeId, month);
+    }
+
     // NF-e de mercadoria baixada automaticamente da Sefaz. accepted=true
     // devolve a aba "NFs Aceitas" (vinculada, aceita sem conta ou aceita
     // com conta); por padrão (ou accepted=false) devolve só as pendentes.
@@ -149,12 +166,18 @@ export class PurchasesController {
         @Query('page') page?: string,
         @Query('pageSize') pageSize?: string,
         @Query('accepted') accepted?: string,
+        @Query('month') month?: string,
+        @Query('startDate') startDate?: string,
+        @Query('endDate') endDate?: string,
     ) {
         return this.purchasesService.findIncomingGoodsNf(user, {
             storeId,
             page: page ? Number(page) : undefined,
             pageSize: pageSize ? Number(pageSize) : undefined,
             accepted: accepted === 'true',
+            month,
+            startDate,
+            endDate,
         });
     }
 
@@ -270,18 +293,43 @@ export class PurchasesController {
         return this.purchasesService.importGoodsNfXml(storeId, files, user);
     }
 
+    // Duas seções de path depois da base (:id/nf-matches), então não
+    // colide com nenhuma rota estática de um segmento só — pode ficar em
+    // qualquer ordem em relação a elas, mas mantém perto do link por
+    // contexto (busca antes de vincular).
+    @Get(':id/nf-matches')
+    async findNfMatchesForPurchase(
+        @Param('id') id: string,
+        @Query('search') search: string | undefined,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.findNfMatchesForPurchase(id, user, search);
+    }
+
+    // Vencimento sugerido pra NF pendente, lido do grupo "cobr/dup" do XML
+    // (duplicata) — usado pelo modal de Conciliar NF antes de vincular, pra
+    // decidir se mostra o mini-formulário de vencimento/Boleto/PIX ou já
+    // vincula direto. Não muda nada no banco, só lê.
+    @Get('incoming-goods-nf/:id/suggested-due-date')
+    @RequiresModule(StoreModule.NOTAS_FISCAIS)
+    async getSuggestedDueDateForIncomingNf(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.getSuggestedDueDateForIncomingNf(
+            id,
+            user,
+        );
+    }
+
     @Post('incoming-goods-nf/:id/link')
     @RequiresModule(StoreModule.NOTAS_FISCAIS)
     async linkIncomingGoodsNf(
         @Param('id') id: string,
-        @Body('purchaseId') purchaseId: string,
+        @Body() dto: LinkIncomingGoodsNfDto,
         @CurrentUser() user: any,
     ) {
-        return this.purchasesService.linkIncomingGoodsNf(
-            id,
-            purchaseId,
-            user,
-        );
+        return this.purchasesService.linkIncomingGoodsNf(id, dto, user);
     }
 
     @Post('incoming-goods-nf/:id/ignore')
@@ -352,6 +400,16 @@ export class PurchasesController {
         return this.purchasesService.findOne(id, user);
     }
 
+    // Log de auditoria da compra (quem criou, aprovou, recebeu, anexou
+    // NF/cupom, gerou/pagou conta, mudou status de pagamento, etc.).
+    @Get(':id/history')
+    async getHistory(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.getPurchaseHistory(id, user);
+    }
+
     @Post(':id/approve')
     async approve(
         @Param('id') id: string,
@@ -370,6 +428,27 @@ export class PurchasesController {
         return this.purchasesService.reject(id, user, body?.comment);
     }
 
+    // Desfaz a reprovação — mesma permissão de quem aprova/reprova (não
+    // precisa ser especificamente quem reprovou aquela compra). Volta
+    // pro fluxo normal, como se tivesse sido aprovada agora.
+    @Post(':id/unreject')
+    async unreject(
+        @Param('id') id: string,
+        @Body() body: { comment?: string },
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.unreject(id, user, body?.comment);
+    }
+
+    // Exclusão definitiva — só compra reprovada (aba Reprovadas).
+    @Post(':id/delete')
+    async remove(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.remove(id, user);
+    }
+
     @Post(':id/check')
     async check(
         @Param('id') id: string,
@@ -384,6 +463,22 @@ export class PurchasesController {
         @CurrentUser() user: any,
     ) {
         return this.purchasesService.close(id, user);
+    }
+
+    // "A pagar" / "Pago" — marcação manual pra saber se a compra já foi
+    // quitada sem passar pelo módulo financeiro (silencia o alerta de
+    // "falta gerar conta a pagar" na lista de Compras).
+    @Post(':id/payment-status')
+    async updatePaymentStatus(
+        @Param('id') id: string,
+        @Body('paymentStatus') paymentStatus: PurchasePaymentStatus,
+        @CurrentUser() user: any,
+    ) {
+        return this.purchasesService.updatePaymentStatus(
+            id,
+            paymentStatus,
+            user,
+        );
     }
 
     @Post(':id/fiscal-documents')

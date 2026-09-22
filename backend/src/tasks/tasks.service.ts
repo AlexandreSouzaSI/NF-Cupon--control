@@ -6,7 +6,7 @@ import {
     NotFoundException,
     OnModuleInit,
 } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import {
     NotificationType,
@@ -625,10 +625,14 @@ export class TasksService implements OnModuleInit {
         await this.ensureOccurrenceForDate(task, nextDate);
     }
 
-    // Roda todo dia de madrugada: gera a ocorrência do dia pra tarefas
-    // diárias/semanais/mensais cujo ciclo bate hoje, e marca como
-    // atrasada (+ avisa) qualquer ocorrência pendente cuja data já passou.
-    @Cron(CronExpression.EVERY_DAY_AT_6AM)
+    // Roda todo dia às 9h no horário de Brasília: gera a ocorrência do dia
+    // pra tarefas diárias/semanais/mensais cujo ciclo bate hoje, e marca
+    // como atrasada (+ avisa) qualquer ocorrência pendente cuja data já
+    // passou. Precisa do timeZone explícito porque o servidor roda em UTC
+    // — sem isso, "6h" vira 3h da manhã em Brasília (UTC-3), que foi
+    // exatamente o motivo dos avisos automáticos de WhatsApp chegando de
+    // madrugada.
+    @Cron('0 9 * * *', { timeZone: 'America/Sao_Paulo' })
     async runDailyGeneration() {
         const today = new Date();
 
@@ -708,20 +712,35 @@ export class TasksService implements OnModuleInit {
         }
     }
 
-    // Lista as ocorrências (quadro de tarefas). Administrativo/Proprietário
-    // veem tudo da loja; os demais só veem a tarefa se foram eles quem
-    // criaram ou se foi atribuída a eles.
+    // Lista as ocorrências (quadro de tarefas). Sem storeId, traz de todas
+    // as lojas que a pessoa tem acesso (Administrativo/Proprietário: todas
+    // do sistema; os demais: só as lojas vinculadas a ela) — é o quadro
+    // "geral" pedido pra não precisar trocar de loja pra ver tudo. Com
+    // storeId, continua filtrando só naquela loja. Em qualquer caso,
+    // Administrativo/Proprietário veem tudo; os demais só veem a tarefa se
+    // foram eles quem criaram ou se foi atribuída a eles.
     async findOccurrences(
         user: any,
         filters: {
-            storeId: string;
+            storeId?: string;
             assignedToId?: string;
             status?: TaskOccurrenceStatus[];
             from?: string;
             to?: string;
         },
     ) {
-        this.ensureStoreAccess(filters.storeId, user);
+        const allowedStoreIds = this.getAllowedStoreIds(user);
+
+        let storeFilter: string | { in: string[] } | undefined;
+
+        if (filters.storeId) {
+            this.ensureStoreAccess(filters.storeId, user);
+            storeFilter = filters.storeId;
+        } else if (allowedStoreIds) {
+            storeFilter = { in: allowedStoreIds };
+        } else {
+            storeFilter = undefined;
+        }
 
         const from = filters.from
             ? this.toDateNoonUtc(filters.from)
@@ -735,7 +754,7 @@ export class TasksService implements OnModuleInit {
                 dueDate: { gte: this.startOfUtcDay(from), lte: this.startOfUtcDay(to) },
                 status: filters.status?.length ? { in: filters.status } : undefined,
                 task: {
-                    storeId: filters.storeId,
+                    storeId: storeFilter,
                     assignedToId: filters.assignedToId,
                     ...this.taskVisibilityWhere(user),
                 },
@@ -749,6 +768,7 @@ export class TasksService implements OnModuleInit {
                         description: true,
                         recurrence: true,
                         storeId: true,
+                        store: { select: { id: true, name: true } },
                         attachmentUrl: true,
                         attachmentName: true,
                         restrictedFromAdministrativo: true,

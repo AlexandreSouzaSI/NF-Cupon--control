@@ -28,6 +28,7 @@ import { CreateStockItemDto } from './dto/create-stock-item.dto';
 import { UpdateStockItemDto } from './dto/update-stock-item.dto';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { LinkNfItemsDto } from './dto/link-nf-items.dto';
+import { LinkPurchaseItemsDto } from './dto/link-purchase-items.dto';
 
 // Quem lida com o estoque físico do dia a dia — mesmo espírito de
 // acesso do módulo Compras, com ESTOQUISTA (perfil já existente,
@@ -132,6 +133,27 @@ export class EstoqueController {
         @CurrentUser() user: any,
     ) {
         return this.estoqueService.vincularNfAoEstoque(id, body, user);
+    }
+
+    // --- Vínculo de compra sem NF (Fluxo 2) ---
+
+    @Get('compras-pendentes')
+    async listComprasPendentes(@CurrentUser() user: any, @Query('storeId') storeId: string) {
+        return this.estoqueService.listComprasPendentes(user, storeId);
+    }
+
+    @Get('compra/:id/itens')
+    async getCompraItens(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.estoqueService.getCompraItensParaVinculo(id, user);
+    }
+
+    @Post('compra/:id/vincular')
+    async vincularCompra(
+        @Param('id') id: string,
+        @Body() body: LinkPurchaseItemsDto,
+        @CurrentUser() user: any,
+    ) {
+        return this.estoqueService.vincularCompraAoEstoque(id, body, user);
     }
 
     // --- Importação por planilha ---

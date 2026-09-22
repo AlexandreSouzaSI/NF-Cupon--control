@@ -480,12 +480,17 @@ export async function sendManifestacao(
     const idLote = String(Date.now()).slice(-15);
     const envEventoXml = `<envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00"><idLote>${idLote}</idLote>${signedEvento}</envEvento>`;
 
+    // Sem elemento "nfeRecepcaoEvento" envolvendo — mesmo problema (e
+    // mesma solução) já descoberto em sendAutorizacaoNfe: o dispatch de
+    // vários webservices estaduais (implementação Java/CXF, ex: MG, GO,
+    // MT, MS, PE, AM) é feito só pela SOAPAction, e eles esperam o
+    // nfeDadosMsg direto como filho do Body. Um wrapper extra com o nome
+    // da operação faz esses servidores devolverem "Não é possível
+    // localizar o método de despacho" mesmo com o conteúdo correto.
     const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>
-    <nfeRecepcaoEvento xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">
-      <nfeDadosMsg>${envEventoXml}</nfeDadosMsg>
-    </nfeRecepcaoEvento>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">${envEventoXml}</nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>`;
 
@@ -662,12 +667,17 @@ export async function sendCancelamentoNfe(
     const idLote = String(Date.now()).slice(-15);
     const envEventoXml = `<envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00"><idLote>${idLote}</idLote>${signedEvento}</envEvento>`;
 
+    // Sem elemento "nfeRecepcaoEvento" envolvendo — mesmo problema (e
+    // mesma solução) já descoberto em sendAutorizacaoNfe e sendManifestacao:
+    // o dispatch de vários webservices estaduais (implementação Java/CXF,
+    // ex: MG, GO, MT, MS, PE, AM) é feito só pela SOAPAction, e eles
+    // esperam o nfeDadosMsg direto como filho do Body. Um wrapper extra
+    // com o nome da operação faz esses servidores devolverem "Não é
+    // possível localizar o método de despacho" mesmo com o conteúdo correto.
     const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>
-    <nfeRecepcaoEvento xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">
-      <nfeDadosMsg>${envEventoXml}</nfeDadosMsg>
-    </nfeRecepcaoEvento>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">${envEventoXml}</nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>`;
 
@@ -1267,6 +1277,41 @@ export function parseFullNfeXml(xml: string): ParsedFullNfe | null {
 function toArray<T>(value: T | T[] | undefined | null): T[] {
     if (value == null) return [];
     return Array.isArray(value) ? value : [value];
+}
+
+export type NfeDuplicata = {
+    numero?: string;
+    dataVencimento?: string; // YYYY-MM-DD
+    valor?: number;
+};
+
+// Grupo opcional "cobr/dup" (duplicata) do XML da NF-e — só existe quando o
+// próprio emitente preenche as condições de pagamento (comum em compra a
+// prazo, mas nem toda nota tem). Não é o boleto em si — isso nunca vem na
+// NF-e, só o compromisso declarado pelo fornecedor: parcela, vencimento e
+// valor. Quando existe, dá pra pré-preencher o vencimento da conta a pagar
+// sem digitar nada; quando não existe, extractDuplicatasFromXml devolve
+// lista vazia e quem chamou precisa pedir o vencimento pra pessoa.
+export function extractDuplicatasFromXml(xml: string): NfeDuplicata[] {
+    let parsed: any;
+
+    try {
+        parsed = parser.parse(xml);
+    } catch {
+        return [];
+    }
+
+    const infNFe = findNode(parsed, 'infNFe');
+    if (!infNFe) return [];
+
+    const cobr = infNFe.cobr;
+    if (!cobr) return [];
+
+    return toArray(cobr.dup).map((dup: any) => ({
+        numero: extractText(dup?.nDup) || undefined,
+        dataVencimento: extractText(dup?.dVenc) || undefined,
+        valor: dup?.vDup != null ? Number(extractText(dup.vDup)) : undefined,
+    }));
 }
 
 type NfeAddress = {

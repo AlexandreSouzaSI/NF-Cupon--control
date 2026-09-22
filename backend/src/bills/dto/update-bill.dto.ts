@@ -11,7 +11,6 @@ import {
 import {
     BillPaymentMethod,
     BillStatus,
-    ExternalLaunchStatus,
     PayableType,
     PixKeyType,
 } from '@prisma/client';
@@ -61,18 +60,6 @@ export class UpdateBillDto {
     @IsOptional()
     @IsString()
     categoryId?: string;
-
-    @IsOptional()
-    @IsEnum(ExternalLaunchStatus)
-    externalLaunchStatus?: ExternalLaunchStatus;
-
-    @IsOptional()
-    @IsString()
-    externalSystemName?: string;
-
-    @IsOptional()
-    @IsString()
-    externalCode?: string;
 
     @IsOptional()
     @IsBoolean()

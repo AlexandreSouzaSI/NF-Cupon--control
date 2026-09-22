@@ -796,6 +796,9 @@ export class ServicesService {
             page?: number;
             pageSize?: number;
             accepted?: boolean;
+            month?: string;
+            startDate?: string;
+            endDate?: string;
         },
     ) {
         const allowedStoreIds = this.getAllowedStoreIds(user);
@@ -810,6 +813,8 @@ export class ServicesService {
                 ? filters.pageSize
                 : 20;
 
+        const dateFilter = this.buildDateFilter(filters);
+
         const where = filters?.accepted
             ? {
                 storeId:
@@ -817,6 +822,7 @@ export class ServicesService {
                     (allowedStoreIds ? { in: allowedStoreIds } : undefined),
                 tipoDocumento: 'NFSE',
                 ignored: false,
+                issueDate: dateFilter,
                 OR: [
                     { serviceId: { not: null } },
                     { billId: { not: null } },
@@ -832,6 +838,7 @@ export class ServicesService {
                 billId: null,
                 accepted: false,
                 ignored: false,
+                issueDate: dateFilter,
             };
 
         const [items, total] = await Promise.all([

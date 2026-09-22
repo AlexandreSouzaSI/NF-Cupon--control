@@ -10,6 +10,7 @@ import {
     CreditCard,
     FileCheck2,
     FileText,
+    Loader2,
     PackageCheck,
     Paperclip,
     ReceiptText,
@@ -23,7 +24,7 @@ import { toast } from 'sonner';
 
 import { AppLayout } from '../../../src/components/app-layout';
 import { api, API_URL } from '@/lib/api';
-import { getUser } from '@/lib/auth';
+import { canManagePurchaseBilling, getUser } from '@/lib/auth';
 
 type PurchaseItem = {
     id: string;
@@ -92,8 +93,6 @@ type Bill = {
     status: string;
     dueDate: string;
     paidAt?: string | null;
-    externalLaunchStatus: string;
-    externalSystemName?: string | null;
     fileUrl?: string | null;
     imageUrl?: string | null;
 };
@@ -174,6 +173,7 @@ type PurchaseDetail = {
     fiscalDocuments: FiscalDocument[];
     histories: PurchaseHistory[];
     bills: Bill[];
+    incomingGoodsNfs?: { id: string; chaveAcesso: string }[];
 };
 
 type ReceiptItemForm = {
@@ -311,11 +311,21 @@ function PurchaseDetailPageInner() {
 
     const user = getUser();
 
+    // "Aceitar e gerar conta a pagar" (Criar Conta a Pagar) é função do
+    // Administrativo/Proprietário/Financeiro/Admin Master — Estoquista só
+    // recebe a compra, não vê essa seção. Espelha canManagePurchaseBilling
+    // do backend (purchases.service.ts).
+    const userCanManageBilling = canManagePurchaseBilling(user);
+
     const [purchase, setPurchase] =
         useState<PurchaseDetail | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
+
+    // Id da NF (IncomingGoodsNf) cujo DANFE está sendo baixado agora, só
+    // pra mostrar o spinner no botão certo (ver openDanfe()).
+    const [openingDanfeId, setOpeningDanfeId] = useState<string | null>(null);
 
     const [showReceiptForm, setShowReceiptForm] =
         useState(false);
@@ -573,6 +583,32 @@ function PurchaseDetailPageInner() {
             );
         } finally {
             setProcessing(false);
+        }
+    }
+
+    // "Abrir arquivo" pra uma NF que veio da Conciliar NF: o fileUrl
+    // guardado é o XML cru baixado da Sefaz (não dá pra abrir direto e
+    // entender nada), então busca o DANFE (PDF de conferência) pelo
+    // endpoint de download e abre num blob — precisa passar pelo axios
+    // (com o token) em vez de um <a href> simples.
+    async function openDanfe(incomingNfId: string) {
+        setOpeningDanfeId(incomingNfId);
+
+        try {
+            const response = await api.get(
+                `/purchases/incoming-goods-nf/${incomingNfId}/danfe`,
+                { responseType: 'blob' },
+            );
+
+            const blobUrl = window.URL.createObjectURL(
+                new Blob([response.data], { type: 'application/pdf' }),
+            );
+
+            window.open(blobUrl, '_blank');
+        } catch {
+            toast.error('Erro ao abrir a NF.');
+        } finally {
+            setOpeningDanfeId(null);
         }
     }
 
@@ -1217,22 +1253,60 @@ function PurchaseDetailPageInner() {
                                                 </div>
 
                                                 <div className="flex flex-wrap gap-2">
-                                                    {document.fileUrl && (
-                                                        <a
-                                                            href={`${API_URL}${document.fileUrl}`}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-sm font-medium text-purple-400 hover:bg-purple-500/20"
-                                                        >
-                                                            <FileText
-                                                                size={
-                                                                    16
-                                                                }
-                                                            />
-                                                            Abrir
-                                                            arquivo
-                                                        </a>
-                                                    )}
+                                                    {document.fileUrl && (() => {
+                                                        // Quando essa NF veio da Conciliar NF, o
+                                                        // fileUrl é o XML cru baixado da Sefaz —
+                                                        // abre o DANFE (PDF de conferência) em vez
+                                                        // do arquivo direto.
+                                                        const incomingNf =
+                                                            purchase.incomingGoodsNfs?.find(
+                                                                (item) =>
+                                                                    item.chaveAcesso ===
+                                                                    document.accessKey,
+                                                            );
+
+                                                        if (
+                                                            document.type === 'INVOICE' &&
+                                                            incomingNf
+                                                        ) {
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        openDanfe(incomingNf.id)
+                                                                    }
+                                                                    disabled={
+                                                                        openingDanfeId ===
+                                                                        incomingNf.id
+                                                                    }
+                                                                    className="inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-sm font-medium text-purple-400 hover:bg-purple-500/20 disabled:opacity-60"
+                                                                >
+                                                                    {openingDanfeId ===
+                                                                        incomingNf.id ? (
+                                                                        <Loader2
+                                                                            size={16}
+                                                                            className="animate-spin"
+                                                                        />
+                                                                    ) : (
+                                                                        <FileText size={16} />
+                                                                    )}
+                                                                    Abrir NF
+                                                                </button>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <a
+                                                                href={`${API_URL}${document.fileUrl}`}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-sm font-medium text-purple-400 hover:bg-purple-500/20"
+                                                            >
+                                                                <FileText size={16} />
+                                                                Abrir arquivo
+                                                            </a>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         ),
@@ -1302,22 +1376,26 @@ function PurchaseDetailPageInner() {
                         <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                             <div className="mb-5 flex items-center justify-between">
                                 <div>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            router.push(
-                                                `/bills/new?purchaseId=${purchase.id}`,
-                                            )
-                                        }
-                                        className="mt-5 rounded-xl bg-cyan-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-cyan-700"
-                                    >
-                                        Criar Conta a Pagar
-                                    </button>
+                                    {userCanManageBilling && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    router.push(
+                                                        `/bills/new?purchaseId=${purchase.id}`,
+                                                    )
+                                                }
+                                                className="mt-5 rounded-xl bg-cyan-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-cyan-700"
+                                            >
+                                                Criar Conta a Pagar
+                                            </button>
 
-                                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                        Boleto, PIX, cartão ou lançamento
-                                        sem boleto.
-                                    </p>
+                                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                                                Boleto, PIX, cartão ou lançamento
+                                                sem boleto.
+                                            </p>
+                                        </>
+                                    )}
                                 </div>
 
                                 <Wallet className="text-cyan-400" />
@@ -1361,17 +1439,6 @@ function PurchaseDetailPageInner() {
                                                         )}
                                                     </p>
 
-                                                    <p className="mt-1 text-xs text-zinc-500">
-                                                        Lançamento
-                                                        externo:{' '}
-                                                        {bill.externalLaunchStatus ===
-                                                            'LAUNCHED'
-                                                            ? `Lançado${bill.externalSystemName
-                                                                ? ` no ${bill.externalSystemName}`
-                                                                : ''
-                                                            }`
-                                                            : 'Não lançado'}
-                                                    </p>
                                                 </div>
 
                                                 <div className="text-left md:text-right">

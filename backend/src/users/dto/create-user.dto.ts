@@ -1,5 +1,6 @@
 import {
     IsArray,
+    IsBoolean,
     IsEmail,
     IsEnum,
     IsNotEmpty,
@@ -36,4 +37,11 @@ export class CreateUserDto {
     @IsArray()
     @IsString({ each: true })
     storeIds?: string[];
+
+    // Permissão extra pra aprovar/reprovar compras — só quem já aprova por
+    // conta própria (Admin Master ou Proprietário) pode enviar esse campo,
+    // ver ensureCanGrantApprovalPermission em users.service.ts.
+    @IsOptional()
+    @IsBoolean()
+    canApprovePurchases?: boolean;
 }

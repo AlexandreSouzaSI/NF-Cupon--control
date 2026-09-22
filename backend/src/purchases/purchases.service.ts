@@ -10,10 +10,12 @@ import {
     FiscalDocumentType,
     NotificationType,
     PaymentMethod,
+    PixKeyType,
     PurchaseAlertLevel,
     PurchaseAlertType,
     PurchaseCategory,
     PurchaseHistoryAction,
+    PurchasePaymentStatus,
     PurchaseStatus,
     ReceiptStatus,
     UserRole,
@@ -32,6 +34,7 @@ import { ReceivePurchaseDto } from './dto/receive-purchase.dto';
 import { AcceptIncomingNfDto } from './dto/accept-incoming-nf.dto';
 import { loadCertificate, type LoadedCertificate } from '../stores/sefaz-nfse-client';
 import {
+    extractDuplicatasFromXml,
     fetchGoodsDistribution,
     parseFullNfeForView,
     parseFullNfeXml,
@@ -43,6 +46,7 @@ import {
 import { buildDanfePdf } from '../common/danfe-builder';
 import { sleep } from '../common/sleep.util';
 import { derivePaymentDefaults } from '../common/bill-payment-defaults.util';
+import { LinkIncomingGoodsNfDto } from './dto/link-incoming-goods-nf.dto';
 
 // Mesmo padrão dos XMLs de NF de serviço: ficam dentro de /uploads, lado a
 // lado com os documentos enviados à mão.
@@ -135,13 +139,27 @@ export class PurchasesService {
         ].includes(user.role);
     }
 
+    // Comprador, Administrativo e Proprietário têm acesso total ao módulo de
+    // Compras (aprovam por padrão, sem precisar de permissão extra) — junto
+    // com Admin Master (isAdminMaster, flag à parte do perfil). Qualquer
+    // outro perfil (ex.: Gerente) só aprova se tiver a permissão extra
+    // canApprovePurchases marcada — que só Admin Master ou Proprietário
+    // podem conceder (ver ensureCanGrantApprovalPermission em
+    // users.service.ts).
     private canApprovePurchase(user: any) {
-        return [
-            UserRole.ADMINISTRATIVO,
-            UserRole.PROPRIETARIO,
-            UserRole.GERENTE,
-            UserRole.COMPRADOR,
-        ].includes(user.role);
+        if (user.isAdminMaster) return true;
+
+        if (
+            [
+                UserRole.PROPRIETARIO,
+                UserRole.COMPRADOR,
+                UserRole.ADMINISTRATIVO,
+            ].includes(user.role)
+        ) {
+            return true;
+        }
+
+        return user.canApprovePurchases === true;
     }
 
     private canReceivePurchase(user: any) {
@@ -154,16 +172,46 @@ export class PurchasesService {
         ].includes(user.role);
     }
 
-    private shouldRequireApproval(dto: CreatePurchaseDto, user: any) {
-        if (dto.category === PurchaseCategory.SUPPLIER_ORDER && user.role === UserRole.COMPRADOR) {
-            return false;
-        }
+    // "Aceitar e gerar conta a pagar" (Conciliar NF, ou Criar Conta a Pagar
+    // direto quando não tem NF) — Comprador, Administrativo e Proprietário
+    // têm acesso total ao módulo de Compras, incluindo isso. Estoquista e
+    // Gerente só recebem a compra (canReceivePurchase acima), não mexem em
+    // conta a pagar. Admin Master sempre tem essa permissão junto, mesmo
+    // padrão dos outros métodos can* desse arquivo. Financeiro entra também
+    // porque já é quem cria conta a pagar direto em Contas a Pagar
+    // (BillsController só libera ADMINISTRATIVO/PROPRIETARIO/FINANCEIRO) —
+    // sem isso o botão apareceria pra ele aqui e voltaria 403 no back.
+    private canManagePurchaseBilling(user: any) {
+        if (user.isAdminMaster) return true;
 
-        if (dto.category === PurchaseCategory.SUPPLIER_ORDER && user.role === UserRole.ADMINISTRATIVO) {
-            return false;
-        }
+        return [
+            UserRole.ADMINISTRATIVO,
+            UserRole.PROPRIETARIO,
+            UserRole.COMPRADOR,
+            UserRole.FINANCEIRO,
+        ].includes(user.role);
+    }
 
-        return true;
+    // Sub-recurso "Notas Fiscais" (NF-e de mercadoria da Sefaz) dentro
+    // desse mesmo controller — mesmos perfis do item "Notas Fiscais" no
+    // menu (lib/menu.ts), diferente do grupo de "Compras" acima.
+    private canAccessGoodsNf(user: any) {
+        return [
+            UserRole.ADMINISTRATIVO,
+            UserRole.PROPRIETARIO,
+            UserRole.GERENTE,
+            UserRole.COMPRADOR,
+            UserRole.ESTOQUISTA,
+            UserRole.FINANCEIRO,
+        ].includes(user.role);
+    }
+
+    // Pedido direto com fornecedor nunca passa por aprovação — vira Compra
+    // Realizada (aguardando recebimento) na hora, seja qual for o perfil
+    // que cadastrou. Avulsa (cartão) e Online sempre exigem aprovação antes
+    // de seguir, por serem compras fora do fluxo combinado com fornecedor.
+    private shouldRequireApproval(dto: CreatePurchaseDto, _user: any) {
+        return dto.category !== PurchaseCategory.SUPPLIER_ORDER;
     }
 
     private getInitialStatus(dto: CreatePurchaseDto, user: any) {
@@ -269,15 +317,34 @@ export class PurchasesService {
             category?: PurchaseCategory;
         },
     ) {
+        if (!this.canCreatePurchase(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Compras.',
+            );
+        }
+
         const allowedStoreIds = this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
             this.ensureStoreAccess(filters.storeId, user);
         }
 
+        // Compra aguardando aprovação ou reprovada não aparece mais na
+        // lista normal de Compras — essas duas situações ficam só na
+        // página Aprovações (findPendingApprovals). Sem status pedido
+        // explicitamente, a lista de Compras só mostra o que já foi
+        // decidido: aprovada, ou que nunca precisou de aprovação
+        // (SUPPLIER_ORDER vai direto pra WAITING_RECEIPT). Quando alguém
+        // pedir um desses 2 status explicitamente (nenhum lugar pede hoje),
+        // continua funcionando normal — o filtro abaixo só entra quando
+        // `filters.status` não foi informado.
+        const statusFilter = filters?.status
+            ? filters.status
+            : { notIn: [PurchaseStatus.WAITING_APPROVAL, PurchaseStatus.REJECTED] };
+
         return this.prisma.purchase.findMany({
             where: {
-                status: filters?.status,
+                status: statusFilter,
                 supplierId: filters?.supplierId,
                 category: filters?.category,
                 storeId:
@@ -296,6 +363,12 @@ export class PurchasesService {
     }
 
     async findOne(id: string, user: any) {
+        if (!this.canCreatePurchase(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Compras.',
+            );
+        }
+
         await this.ensurePurchaseAccess(id, user);
 
         const purchase = await this.prisma.purchase.findUnique({
@@ -308,6 +381,205 @@ export class PurchasesService {
         }
 
         return purchase;
+    }
+
+    // "AAAA-MM" do seletor de mês do Dashboard de Compras — qualquer coisa
+    // inválida ou ausente cai no mês corrente.
+    private resolveDashboardMonth(month?: string): Date {
+        if (month) {
+            const match = /^(\d{4})-(\d{2})$/.exec(month);
+
+            if (match) {
+                const year = Number(match[1]);
+                const monthIndex = Number(match[2]) - 1;
+
+                if (monthIndex >= 0 && monthIndex <= 11) {
+                    return new Date(year, monthIndex, 1);
+                }
+            }
+        }
+
+        return new Date();
+    }
+
+    // Dashboard próprio de Compras (não é o Dashboard principal do sistema,
+    // que agora só mostra Tarefas). "A chegar" / "Chegou" / "Chegou com
+    // diferença" são o estado atual do pipeline (mesma lógica das abas da
+    // lista de Compras — getFlowStage no frontend), sem recorte de período:
+    // pedido com fornecedor e compra online entram junto em "A chegar"
+    // enquanto não tiverem sido recebidos. O total é o único recorte por
+    // mês, pra saber quanto foi comprado no período selecionado.
+    async dashboardSummary(user: any, storeId?: string, month?: string) {
+        if (!this.canCreatePurchase(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Compras.',
+            );
+        }
+
+        const allowedStoreIds = this.getAllowedStoreIds(user);
+
+        if (storeId) {
+            this.ensureStoreAccess(storeId, user);
+        }
+
+        const storeFilter =
+            storeId ||
+            (allowedStoreIds
+                ? {
+                    in: allowedStoreIds,
+                }
+                : undefined);
+
+        const NON_FLOW_STATUSES: PurchaseStatus[] = [
+            PurchaseStatus.REJECTED,
+            PurchaseStatus.CANCELED,
+            PurchaseStatus.DRAFT,
+        ];
+
+        const RECEIVED_STATUSES: PurchaseStatus[] = [
+            PurchaseStatus.RECEIVED_OK,
+            PurchaseStatus.WAITING_INVOICE,
+            PurchaseStatus.HAS_COUPON_ONLY,
+            PurchaseStatus.HAS_INVOICE,
+            PurchaseStatus.WAITING_PAYMENT_REGISTER,
+            PurchaseStatus.CLOSED,
+        ];
+
+        const pipelinePurchases = await this.prisma.purchase.findMany({
+            where: {
+                storeId: storeFilter,
+                status: {
+                    notIn: NON_FLOW_STATUSES,
+                },
+            },
+            select: {
+                status: true,
+                receipts: {
+                    select: { status: true },
+                },
+            },
+        });
+
+        let arriving = 0;
+        let ok = 0;
+        let difference = 0;
+
+        for (const purchase of pipelinePurchases) {
+            const hasDivergentReceipt = purchase.receipts.some(
+                (receipt) => receipt.status !== ReceiptStatus.OK,
+            );
+
+            if (
+                hasDivergentReceipt ||
+                purchase.status === PurchaseStatus.RECEIVED_WITH_DIFFERENCE
+            ) {
+                difference += 1;
+                continue;
+            }
+
+            const hasAnyReceipt = purchase.receipts.length > 0;
+
+            if (hasAnyReceipt || RECEIVED_STATUSES.includes(purchase.status)) {
+                ok += 1;
+                continue;
+            }
+
+            arriving += 1;
+        }
+
+        const referenceDate = this.resolveDashboardMonth(month);
+        const monthStart = new Date(
+            referenceDate.getFullYear(),
+            referenceDate.getMonth(),
+            1,
+            0,
+            0,
+            0,
+            0,
+        );
+        const monthEnd = new Date(
+            referenceDate.getFullYear(),
+            referenceDate.getMonth() + 1,
+            0,
+            23,
+            59,
+            59,
+            999,
+        );
+
+        // Mesma janela do período pra alimentar os 2 gráficos do dashboard:
+        // Top fornecedores por valor comprado e produtos mais comprados por
+        // quantidade — junto já dá pra tirar total de compras e valor gasto
+        // no período, sem precisar de uma segunda query agregada.
+        const periodPurchases = await this.prisma.purchase.findMany({
+            where: {
+                storeId: storeFilter,
+                status: {
+                    notIn: NON_FLOW_STATUSES,
+                },
+                createdAt: {
+                    gte: monthStart,
+                    lte: monthEnd,
+                },
+            },
+            select: {
+                value: true,
+                supplier: { select: { name: true } },
+                items: { select: { name: true, quantity: true } },
+            },
+        });
+
+        const supplierTotals = new Map<string, number>();
+        const productTotals = new Map<string, number>();
+        let periodTotalValue = 0;
+
+        for (const purchase of periodPurchases) {
+            periodTotalValue += Number(purchase.value);
+
+            const supplierName = purchase.supplier?.name || 'Sem fornecedor';
+            supplierTotals.set(
+                supplierName,
+                (supplierTotals.get(supplierName) || 0) + Number(purchase.value),
+            );
+
+            for (const item of purchase.items) {
+                const name = item.name.trim();
+                const quantity = Number(item.quantity) || 0;
+                productTotals.set(
+                    name,
+                    (productTotals.get(name) || 0) + quantity,
+                );
+            }
+        }
+
+        const topSuppliers = [...supplierTotals.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8)
+            .map(([name, value]) => ({ name, value }));
+
+        const topProducts = [...productTotals.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([name, quantity]) => ({ name, quantity }));
+
+        const currentReferenceMonth = `${monthStart.getFullYear()}-${String(
+            monthStart.getMonth() + 1,
+        ).padStart(2, '0')}`;
+
+        return {
+            referenceMonth: currentReferenceMonth,
+            pipeline: {
+                arriving,
+                ok,
+                difference,
+            },
+            period: {
+                totalCount: periodPurchases.length,
+                totalValue: periodTotalValue,
+            },
+            topSuppliers,
+            topProducts,
+        };
     }
 
     async approve(purchaseId: string, user: any, comment?: string) {
@@ -421,12 +693,117 @@ export class PurchasesService {
         return updated;
     }
 
+    // Desfaz uma reprovação — mesma permissão de quem aprova/reprova
+    // (qualquer um do grupo, não só quem reprovou aquela compra
+    // específica). Volta a compra pro fluxo normal como se tivesse sido
+    // aprovada agora (mesma regra do approve(): Aguardando NF pra avulsa
+    // com cartão, Aguardando recebimento nas demais).
+    async unreject(purchaseId: string, user: any, comment?: string) {
+        if (!this.canApprovePurchase(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para reverter reprovação de compras.',
+            );
+        }
+
+        const purchase = await this.ensurePurchaseAccess(purchaseId, user);
+
+        if (purchase.status !== PurchaseStatus.REJECTED) {
+            throw new ForbiddenException('Essa compra não está reprovada.');
+        }
+
+        const updated = await this.prisma.purchase.update({
+            where: { id: purchaseId },
+            data: {
+                status:
+                    purchase.category === PurchaseCategory.AVULSA_CARD
+                        ? PurchaseStatus.WAITING_INVOICE
+                        : PurchaseStatus.WAITING_RECEIPT,
+                approvedById: user.id,
+                approvedAt: new Date(),
+                approvals: {
+                    create: {
+                        approverId: user.id,
+                        status: ApprovalStatus.APPROVED,
+                        comment: comment || 'Reprovação revertida — compra liberada de novo.',
+                    },
+                },
+            },
+            include: this.defaultInclude(),
+        });
+
+        await this.createHistory(
+            purchaseId,
+            user.id,
+            PurchaseHistoryAction.APPROVED,
+            comment || 'Reprovação revertida — compra voltou pro fluxo normal.',
+        );
+
+        await this.notificationsService.notifyStoreAccess({
+            storeId: updated.storeId,
+            allowedRoles: PURCHASE_NOTIFY_ROLES,
+            excludeUserId: user.id,
+            title: 'Compra liberada',
+            message: `A reprovação de "${updated.description}" foi revertida — a compra voltou pro fluxo normal.`,
+            type: NotificationType.PURCHASE_APPROVED,
+        });
+
+        return updated;
+    }
+
+    // Exclusão definitiva — só pra compra reprovada (aba "Reprovadas"),
+    // nunca chegou a ser recebida/faturada, então não tem nada de
+    // fiscal/financeiro real dependendo dela. Cascade cuida de
+    // items/receipts/fiscalDocuments/attachments/approvals/histórico.
+    async remove(purchaseId: string, user: any) {
+        if (!this.canApprovePurchase(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para excluir compras.',
+            );
+        }
+
+        const purchase = await this.prisma.purchase.findUnique({
+            where: { id: purchaseId },
+            include: { bills: { select: { id: true } }, incomingGoodsNfs: { select: { id: true } } },
+        });
+
+        if (!purchase) {
+            throw new NotFoundException('Compra não encontrada.');
+        }
+
+        this.ensureStoreAccess(purchase.storeId, user);
+
+        if (purchase.status !== PurchaseStatus.REJECTED) {
+            throw new ForbiddenException('Só é possível excluir compras reprovadas.');
+        }
+
+        if (purchase.bills.length > 0 || purchase.incomingGoodsNfs.length > 0) {
+            throw new ForbiddenException(
+                'Essa compra tem conta a pagar ou NF vinculada — não pode ser excluída.',
+            );
+        }
+
+        await this.prisma.purchase.delete({ where: { id: purchaseId } });
+
+        return { deleted: true };
+    }
+
+    // Página Aprovações: tudo que precisa de uma decisão de quem aprova —
+    // aguardando aprovação (nunca decidida) e reprovada (decidida, mas
+    // pode ser revertida ou excluída por qualquer um do grupo). Essas 2
+    // situações saíram da lista de Compras (ver findAll) — só aparecem
+    // aqui agora.
     async findPendingApprovals(user: any) {
+        if (!this.canApprovePurchase(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Aprovações.',
+            );
+        }
+
         const allowedStoreIds = this.getAllowedStoreIds(user);
 
         return this.prisma.purchase.findMany({
             where: {
-                status: PurchaseStatus.WAITING_APPROVAL,
+                status: { in: [PurchaseStatus.WAITING_APPROVAL, PurchaseStatus.REJECTED] },
                 storeId: allowedStoreIds
                     ? {
                         in: allowedStoreIds,
@@ -563,6 +940,12 @@ export class PurchasesService {
 
     async check(id: string, user?: any) {
         if (user) {
+            if (!this.canReceivePurchase(user)) {
+                throw new ForbiddenException(
+                    'Seu perfil não tem permissão para conferir compras.',
+                );
+            }
+
             await this.ensurePurchaseAccess(id, user);
         }
 
@@ -586,8 +969,51 @@ export class PurchasesService {
         return purchase;
     }
 
+    // Marcação manual "A pagar" / "Pago" (ver comentário no schema) — quem
+    // gerencia Conciliar NF/Conta a Pagar decide se a compra já foi
+    // quitada sem passar pelo módulo financeiro (ex: pago na hora com
+    // dinheiro do caixa). Não mexe em status/histórico da compra em si,
+    // só nesse campo — é só pra silenciar/mostrar o alerta de "falta
+    // gerar conta a pagar" na lista.
+    async updatePaymentStatus(
+        id: string,
+        paymentStatus: PurchasePaymentStatus,
+        user: any,
+    ) {
+        if (!this.canManagePurchaseBilling(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para alterar isso.',
+            );
+        }
+
+        await this.ensurePurchaseAccess(id, user);
+
+        const updated = await this.prisma.purchase.update({
+            where: { id },
+            data: { paymentStatus },
+            include: this.defaultInclude(),
+        });
+
+        await this.createHistory(
+            id,
+            user.id,
+            PurchaseHistoryAction.PAYMENT_STATUS_CHANGED,
+            paymentStatus === PurchasePaymentStatus.PAID
+                ? 'Marcada como Paga.'
+                : 'Marcada como A pagar.',
+        );
+
+        return updated;
+    }
+
     async close(id: string, user?: any) {
         if (user) {
+            if (!this.canReceivePurchase(user)) {
+                throw new ForbiddenException(
+                    'Seu perfil não tem permissão para encerrar compras.',
+                );
+            }
+
             await this.ensurePurchaseAccess(id, user);
         }
 
@@ -619,6 +1045,8 @@ export class PurchasesService {
                 storeId: true,
                 status: true,
                 category: true,
+                supplierId: true,
+                value: true,
             },
         });
 
@@ -633,6 +1061,25 @@ export class PurchasesService {
         }
 
         return purchase;
+    }
+
+    // Log de auditoria da compra — quem criou, aprovou, recebeu, anexou
+    // NF/cupom, gerou/pagou conta, mudou status de pagamento, etc. Qualquer
+    // perfil com acesso à compra (mesma regra de ensurePurchaseAccess) pode
+    // consultar; não é restrito a quem gerencia conta a pagar, porque é só
+    // leitura do que já aconteceu.
+    async getPurchaseHistory(id: string, user: any) {
+        await this.ensurePurchaseAccess(id, user);
+
+        return this.prisma.purchaseHistory.findMany({
+            where: { purchaseId: id },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                user: {
+                    select: { id: true, name: true, email: true },
+                },
+            },
+        });
     }
 
     private async createHistory(
@@ -779,6 +1226,13 @@ export class PurchasesService {
             },
             bills: true,
             purchaseAlerts: true,
+            // Só o id e a chave de acesso — usado no frontend pra decidir
+            // se "Abrir NF" mostra o DANFE (quando a NF veio da Sefaz via
+            // Conciliar NF, e o fiscalDocument.fileUrl é o XML cru) ou o
+            // arquivo anexado manualmente (imagem/PDF, abre direto).
+            incomingGoodsNfs: {
+                select: { id: true, chaveAcesso: true },
+            },
         };
     }
 
@@ -1001,6 +1455,12 @@ export class PurchasesService {
     // disponíveis pra conciliação manual (vinculação a uma compra já
     // cadastrada) na aba "Novas NFs".
     async syncIncomingGoodsNf(storeId: string, user: any) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
         if (!storeId) {
             throw new BadRequestException(
                 'Selecione uma loja ativa no topo do sistema.',
@@ -1448,6 +1908,12 @@ export class PurchasesService {
         files: Express.Multer.File[],
         user: any,
     ) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
         if (!storeId) {
             throw new BadRequestException(
                 'Selecione uma loja ativa no topo do sistema.',
@@ -1561,8 +2027,17 @@ export class PurchasesService {
             page?: number;
             pageSize?: number;
             accepted?: boolean;
+            month?: string;
+            startDate?: string;
+            endDate?: string;
         },
     ) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
         const allowedStoreIds = this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
@@ -1575,12 +2050,15 @@ export class PurchasesService {
                 ? filters.pageSize
                 : 20;
 
+        const dateFilter = this.buildDateFilter(filters);
+
         const where = filters?.accepted
             ? {
                 storeId:
                     filters?.storeId ||
                     (allowedStoreIds ? { in: allowedStoreIds } : undefined),
                 ignored: false,
+                issueDate: dateFilter,
                 OR: [
                     { purchaseId: { not: null } },
                     { billId: { not: null } },
@@ -1595,6 +2073,7 @@ export class PurchasesService {
                 billId: null,
                 accepted: false,
                 ignored: false,
+                issueDate: dateFilter,
             };
 
         const [items, total] = await Promise.all([
@@ -1670,6 +2149,12 @@ export class PurchasesService {
             endDate?: string;
         },
     ) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
         const allowedStoreIds = this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
@@ -1703,15 +2188,248 @@ export class PurchasesService {
         }));
     }
 
+    // Número da NF (nNF) não é guardado em campo próprio pra NF de
+    // mercadoria (só existe de fato quando o XML completo é baixado), mas
+    // dá pra extrair de forma confiável da chave de acesso de 44 dígitos,
+    // que sempre existe (mesmo nos registros que chegaram só como resumo
+    // resNFe). Layout fixo: UF(2) AAMM(4) CNPJ(14) modelo(2) série(3)
+    // número(9) tpEmis(1) cNF(8) DV(1) — número é a fatia [25:34].
+    private extractNfNumberFromChave(chaveAcesso?: string | null): string | null {
+        if (!chaveAcesso || chaveAcesso.length !== 44) return null;
+
+        const raw = chaveAcesso.slice(25, 34);
+        const trimmed = raw.replace(/^0+/, '');
+
+        return trimmed || '0';
+    }
+
+    // Busca de candidatas a "Conciliar NF": a partir de uma compra já
+    // recebida, procura NF de mercadoria ainda pendente (baixada
+    // automaticamente da Sefaz ou importada de XML) que provavelmente é a
+    // mesma, pra evitar que o usuário precise catar na lista de Notas
+    // Fiscais. Pontua por CNPJ do fornecedor, proximidade de valor e nome
+    // do emitente x fornecedor; se vier `search`, filtra também por número
+    // da NF (extraído da chave), chave de acesso ou nome do emitente.
+    async findNfMatchesForPurchase(
+        purchaseId: string,
+        user: any,
+        search?: string,
+    ) {
+        // Conciliar NF é parte do fluxo de "aceitar e gerar conta a pagar"
+        // — restrito ao Administrativo (ver canManagePurchaseBilling).
+        if (!this.canManagePurchaseBilling(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para conciliar NF de compras.',
+            );
+        }
+
+        const purchase = await this.prisma.purchase.findUnique({
+            where: { id: purchaseId },
+            select: {
+                id: true,
+                storeId: true,
+                value: true,
+                supplier: { select: { name: true, cnpj: true } },
+                fiscalDocuments: {
+                    where: { type: FiscalDocumentType.INVOICE },
+                    select: { id: true },
+                },
+            },
+        });
+
+        if (!purchase) {
+            throw new NotFoundException('Compra não encontrada.');
+        }
+
+        this.ensureStoreAccess(purchase.storeId, user);
+
+        if (purchase.fiscalDocuments.length > 0) {
+            throw new BadRequestException(
+                'Essa compra já tem uma NF vinculada.',
+            );
+        }
+
+        const searchTerm = search?.trim();
+
+        const candidates = await this.prisma.incomingGoodsNf.findMany({
+            where: {
+                storeId: purchase.storeId,
+                purchaseId: null,
+                ignored: false,
+                ...(searchTerm
+                    ? {
+                        OR: [
+                            { chaveAcesso: { contains: searchTerm, mode: 'insensitive' } },
+                            { issuerName: { contains: searchTerm, mode: 'insensitive' } },
+                            { issuerCnpj: { contains: searchTerm.replace(/\D/g, '') || searchTerm } },
+                        ],
+                    }
+                    : {}),
+            },
+            orderBy: { issueDate: { sort: 'desc', nulls: 'last' } },
+            take: 200,
+        });
+
+        const purchaseValue = Number(purchase.value);
+        const supplierCnpjDigits = (purchase.supplier?.cnpj || '').replace(/\D/g, '');
+        const supplierNameNormalized = (purchase.supplier?.name || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .trim();
+
+        const scored = candidates.map((item) => {
+            const reasons: string[] = [];
+            let score = 0;
+
+            const itemCnpjDigits = (item.issuerCnpj || '').replace(/\D/g, '');
+            if (supplierCnpjDigits && itemCnpjDigits && supplierCnpjDigits === itemCnpjDigits) {
+                score += 60;
+                reasons.push('Mesmo CNPJ do fornecedor');
+            }
+
+            if (item.value !== null && item.value !== undefined) {
+                const itemValue = Number(item.value);
+                const diff = Math.abs(itemValue - purchaseValue);
+
+                if (diff <= 0.05) {
+                    score += 35;
+                    reasons.push('Valor igual ao da compra');
+                } else if (purchaseValue > 0 && diff / purchaseValue <= 0.02) {
+                    score += 15;
+                    reasons.push('Valor bem próximo ao da compra');
+                }
+            }
+
+            const itemNameNormalized = (item.issuerName || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[̀-ͯ]/g, '')
+                .trim();
+
+            if (
+                supplierNameNormalized &&
+                itemNameNormalized &&
+                (itemNameNormalized.includes(supplierNameNormalized) ||
+                    supplierNameNormalized.includes(itemNameNormalized))
+            ) {
+                score += 10;
+                reasons.push('Nome do fornecedor parecido');
+            }
+
+            return {
+                id: item.id,
+                chaveAcesso: item.chaveAcesso,
+                nfNumber: this.extractNfNumberFromChave(item.chaveAcesso),
+                issuerCnpj: item.issuerCnpj,
+                issuerName: item.issuerName,
+                value: item.value ? Number(item.value) : null,
+                issueDate: item.issueDate,
+                fileUrl: item.fileUrl,
+                score,
+                reasons,
+            };
+        });
+
+        // Sem termo de busca, só mostra quem teve alguma pontuação (senão a
+        // lista de "sugestões" viraria a lista inteira de NF pendente da
+        // loja) — com termo de busca, mostra tudo que bateu no filtro.
+        const filtered = searchTerm ? scored : scored.filter((item) => item.score > 0);
+
+        return filtered.sort((a, b) => b.score - a.score).slice(0, 20);
+    }
+
+    // Mesmo padrão de leitura de XML já usado em viewIncomingGoodsNf e
+    // downloadIncomingGoodsNfXml — devolve null (em vez de lançar erro)
+    // quando não tem arquivo salvo ou o arquivo sumiu, porque nem toda NF
+    // sincronizada automaticamente tem o XML completo (às vezes só o
+    // resumo/resNFe).
+    private readIncomingGoodsNfXmlContent(incoming: {
+        fileUrl: string | null;
+    }): string | null {
+        if (!incoming.fileUrl) return null;
+
+        const relativePath = incoming.fileUrl.replace(/^\/uploads\//, '');
+        const filePath = join(process.cwd(), 'uploads', relativePath);
+
+        if (!existsSync(filePath)) return null;
+
+        try {
+            return readFileSync(filePath, 'utf-8');
+        } catch {
+            return null;
+        }
+    }
+
+    // Tenta achar o vencimento sozinho no grupo "cobr/dup" (duplicata) do
+    // XML da NF — só existe quando o próprio fornecedor preenche as
+    // condições de pagamento, nem toda nota tem. Quando tem mais de uma
+    // parcela, usa a primeira (mais cedo) só pra dar um palpite; hoje o
+    // sistema não parcela conta a pagar automaticamente. Usado pelo modal
+    // de Conciliar NF antes de vincular, pra decidir se pede o vencimento
+    // na mão ou já segue direto.
+    async getSuggestedDueDateForIncomingNf(incomingNfId: string, user: any) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
+        const incoming = await this.prisma.incomingGoodsNf.findUnique({
+            where: { id: incomingNfId },
+        });
+
+        if (!incoming) {
+            throw new NotFoundException('Documento não encontrado.');
+        }
+
+        this.ensureStoreAccess(incoming.storeId, user);
+
+        const xml = this.readIncomingGoodsNfXmlContent(incoming);
+
+        if (!xml) {
+            return { dueDate: null, installments: 0 };
+        }
+
+        const duplicatas = extractDuplicatasFromXml(xml).filter(
+            (item) => item.dataVencimento,
+        );
+
+        if (duplicatas.length === 0) {
+            return { dueDate: null, installments: 0 };
+        }
+
+        const earliest = duplicatas.sort((a, b) =>
+            (a.dataVencimento as string).localeCompare(
+                b.dataVencimento as string,
+            ),
+        )[0];
+
+        return { dueDate: earliest.dataVencimento, installments: duplicatas.length };
+    }
+
     // Vincula uma NF de mercadoria baixada automaticamente a uma compra já
     // cadastrada — mesmo princípio da conciliação de NF de Serviço. Reusa
     // addFiscalDocument pra manter o mesmo comportamento de status/histórico
     // de quando a NF é anexada manualmente.
+    //
+    // generateBill é opcional (default false) — os outros 2 lugares que
+    // chamam esse mesmo endpoint (fiscal-documents/page.tsx e
+    // EntradaNfTab.tsx) continuam só vinculando, sem gerar conta, porque
+    // nunca mandam esse campo. Só o modal de Conciliar NF manda true.
     async linkIncomingGoodsNf(
         incomingNfId: string,
-        purchaseId: string,
+        dto: LinkIncomingGoodsNfDto,
         user: any,
     ) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
+        const { purchaseId } = dto;
+
         const incoming = await this.prisma.incomingGoodsNf.findUnique({
             where: { id: incomingNfId },
         });
@@ -1746,12 +2464,97 @@ export class PurchasesService {
             data: { purchaseId },
         });
 
+        if (dto.generateBill) {
+            // Gerar conta a pagar é restrito — mesma regra de "Aceitar sem
+            // NF" (ver canManagePurchaseBilling). Vincular sozinho (sem
+            // gerar conta) continua liberado pra quem já tinha acesso a
+            // Notas Fiscais, sem essa restrição extra.
+            if (!this.canManagePurchaseBilling(user)) {
+                throw new ForbiddenException(
+                    'Seu perfil não tem permissão para gerar conta a pagar.',
+                );
+            }
+
+            let dueDate = dto.dueDate;
+
+            if (!dueDate) {
+                const xml = this.readIncomingGoodsNfXmlContent(incoming);
+
+                if (xml) {
+                    const duplicatas = extractDuplicatasFromXml(xml).filter(
+                        (item) => item.dataVencimento,
+                    );
+
+                    if (duplicatas.length > 0) {
+                        dueDate = duplicatas.sort((a, b) =>
+                            (a.dataVencimento as string).localeCompare(
+                                b.dataVencimento as string,
+                            ),
+                        )[0].dataVencimento;
+                    }
+                }
+            }
+
+            if (!dueDate) {
+                throw new BadRequestException(
+                    'Não foi possível identificar o vencimento na NF — informe manualmente.',
+                );
+            }
+
+            // Se a compra já tem fornecedor vinculado, usa esse (mantém
+            // consistente com o cadastro da compra) — só cai pro emitente
+            // da NF quando a compra não tinha fornecedor nenhum (compra
+            // avulsa antiga, por exemplo).
+            let supplierId = purchase.supplierId || undefined;
+
+            if (!supplierId && incoming.issuerName) {
+                const supplier = await this.suppliersService.findOrCreate(
+                    incoming.issuerName,
+                );
+                supplierId = supplier.id;
+            }
+
+            const { type, paymentMethod } = derivePaymentDefaults({
+                paymentType: dto.paymentType,
+                pixKey: dto.pixKey,
+            });
+
+            const bill = await this.billsService.create(
+                {
+                    description: `NF vinculada — ${incoming.issuerName || 'Fornecedor'}`,
+                    value: incoming.value
+                        ? Number(incoming.value)
+                        : Number(purchase.value),
+                    type,
+                    paymentMethod,
+                    dueDate,
+                    storeId: incoming.storeId,
+                    supplierId,
+                    purchaseId,
+                    pixKey: dto.pixKey,
+                    pixKeyType: dto.pixKeyType,
+                },
+                user,
+            );
+
+            await this.prisma.incomingGoodsNf.update({
+                where: { id: incomingNfId },
+                data: { billId: bill.id },
+            });
+        }
+
         return { ...updated, nsu: updated.nsu.toString() };
     }
 
     // "Recusar" (antiga "Não é nossa") — some da lista de pendências sem
     // apagar o registro (fica guardado caso precise investigar depois).
     async ignoreIncomingGoodsNf(incomingNfId: string, user: any) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
         const incoming = await this.prisma.incomingGoodsNf.findUnique({
             where: { id: incomingNfId },
         });
@@ -1781,6 +2584,12 @@ export class PurchasesService {
         dto: AcceptIncomingNfDto,
         user: any,
     ) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
         const incoming = await this.prisma.incomingGoodsNf.findUnique({
             where: { id: incomingNfId },
         });
@@ -1860,6 +2669,12 @@ export class PurchasesService {
     // sincronizada automaticamente às vezes só tem o resumo (resNFe), sem
     // itens (a leitura de "manifestação" com XML completo é fase futura).
     async viewIncomingGoodsNf(incomingNfId: string, user: any) {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
         const incoming = await this.prisma.incomingGoodsNf.findUnique({
             where: { id: incomingNfId },
         });
@@ -1916,6 +2731,12 @@ export class PurchasesService {
         incomingNfId: string,
         user: any,
     ): Promise<{ buffer: Buffer; filename: string }> {
+        if (!this.canAccessGoodsNf(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem acesso a Notas Fiscais.',
+            );
+        }
+
         const incoming = await this.prisma.incomingGoodsNf.findUnique({
             where: { id: incomingNfId },
         });

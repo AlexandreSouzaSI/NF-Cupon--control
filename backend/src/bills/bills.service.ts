@@ -7,7 +7,6 @@ import {
 
 import {
     BillStatus,
-    ExternalLaunchStatus,
     PurchaseHistoryAction,
     PurchaseStatus,
     UserRole,
@@ -17,6 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { parseOfx } from './ofx-parser';
+import { buildTodayReportPdf } from './bills-report-builder';
 
 @Injectable()
 export class BillsService {
@@ -92,6 +92,8 @@ export class BillsService {
 
         this.ensureStoreAccess(dto.storeId, user);
 
+        let noInvoiceProductsNoteToPersist: string | undefined;
+
         if (dto.purchaseId) {
             const purchase =
                 await this.prisma.purchase.findUnique({
@@ -102,6 +104,13 @@ export class BillsService {
                         id: true,
                         storeId: true,
                         supplierId: true,
+                        noInvoiceProductsNote: true,
+                        fiscalDocuments: {
+                            where: {
+                                status: 'LINKED',
+                            },
+                            select: { type: true },
+                        },
                     },
                 });
 
@@ -115,6 +124,24 @@ export class BillsService {
                 throw new BadRequestException(
                     'A conta e a compra precisam pertencer à mesma loja.',
                 );
+            }
+
+            // Fluxo 2: compra sem NF e sem previsão de ter uma. Se não existe
+            // nenhum FiscalDocument (nem INVOICE, nem COUPON/foto da notinha)
+            // vinculado, exige descrição dos produtos ou a foto antes de gerar
+            // a conta — é o que depois vai permitir vincular ao estoque.
+            const hasFiscalDocument = purchase.fiscalDocuments.length > 0;
+            const existingNote = purchase.noInvoiceProductsNote?.trim();
+            const incomingNote = dto.noInvoiceProductsNote?.trim();
+
+            if (!hasFiscalDocument && !existingNote && !incomingNote) {
+                throw new BadRequestException(
+                    'Essa compra não tem NF nem cupom anexado. Descreva os produtos comprados ou envie uma foto da notinha antes de gerar a conta a pagar.',
+                );
+            }
+
+            if (!existingNote && incomingNote) {
+                noInvoiceProductsNoteToPersist = incomingNote;
             }
         }
 
@@ -130,13 +157,6 @@ export class BillsService {
                 ),
 
                 status: BillStatus.OPEN,
-
-                externalLaunchStatus:
-                    dto.externalLaunchStatus ||
-                    ExternalLaunchStatus.NOT_LAUNCHED,
-
-                externalSystemName: dto.externalSystemName,
-                externalCode: dto.externalCode,
 
                 hasBillFile:
                     dto.hasBillFile || Boolean(dto.fileUrl),
@@ -183,6 +203,25 @@ export class BillsService {
                     })}.`,
                 },
             });
+
+            if (noInvoiceProductsNoteToPersist) {
+                await this.prisma.purchase.update({
+                    where: { id: bill.purchaseId },
+                    data: {
+                        noInvoiceProductsNote:
+                            noInvoiceProductsNoteToPersist,
+                    },
+                });
+
+                await this.prisma.purchaseHistory.create({
+                    data: {
+                        purchaseId: bill.purchaseId,
+                        userId: user.id,
+                        action: PurchaseHistoryAction.UPDATED,
+                        comment: `Descrição dos produtos (compra sem NF) registrada: "${noInvoiceProductsNoteToPersist}".`,
+                    },
+                });
+            }
         }
 
         return bill;
@@ -293,14 +332,8 @@ export class BillsService {
 
                 status: dto.status,
 
-                externalLaunchStatus:
-                    dto.externalLaunchStatus,
-
-                externalSystemName:
-                    dto.externalSystemName,
-
-                externalCode:
-                    dto.externalCode,
+                queuedForPaymentAt:
+                    dto.status === BillStatus.PAID ? null : undefined,
 
                 hasBillFile:
                     dto.hasBillFile,
@@ -411,6 +444,7 @@ export class BillsService {
                 paidAt: paidAt
                     ? new Date(paidAt)
                     : new Date(),
+                queuedForPaymentAt: null,
                 notes: reconciliationNote
                     ? [currentBill.notes, reconciliationNote]
                         .filter(Boolean)
@@ -477,33 +511,131 @@ export class BillsService {
         return bill;
     }
 
-    async markAsLaunched(
-        id: string,
-        user: any,
-        data?: {
-            externalSystemName?: string;
-            externalCode?: string;
-        },
-    ) {
+    private startOfToday() {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    private startOfTomorrow() {
+        const start = this.startOfToday();
+        start.setDate(start.getDate() + 1);
+        return start;
+    }
+
+    // "Incluir nos pagamentos de hoje" — só pra contas em aberto/vencidas
+    // (pagar/cancelada não faz sentido entrar numa fila de pagamento).
+    // Alterna: se já estava marcada, desmarca. Não muda dueDate nem status
+    // — a conta continua aparecendo como Vencida, só passa a contar
+    // também no filtro/relatório de "Hoje".
+    async toggleQueueToday(id: string, user: any) {
         if (!this.canManageBills(user)) {
             throw new ForbiddenException(
-                'Seu perfil não tem permissão para informar lançamento externo.',
+                'Seu perfil não tem permissão para gerenciar contas a pagar.',
             );
         }
 
-        await this.ensureBillAccess(id, user);
+        const currentBill = await this.ensureBillAccess(id, user);
+
+        if (
+            currentBill.status !== BillStatus.OPEN &&
+            currentBill.status !== BillStatus.OVERDUE
+        ) {
+            throw new BadRequestException(
+                'Só é possível incluir contas em aberto ou vencidas nos pagamentos de hoje.',
+            );
+        }
+
+        const bill = await this.prisma.bill.findUnique({
+            where: { id },
+            select: { queuedForPaymentAt: true },
+        });
 
         return this.prisma.bill.update({
             where: { id },
             data: {
-                externalLaunchStatus:
-                    ExternalLaunchStatus.LAUNCHED,
-                externalSystemName:
-                    data?.externalSystemName || 'OMIE',
-                externalCode: data?.externalCode,
+                queuedForPaymentAt: bill?.queuedForPaymentAt
+                    ? null
+                    : new Date(),
             },
             include: this.defaultInclude(),
         });
+    }
+
+    // Lista usada no relatório do dia: contas com vencimento hoje +
+    // vencidas que alguém marcou manualmente pra entrar nos pagamentos de
+    // hoje (toggleQueueToday) — mesmo critério do filtro "Hoje" da tela.
+    async findTodayBills(user: any, storeId?: string) {
+        const allowedStoreIds = this.getAllowedStoreIds(user);
+
+        if (storeId) {
+            this.ensureStoreAccess(storeId, user);
+        }
+
+        const start = this.startOfToday();
+        const end = this.startOfTomorrow();
+
+        const bills = await this.prisma.bill.findMany({
+            where: {
+                status: { in: [BillStatus.OPEN, BillStatus.OVERDUE] },
+                storeId:
+                    storeId ||
+                    (allowedStoreIds ? { in: allowedStoreIds } : undefined),
+                OR: [
+                    { dueDate: { gte: start, lt: end } },
+                    { queuedForPaymentAt: { not: null } },
+                ],
+            },
+            orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+            // Só o necessário pro relatório do dia — não o include pesado
+            // de defaultInclude() (que inclui compra/categoria/launchedBy).
+            include: { store: true, supplier: true },
+        });
+
+        // A query já trouxe "vence hoje" OU "marcada pra hoje" — mas uma
+        // marcada pra hoje pode ter vencimento em qualquer dia passado, e
+        // uma vencida sem marcação não deveria entrar mesmo se veio na
+        // OR (não deveria vir, mas o filtro dupla-checa por segurança).
+        return bills.filter((bill) => {
+            const dueDate = bill.dueDate;
+            const isToday = dueDate >= start && dueDate < end;
+            const isOverdue = dueDate < start;
+
+            if (isToday) return true;
+            if (isOverdue) return Boolean(bill.queuedForPaymentAt);
+
+            return false;
+        });
+    }
+
+    async getTodayReportPdf(user: any, storeId?: string) {
+        const bills = await this.findTodayBills(user, storeId);
+
+        let storeName = 'Todas as lojas';
+
+        if (storeId) {
+            const store = await this.prisma.store.findUnique({
+                where: { id: storeId },
+                select: { name: true },
+            });
+
+            storeName = store?.name || storeName;
+        }
+
+        return buildTodayReportPdf(
+            bills.map((bill) => ({
+                id: bill.id,
+                description: bill.description,
+                value: Number(bill.value),
+                dueDate: bill.dueDate,
+                status:
+                    bill.dueDate < this.startOfToday()
+                        ? 'OVERDUE'
+                        : 'OPEN',
+                supplierName: bill.supplier?.name || null,
+                storeName: bill.store.name,
+            })),
+            { storeName, today: new Date() },
+        );
     }
 
     async remove(id: string, user: any) {

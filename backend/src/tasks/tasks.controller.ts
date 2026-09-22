@@ -92,11 +92,12 @@ export class TasksController {
     }
 
     // Rota de path fixo precisa vir antes de ":id" pra não ser
-    // interpretada como um id.
+    // interpretada como um id. Sem storeId, o service já devolve o quadro
+    // geral com as tarefas de todas as lojas que a pessoa tem acesso.
     @Get('occurrences')
     async findOccurrences(
         @CurrentUser() user: any,
-        @Query('storeId') storeId: string,
+        @Query('storeId') storeId?: string,
         @Query('assignedToId') assignedToId?: string,
         @Query('status') status?: string,
         @Query('from') from?: string,

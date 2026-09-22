@@ -397,6 +397,7 @@ export function ServiceNfTab() {
                 dueDate: payload.dueDate,
                 pixKey: payload.pixKey,
                 barcode: payload.barcode,
+                paymentType: payload.paymentType,
             });
 
             toast.success('NF aceita e conta a pagar criada.');

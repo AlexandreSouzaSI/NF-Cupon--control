@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { toast } from 'sonner';
@@ -39,7 +39,17 @@ type LinhaForm = {
     valorTotal: string;
 };
 
-export function LinkNfTab({ onChanged }: { onChanged: () => void }) {
+export function LinkNfTab({
+    onChanged,
+    autoOpenNfId,
+}: {
+    onChanged: () => void;
+    // Vindo do "Conciliar NF" de Compras (?nfId= na URL) — abre esse painel
+    // sozinho assim que a NF aparecer na lista de pendentes, sem precisar
+    // procurar e clicar. Só tenta uma vez (guardado em autoOpenedRef) pra
+    // não reabrir se a pessoa fechar o painel manualmente depois.
+    autoOpenNfId?: string | null;
+}) {
     const [nfs, setNfs] = useState<NfPendente[]>([]);
     const [loading, setLoading] = useState(true);
     const [stockItems, setStockItems] = useState<StockItemOption[]>([]);
@@ -49,6 +59,7 @@ export function LinkNfTab({ onChanged }: { onChanged: () => void }) {
     const [linhas, setLinhas] = useState<Record<number, LinhaForm>>({});
     const [carregandoItens, setCarregandoItens] = useState(false);
     const [salvando, setSalvando] = useState(false);
+    const autoOpenedRef = useRef(false);
 
     async function load() {
         const store = getActiveStore();
@@ -62,6 +73,17 @@ export function LinkNfTab({ onChanged }: { onChanged: () => void }) {
             ]);
             setNfs(nfsRes.data);
             setStockItems(itemsRes.data);
+
+            if (autoOpenNfId && !autoOpenedRef.current) {
+                const alvo: NfPendente | undefined = nfsRes.data.find(
+                    (nf: NfPendente) => nf.id === autoOpenNfId,
+                );
+
+                if (alvo) {
+                    autoOpenedRef.current = true;
+                    abrir(alvo);
+                }
+            }
         } catch (error) {
             console.error(error);
         } finally {

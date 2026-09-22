@@ -66,6 +66,19 @@ export class UsersService {
         return allowed.includes(actingUser.role);
     }
 
+    // Só quem já aprova compra por conta própria (Admin Master ou
+    // Proprietário) pode conceder ou tirar a permissão extra
+    // canApprovePurchases de outro usuário — evita que, por exemplo, um
+    // Gerente libere aprovação pra si mesmo ou pra outra pessoa.
+    private ensureCanGrantApprovalPermission(actingUser: any) {
+        if (actingUser.isAdminMaster) return;
+        if (actingUser.role === UserRole.PROPRIETARIO) return;
+
+        throw new ForbiddenException(
+            'Só o Proprietário ou o Admin Master podem liberar a permissão de aprovar compras.',
+        );
+    }
+
     // Duas checagens independentes:
     // 1) Perfil-alvo — quem pode cadastrar/editar/desativar alguém com
     //    aquele perfil (matriz ROLE_ASSIGNERS, roda pra todo mundo,
@@ -117,6 +130,10 @@ export class UsersService {
                 targetRole: dto.role,
                 targetStoreIds: dto.storeIds || [],
             });
+
+            if (dto.canApprovePurchases !== undefined) {
+                this.ensureCanGrantApprovalPermission(actingUser);
+            }
         }
 
         const phone = dto.phone?.trim() ? normalizePhone(dto.phone) : null;
@@ -143,6 +160,7 @@ export class UsersService {
                 role: dto.role,
                 phone,
                 active: true,
+                canApprovePurchases: dto.canApprovePurchases ?? false,
                 userStores: {
                     create:
                         dto.storeIds?.map((storeId) => ({
@@ -262,6 +280,10 @@ export class UsersService {
                     targetStoreIds: dto.storeIds,
                 });
             }
+
+            if (dto.canApprovePurchases !== undefined) {
+                this.ensureCanGrantApprovalPermission(actingUser);
+            }
         }
 
         if (dto.email) {
@@ -313,6 +335,7 @@ export class UsersService {
                     role: dto.role,
                     phone: normalizedPhone,
                     active: dto.active,
+                    canApprovePurchases: dto.canApprovePurchases,
                 },
             });
 

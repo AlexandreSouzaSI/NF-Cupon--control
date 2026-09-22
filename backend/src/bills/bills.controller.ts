@@ -8,10 +8,13 @@ import {
     Post,
     Put,
     Query,
+    Res,
     UploadedFile,
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
+
+import type { Response } from 'express';
 
 import {
     BillStatus,
@@ -85,6 +88,27 @@ export class BillsController {
         });
     }
 
+    // Precisa vir antes de ":id" pra não ser interpretada como um id.
+    @Get('report/today')
+    async downloadTodayReport(
+        @CurrentUser() user: any,
+        @Res() res: Response,
+        @Query('storeId') storeId?: string,
+    ) {
+        const buffer = await this.billsService.getTodayReportPdf(
+            user,
+            storeId,
+        );
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="contas-a-pagar-${new Date()
+                .toISOString()
+                .slice(0, 10)}.pdf"`,
+        });
+        res.send(buffer);
+    }
+
     @Get(':id')
     async findOne(
         @Param('id') id: string,
@@ -117,29 +141,20 @@ export class BillsController {
         );
     }
 
-    @Patch(':id/launch')
-    async markAsLaunched(
-        @Param('id') id: string,
-        @Body()
-        body: {
-            externalSystemName?: string;
-            externalCode?: string;
-        },
-        @CurrentUser() user: any,
-    ) {
-        return this.billsService.markAsLaunched(
-            id,
-            user,
-            body,
-        );
-    }
-
     @Delete(':id')
     async remove(
         @Param('id') id: string,
         @CurrentUser() user: any,
     ) {
         return this.billsService.remove(id, user);
+    }
+
+    @Patch(':id/queue-today')
+    async toggleQueueToday(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.billsService.toggleQueueToday(id, user);
     }
 
     @Post('upload')

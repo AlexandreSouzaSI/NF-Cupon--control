@@ -52,6 +52,12 @@ type Purchase = {
         id: string;
         status: string;
     }[];
+
+    // Fluxo 2 (compra sem NF e nem vai ter): usados pra saber se é
+    // obrigatório pedir descrição dos produtos ou foto da notinha antes
+    // de liberar o salvamento da conta.
+    fiscalDocuments?: { type: string }[];
+    noInvoiceProductsNote?: string | null;
 };
 
 type BillType =
@@ -78,10 +84,6 @@ type PixKeyType =
     | 'RANDOM'
     | 'EVP';
 
-type ExternalLaunchStatus =
-    | 'NOT_LAUNCHED'
-    | 'LAUNCHED';
-
 type BillForm = {
     description: string;
     value: string;
@@ -94,10 +96,6 @@ type BillForm = {
     storeId: string;
     supplierId: string;
     purchaseId: string;
-
-    externalLaunchStatus: ExternalLaunchStatus;
-    externalSystemName: string;
-    externalCode: string;
 
     barcode: string;
 
@@ -127,10 +125,6 @@ function createEmptyForm(): BillForm {
         storeId: '',
         supplierId: '',
         purchaseId: '',
-
-        externalLaunchStatus: 'NOT_LAUNCHED',
-        externalSystemName: 'OMIE',
-        externalCode: '',
 
         barcode: '',
 
@@ -224,6 +218,71 @@ function NewBillPageInner() {
     // depois da leitura automática).
     const [lastReadDigits, setLastReadDigits] =
         useState('');
+
+    // Fluxo 2 (compra sem NF e nem vai ter): descrição dos produtos e/ou
+    // foto da notinha, exigidos antes de salvar quando a compra vinculada
+    // não tem nenhum FiscalDocument (nem INVOICE, nem COUPON).
+    const [noInvoiceNote, setNoInvoiceNote] =
+        useState('');
+
+    const [couponUploaded, setCouponUploaded] =
+        useState(false);
+
+    const [uploadingCoupon, setUploadingCoupon] =
+        useState(false);
+
+    const purchaseHasFiscalDocument =
+        (purchase?.fiscalDocuments?.length || 0) > 0;
+
+    const purchaseHasExistingNote = Boolean(
+        purchase?.noInvoiceProductsNote?.trim(),
+    );
+
+    const needsNoInvoiceProof =
+        Boolean(purchase) &&
+        !purchaseHasFiscalDocument &&
+        !purchaseHasExistingNote &&
+        !couponUploaded;
+
+    async function uploadCouponForPurchase(file: File) {
+        if (!purchase) {
+            return;
+        }
+
+        const formData = new FormData();
+
+        formData.append('file', file);
+        formData.append('type', 'COUPON');
+
+        try {
+            setUploadingCoupon(true);
+
+            await api.post(
+                `/purchases/${purchase.id}/fiscal-documents/upload`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type':
+                            'multipart/form-data',
+                    },
+                },
+            );
+
+            setCouponUploaded(true);
+
+            toast.success(
+                'Foto da notinha enviada.',
+            );
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data
+                    ?.message ||
+                'Erro ao enviar a foto da notinha.',
+            );
+        } finally {
+            setUploadingCoupon(false);
+        }
+    }
 
     function handleBarcodeInput(value: string) {
         setForm((current) => ({
@@ -344,14 +403,6 @@ function NewBillPageInner() {
 
                     purchaseId:
                         loadedPurchase.id,
-
-                    externalLaunchStatus:
-                        'NOT_LAUNCHED',
-
-                    externalSystemName:
-                        'OMIE',
-
-                    externalCode: '',
 
                     barcode: '',
 
@@ -543,6 +594,16 @@ function NewBillPageInner() {
             return;
         }
 
+        if (
+            needsNoInvoiceProof &&
+            !noInvoiceNote.trim()
+        ) {
+            toast.error(
+                'Essa compra não tem NF nem cupom anexado. Descreva os produtos comprados ou envie a foto da notinha antes de salvar.',
+            );
+            return;
+        }
+
         try {
             setSaving(true);
 
@@ -570,23 +631,6 @@ function NewBillPageInner() {
                 purchaseId:
                     form.purchaseId ||
                     undefined,
-
-                externalLaunchStatus:
-                    form.externalLaunchStatus,
-
-                externalSystemName:
-                    form.externalLaunchStatus ===
-                        'LAUNCHED'
-                        ? form.externalSystemName ||
-                        undefined
-                        : undefined,
-
-                externalCode:
-                    form.externalLaunchStatus ===
-                        'LAUNCHED'
-                        ? form.externalCode ||
-                        undefined
-                        : undefined,
 
                 barcode:
                     form.paymentMethod ===
@@ -655,6 +699,10 @@ function NewBillPageInner() {
 
                 notes:
                     form.notes.trim() ||
+                    undefined,
+
+                noInvoiceProductsNote:
+                    noInvoiceNote.trim() ||
                     undefined,
             });
 
@@ -774,6 +822,94 @@ function NewBillPageInner() {
                                         purchase.value,
                                     )}
                                 </strong>
+                            </div>
+                        </div>
+                    </section>
+                )}
+
+                {needsNoInvoiceProof && (
+                    <section className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-5">
+                        <div className="flex items-start gap-3">
+                            <ReceiptText className="mt-1 text-amber-500" />
+
+                            <div className="flex-1">
+                                <h3 className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                                    Compra sem NF — descrição obrigatória
+                                </h3>
+
+                                <p className="mt-1 text-sm text-amber-700/90 dark:text-amber-300/80">
+                                    Essa compra não tem NF nem cupom
+                                    anexado. Antes de salvar, descreva
+                                    os produtos comprados ou envie uma
+                                    foto da notinha — isso vai servir
+                                    de referência pra depois vincular
+                                    ao estoque.
+                                </p>
+
+                                <div className="mt-4 space-y-3">
+                                    <div>
+                                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                            Descrição dos produtos
+                                        </label>
+
+                                        <textarea
+                                            value={
+                                                noInvoiceNote
+                                            }
+                                            onChange={(event) =>
+                                                setNoInvoiceNote(
+                                                    event.target.value,
+                                                )
+                                            }
+                                            rows={3}
+                                            placeholder="Ex: 2 caixas de refrigerante, 10kg de carne, 1 fardo de água..."
+                                            className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm outline-none focus:border-amber-500"
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                                        <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+                                        ou
+                                        <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+                                    </div>
+
+                                    <div>
+                                        <label
+                                            className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium ${couponUploaded
+                                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                                : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                                                }`}
+                                        >
+                                            <Upload size={16} />
+                                            {uploadingCoupon
+                                                ? 'Enviando...'
+                                                : couponUploaded
+                                                    ? 'Foto enviada'
+                                                    : 'Enviar foto da notinha'}
+
+                                            <input
+                                                type="file"
+                                                accept="image/*,.pdf"
+                                                className="hidden"
+                                                disabled={uploadingCoupon}
+                                                onChange={(event) => {
+                                                    const file =
+                                                        event.target
+                                                            .files?.[0];
+
+                                                    if (file) {
+                                                        uploadCouponForPurchase(
+                                                            file,
+                                                        );
+                                                    }
+
+                                                    event.target.value =
+                                                        '';
+                                                }}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -1336,100 +1472,6 @@ function NewBillPageInner() {
                                 )}
                             </select>
                         </div>
-
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                Lançado no OMIE?
-                            </label>
-
-                            <select
-                                value={
-                                    form.externalLaunchStatus
-                                }
-                                onChange={(event) =>
-                                    setForm(
-                                        (current) => ({
-                                            ...current,
-                                            externalLaunchStatus:
-                                                event
-                                                    .target
-                                                    .value as ExternalLaunchStatus,
-                                        }),
-                                    )
-                                }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-cyan-500"
-                            >
-                                <option value="NOT_LAUNCHED">
-                                    Não lançado
-                                </option>
-
-                                <option value="LAUNCHED">
-                                    Lançado
-                                </option>
-                            </select>
-                        </div>
-
-                        {form.externalLaunchStatus ===
-                            'LAUNCHED' && (
-                                <>
-                                    <div>
-                                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                            Sistema
-                                        </label>
-
-                                        <input
-                                            value={
-                                                form.externalSystemName
-                                            }
-                                            onChange={(
-                                                event,
-                                            ) =>
-                                                setForm(
-                                                    (
-                                                        current,
-                                                    ) => ({
-                                                        ...current,
-                                                        externalSystemName:
-                                                            event
-                                                                .target
-                                                                .value,
-                                                    }),
-                                                )
-                                            }
-                                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-cyan-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                            Código externo
-                                        </label>
-
-                                        <input
-                                            value={
-                                                form.externalCode
-                                            }
-                                            onChange={(
-                                                event,
-                                            ) =>
-                                                setForm(
-                                                    (
-                                                        current,
-                                                    ) => ({
-                                                        ...current,
-                                                        externalCode:
-                                                            event
-                                                                .target
-                                                                .value,
-                                                    }),
-                                                )
-                                            }
-                                            placeholder="Código do lançamento"
-                                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-cyan-500"
-                                        />
-                                    </div>
-                                </>
-                            )}
 
                         <div className="md:col-span-2">
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">

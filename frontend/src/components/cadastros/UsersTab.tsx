@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { Pencil, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
 import { toast } from 'sonner';
-import { canAssignRole, getUser } from '@/lib/auth';
+import { canAssignRole, canGrantApprovalPermission, getUser } from '@/lib/auth';
 
 type Store = {
     id: string;
@@ -18,6 +18,7 @@ type User = {
     phone?: string | null;
     role: string;
     active: boolean;
+    canApprovePurchases?: boolean;
     userStores: {
         store: Store;
     }[];
@@ -110,9 +111,15 @@ export function UsersTab() {
         role: 'FUNCIONARIO',
         active: true,
         storeIds: [] as string[],
+        canApprovePurchases: false,
     });
 
     const loggedUser = getUser();
+
+    // Só quem já aprova compra por conta própria (Admin Master ou
+    // Proprietário) pode conceder essa permissão extra pra outro usuário —
+    // ver ensureCanGrantApprovalPermission no backend (users.service.ts).
+    const canEditApprovalPermission = canGrantApprovalPermission(loggedUser);
 
     // Some da lista de opções quando: (a) é um perfil legado fora de foco
     // (hidden) e não é o perfil já selecionado, ou (b) o usuário logado não
@@ -179,6 +186,7 @@ export function UsersTab() {
             role: 'FUNCIONARIO',
             active: true,
             storeIds: [],
+            canApprovePurchases: false,
         });
     }
 
@@ -193,6 +201,7 @@ export function UsersTab() {
             role: user.role,
             active: user.active,
             storeIds: user.userStores.map((item) => item.store.id),
+            canApprovePurchases: user.canApprovePurchases || false,
         });
 
         // O form fica acima da lista (ou antes dela, empilhado no
@@ -250,6 +259,14 @@ export function UsersTab() {
 
             if (form.password.trim()) {
                 payload.password = form.password;
+            }
+
+            // Só manda esse campo se quem está logado pode concedê-lo —
+            // senão, se um editor sem essa permissão salvar o form (sem
+            // nunca ter visto o toggle), não queremos sobrescrever o valor
+            // que já existia no usuário.
+            if (canEditApprovalPermission) {
+                payload.canApprovePurchases = form.canApprovePurchases;
             }
 
             if (editingUser) {
@@ -415,6 +432,30 @@ export function UsersTab() {
                         </div>
                     </div>
 
+                    {canEditApprovalPermission && (
+                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
+                            <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                <input
+                                    type="checkbox"
+                                    checked={form.canApprovePurchases}
+                                    onChange={(e) =>
+                                        setForm({
+                                            ...form,
+                                            canApprovePurchases: e.target.checked,
+                                        })
+                                    }
+                                />
+                                Pode aprovar compras (permissão extra)
+                            </label>
+                            <p className="mt-1 text-xs text-zinc-500">
+                                Comprador, Proprietário e Admin Master já aprovam
+                                por padrão. Marque aqui só pra liberar aprovação
+                                pra um usuário de outro perfil (ex.: Administrativo,
+                                Gerente).
+                            </p>
+                        </div>
+                    )}
+
                     <div>
                         <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                             Lojas
@@ -529,6 +570,12 @@ export function UsersTab() {
                                             >
                                                 {user.active ? 'Ativo' : 'Inativo'}
                                             </span>
+
+                                            {user.canApprovePurchases && (
+                                                <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-400">
+                                                    Aprova compras (extra)
+                                                </span>
+                                            )}
                                         </div>
 
                                         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">

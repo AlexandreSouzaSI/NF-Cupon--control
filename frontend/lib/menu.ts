@@ -20,6 +20,7 @@ import {
     HelpCircle,
     Package,
     Warehouse,
+    PieChart,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -136,6 +137,20 @@ export const menu: MenuGroup[] = [
     {
         group: 'Compras',
         items: [
+            {
+                label: 'Dashboard de Compras',
+                href: '/purchases/dashboard',
+                icon: LayoutDashboard,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'ESTOQUISTA',
+                ],
+                color: 'blue',
+                module: 'COMPRAS',
+            },
             {
                 label: 'Nova Compra',
                 href: '/purchases/new',
@@ -271,6 +286,17 @@ export const menu: MenuGroup[] = [
     {
         group: 'Financeiro',
         items: [
+            {
+                label: 'Dashboard Financeiro',
+                href: '/financial-dashboard',
+                icon: PieChart,
+                // Mesmo acesso de Contas a Pagar — é a visão geral de tudo
+                // que é financeiro (NF, perdas, pagamentos), então segue o
+                // mesmo módulo/perfis em vez de um StoreModule novo.
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
+                color: 'teal',
+                module: 'CONTAS_A_PAGAR',
+            },
             {
                 label: 'Contas a Pagar',
                 href: '/bills',

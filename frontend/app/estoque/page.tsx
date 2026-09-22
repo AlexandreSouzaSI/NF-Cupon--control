@@ -9,6 +9,7 @@ import { Boxes, ArrowLeftRight, FileStack, Upload, ShoppingCart } from 'lucide-r
 import { ItemsTab } from '../../src/components/estoque/ItemsTab';
 import { MovementsTab } from '../../src/components/estoque/MovementsTab';
 import { LinkNfTab } from '../../src/components/estoque/LinkNfTab';
+import { LinkPurchaseTab } from '../../src/components/estoque/LinkPurchaseTab';
 import { ImportEstoqueTab } from '../../src/components/estoque/ImportEstoqueTab';
 import { ShoppingListTab } from '../../src/components/estoque/ShoppingListTab';
 
@@ -66,8 +67,14 @@ function EstoquePageInner() {
     );
 
     const requestedTab = searchParams.get('tab') as TabKey | null;
+    // Chegando do "Conciliar NF" de Compras, já com a NF vinculada — abre
+    // direto na aba de vínculo de estoque com essa NF pronta pra editar.
+    const requestedNfId = searchParams.get('nfId');
 
     const [activeTab, setActiveTab] = useState<TabKey>(() => {
+        if (requestedNfId && visibleTabs.some((tab) => tab.key === 'nf')) {
+            return 'nf';
+        }
         if (requestedTab && visibleTabs.some((tab) => tab.key === requestedTab)) {
             return requestedTab;
         }
@@ -121,7 +128,18 @@ function EstoquePageInner() {
 
                 {activeTab === 'itens' && <ItemsTab refreshKey={refreshKey} />}
                 {activeTab === 'movimentar' && <MovementsTab onChanged={bump} />}
-                {activeTab === 'nf' && <LinkNfTab onChanged={bump} />}
+                {activeTab === 'nf' && (
+                    <div className="space-y-6">
+                        <LinkNfTab onChanged={bump} autoOpenNfId={requestedNfId} />
+
+                        <div>
+                            <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                                Compras sem NF
+                            </h3>
+                            <LinkPurchaseTab onChanged={bump} />
+                        </div>
+                    </div>
+                )}
                 {activeTab === 'importar' && <ImportEstoqueTab onImported={bump} />}
                 {activeTab === 'lista-compra' && <ShoppingListTab refreshKey={refreshKey} />}
             </div>

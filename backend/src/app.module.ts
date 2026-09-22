@@ -31,6 +31,7 @@ import { BillCategoriesModule } from './bill-categories/bill-categories.module';
 import { DemoModule } from './demo/demo.module';
 import { ProductSalesModule } from './product-sales/product-sales.module';
 import { EstoqueModule } from './estoque/estoque.module';
+import { FinancialDashboardModule } from './financial-dashboard/financial-dashboard.module';
 
 @Module({
   imports: [
@@ -65,7 +66,8 @@ import { EstoqueModule } from './estoque/estoque.module';
     BillCategoriesModule,
     DemoModule,
     ProductSalesModule,
-    EstoqueModule
+    EstoqueModule,
+    FinancialDashboardModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -77,6 +77,30 @@ const categoryLabels: Record<PurchaseCategory, string> = {
     ONLINE_MARKETPLACE: 'Compra online',
 };
 
+// Pequeno resumo do que cada tipo significa pro fluxo — mostrado logo
+// abaixo do seletor "Tipo da compra", pra quem tá cadastrando já saber se
+// vai cair em aprovação ou seguir direto.
+const categoryInfo: Record<
+    PurchaseCategory,
+    { description: string; requiresApproval: boolean }
+> = {
+    SUPPLIER_ORDER: {
+        description:
+            'Direto com fornecedor combinado — não passa por aprovação, vai direto para Compras Realizadas, aguardando chegar na loja.',
+        requiresApproval: false,
+    },
+    AVULSA_CARD: {
+        description:
+            'Compra avulsa (ex.: faltou algo e comprou no cartão) — depende de aprovação antes de seguir.',
+        requiresApproval: true,
+    },
+    ONLINE_MARKETPLACE: {
+        description:
+            'Compra online (ex.: Mercado Livre) — depende de aprovação antes de seguir.',
+        requiresApproval: true,
+    },
+};
+
 const paymentMethodLabels: Record<PaymentMethod, string> = {
     CREDIT_CARD: 'Cartão de crédito',
     CASH: 'Dinheiro',
@@ -167,7 +191,6 @@ export default function NewPurchasePage() {
     const [resolvingSupplier, setResolvingSupplier] = useState(false);
     const [cardId, setCardId] = useState('');
 
-    const [externalOrderCode, setExternalOrderCode] = useState('');
     const [invoiceResponsibleId, setInvoiceResponsibleId] = useState('');
     const [purchasedAt, setPurchasedAt] = useState(() => todayISO());
     const [dueDate, setDueDate] = useState(() => todayPlusDaysISO(7));
@@ -393,7 +416,11 @@ export default function NewPurchasePage() {
             setSupplierQuery(draft.supplierName);
         }
 
-        if (draft.paymentMethod) {
+        // "Conta da empresa" não é mais selecionável em Nova Compra — se a
+        // transcrição por voz entender isso, cai no padrão (Boleto) em vez
+        // de deixar o formulário com uma forma de pagamento sem opção
+        // visível no select.
+        if (draft.paymentMethod && draft.paymentMethod !== 'COMPANY_ACCOUNT') {
             setMethod(draft.paymentMethod);
         }
 
@@ -615,8 +642,6 @@ export default function NewPurchasePage() {
                         : undefined,
                 category,
                 origin,
-                externalOrderCode:
-                    externalOrderCode.trim() || undefined,
                 invoiceResponsibleId:
                     invoiceResponsibleId || undefined,
                 purchasedAt: purchasedAt || undefined,
@@ -838,6 +863,20 @@ export default function NewPurchasePage() {
                                         Compra online
                                     </option>
                                 </select>
+
+                                <div
+                                    className={`mt-2 rounded-xl border px-3 py-2 text-xs ${categoryInfo[category].requiresApproval
+                                        ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-300'
+                                        : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                                        }`}
+                                >
+                                    {categoryInfo[category].requiresApproval
+                                        ? '⏳ Depende de aprovação'
+                                        : '✓ Sem aprovação — vai direto pra Compras Realizadas'}
+                                    <span className="ml-1 text-zinc-500 dark:text-zinc-400">
+                                        {categoryInfo[category].description}
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="md:col-span-2">
@@ -872,16 +911,21 @@ export default function NewPurchasePage() {
                                     }
                                     className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
                                 >
-                                    {Object.entries(
-                                        paymentMethodLabels,
-                                    ).map(([value, label]) => (
-                                        <option
-                                            key={value}
-                                            value={value}
-                                        >
-                                            {label}
-                                        </option>
-                                    ))}
+                                    {Object.entries(paymentMethodLabels)
+                                        // "Conta da empresa" saiu das opções de Nova Compra — segue
+                                        // no enum só pra não quebrar compras antigas que já usam isso.
+                                        .filter(
+                                            ([value]) =>
+                                                value !== 'COMPANY_ACCOUNT',
+                                        )
+                                        .map(([value, label]) => (
+                                            <option
+                                                key={value}
+                                                value={value}
+                                            >
+                                                {label}
+                                            </option>
+                                        ))}
                                 </select>
                             </div>
 
@@ -1019,26 +1063,6 @@ export default function NewPurchasePage() {
                                     )}
                                 </div>
                             )}
-
-                            {category ===
-                                'ONLINE_MARKETPLACE' && (
-                                    <div>
-                                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                            Código do pedido
-                                        </label>
-
-                                        <input
-                                            value={externalOrderCode}
-                                            onChange={(event) =>
-                                                setExternalOrderCode(
-                                                    event.target.value,
-                                                )
-                                            }
-                                            placeholder="Ex.: ML-123456789"
-                                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
-                                        />
-                                    </div>
-                                )}
 
                         </div>
 

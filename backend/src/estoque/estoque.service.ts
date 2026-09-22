@@ -26,6 +26,7 @@ import { CreateStockItemDto } from './dto/create-stock-item.dto';
 import { UpdateStockItemDto } from './dto/update-stock-item.dto';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { LinkNfItemsDto } from './dto/link-nf-items.dto';
+import { LinkPurchaseItemsDto } from './dto/link-purchase-items.dto';
 
 // Mesmo normalizador usado em product-sales.service.ts (Ingredient,
 // produtoChave) — maiúsculo, sem espaço duplicado/nas pontas. Mantido
@@ -740,6 +741,152 @@ export class EstoqueService {
 
             await tx.incomingGoodsNf.update({
                 where: { id: incomingNfId },
+                data: { stockLinkedAt: new Date() },
+            });
+        });
+
+        return { vinculados: dto.itens.length };
+    }
+
+    // ---------------------------------------------------------------
+    // Vínculo de itens de compra sem NF — Fluxo 2 (nunca vai ter NF real,
+    // só descrição/foto do cupom, obrigatórias na hora de gerar a conta —
+    // ver Purchase.noInvoiceProductsNote e bills.service.ts). Sem XML pra
+    // ler, então os itens são digitados manualmente aqui.
+    // ---------------------------------------------------------------
+
+    // Compras que já geraram conta a pagar, não têm NF real (tipo
+    // INVOICE) vinculada — só cupom (COUPON) ou nada — e ainda não
+    // tiveram os itens ligados ao estoque.
+    async listComprasPendentes(user: any, storeId: string) {
+        this.ensureStoreAccess(storeId, user);
+
+        const purchases = await this.prisma.purchase.findMany({
+            where: {
+                storeId,
+                stockLinkedAt: null,
+                bills: { some: {} },
+                fiscalDocuments: { none: { type: 'INVOICE', status: 'LINKED' } },
+            },
+            orderBy: { purchasedAt: 'desc' },
+            select: {
+                id: true,
+                description: true,
+                value: true,
+                purchasedAt: true,
+                noInvoiceProductsNote: true,
+                supplier: { select: { name: true } },
+                fiscalDocuments: {
+                    where: { type: 'COUPON', status: 'LINKED' },
+                    select: { id: true, fileUrl: true },
+                    take: 1,
+                },
+            },
+            take: 100,
+        });
+
+        return purchases.map((p) => ({
+            id: p.id,
+            description: p.description,
+            value: p.value,
+            purchasedAt: p.purchasedAt,
+            supplierName: p.supplier?.name ?? null,
+            noInvoiceProductsNote: p.noInvoiceProductsNote,
+            couponUrl: p.fiscalDocuments[0]?.fileUrl ?? null,
+        }));
+    }
+
+    // Detalhe da compra pra montar a tela de vínculo manual — descrição,
+    // foto do cupom (se tiver) e o que já foi vinculado antes (reabrir
+    // pra editar), já que não existe lista de itens vinda de XML.
+    async getCompraItensParaVinculo(purchaseId: string, user: any) {
+        const purchase = await this.prisma.purchase.findUnique({
+            where: { id: purchaseId },
+            include: {
+                supplier: { select: { name: true } },
+                fiscalDocuments: {
+                    where: { type: 'COUPON', status: 'LINKED' },
+                    select: { id: true, fileUrl: true },
+                    take: 1,
+                },
+                bills: { select: { id: true }, take: 1 },
+            },
+        });
+
+        if (!purchase) throw new NotFoundException('Compra não encontrada.');
+        this.ensureStoreAccess(purchase.storeId, user);
+
+        if (purchase.bills.length === 0) {
+            throw new BadRequestException(
+                'Essa compra ainda não tem conta a pagar gerada.',
+            );
+        }
+
+        const jaVinculados = await this.prisma.stockMovement.findMany({
+            where: { storeId: purchase.storeId, sourceRef: { startsWith: `compra:${purchaseId}:item:` } },
+            include: { stockItem: { select: { id: true, nome: true } } },
+            orderBy: { sourceRef: 'asc' },
+        });
+
+        return {
+            description: purchase.description,
+            value: purchase.value,
+            purchasedAt: purchase.purchasedAt,
+            supplierName: purchase.supplier?.name ?? null,
+            noInvoiceProductsNote: purchase.noInvoiceProductsNote,
+            couponUrl: purchase.fiscalDocuments[0]?.fileUrl ?? null,
+            stockLinkedAt: purchase.stockLinkedAt,
+            itensVinculados: jaVinculados.map((mov) => ({
+                stockItemId: mov.stockItem.id,
+                stockItemNome: mov.stockItem.nome,
+                quantidade: Number(mov.quantidade),
+                valorTotal: mov.valorTotal ? Number(mov.valorTotal) : null,
+            })),
+        };
+    }
+
+    async vincularCompraAoEstoque(purchaseId: string, dto: LinkPurchaseItemsDto, user: any) {
+        const purchase = await this.prisma.purchase.findUnique({
+            where: { id: purchaseId },
+            include: { bills: { select: { id: true }, take: 1 } },
+        });
+
+        if (!purchase) throw new NotFoundException('Compra não encontrada.');
+        this.ensureStoreAccess(purchase.storeId, user);
+
+        if (purchase.bills.length === 0) {
+            throw new BadRequestException(
+                'Essa compra ainda não tem conta a pagar gerada.',
+            );
+        }
+
+        await this.prisma.$transaction(async (tx) => {
+            for (let index = 0; index < dto.itens.length; index++) {
+                const linha = dto.itens[index];
+
+                const stockItem = await this.resolveOrCreateStockItem(tx, {
+                    storeId: purchase.storeId,
+                    stockItemId: linha.stockItemId,
+                    novoNome: linha.novoNome,
+                    novaCategoria: linha.novaCategoria,
+                    novaUnidadeMedida: linha.novaUnidadeMedida,
+                });
+
+                await this.applyMovement(tx, {
+                    storeId: purchase.storeId,
+                    stockItemId: stockItem.id,
+                    tipo: StockMovementType.ENTRADA,
+                    origem: StockMovementOrigin.COMPRA_SEM_NF,
+                    quantidade: linha.quantidade,
+                    valorTotal: linha.valorTotal ?? null,
+                    sourceRef: `compra:${purchaseId}:item:${index}`,
+                    data: purchase.purchasedAt ?? new Date(),
+                    createdById: user.id,
+                });
+            }
+
+            await tx.purchase.update({
+                where: { id: purchaseId },
                 data: { stockLinkedAt: new Date() },
             });
         });

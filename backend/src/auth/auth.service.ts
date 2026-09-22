@@ -60,6 +60,7 @@ export class AuthService {
                 email: user.email,
                 role: user.role,
                 isAdminMaster: user.isAdminMaster,
+                canApprovePurchases: user.canApprovePurchases,
                 isDemo: user.isDemo,
                 demoExpiresAt: user.demoExpiresAt,
                 stores,

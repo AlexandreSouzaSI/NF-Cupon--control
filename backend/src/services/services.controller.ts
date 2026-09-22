@@ -211,12 +211,18 @@ export class ServicesController {
         @Query('page') page?: string,
         @Query('pageSize') pageSize?: string,
         @Query('accepted') accepted?: string,
+        @Query('month') month?: string,
+        @Query('startDate') startDate?: string,
+        @Query('endDate') endDate?: string,
     ) {
         return this.servicesService.findIncomingNf(user, {
             storeId,
             page: page ? Number(page) : undefined,
             pageSize: pageSize ? Number(pageSize) : undefined,
             accepted: accepted === 'true',
+            month,
+            startDate,
+            endDate,
         });
     }
 

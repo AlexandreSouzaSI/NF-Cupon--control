@@ -15,6 +15,10 @@ export type AcceptNfBillPayload = {
     dueDate: string;
     pixKey?: string;
     barcode?: string;
+    // Escolha explícita feita no toggle abaixo — manda mesmo quando o
+    // usuário escolhe "Boleto" sem digitar o código ainda (o pagamento
+    // continua sendo criado como Boleto pendente, não "sem boleto").
+    paymentType: 'PIX' | 'BOLETO' | 'NONE';
 };
 
 type PixOrBoleto = 'NONE' | 'PIX' | 'BOLETO';
@@ -160,6 +164,7 @@ export function AcceptNfBillForm({
             dueDate,
             pixKey: pixOrBoleto === 'PIX' ? pixKey.trim() : undefined,
             barcode: pixOrBoleto === 'BOLETO' ? barcode.trim() : undefined,
+            paymentType: pixOrBoleto,
         });
     }
 

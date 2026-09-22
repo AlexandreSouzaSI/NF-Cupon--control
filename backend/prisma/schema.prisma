@@ -60,6 +60,17 @@ enum PaymentMethod {
   BOLETO
 }
 
+// Marcação manual (não é calculada) pra dizer se a compra ainda precisa de
+// uma conta a pagar (TO_PAY, padrão) ou se já foi paga de outra forma sem
+// passar pelo módulo Contas a Pagar (PAID — ex: pago na hora com dinheiro
+// do caixa, sem gerar conta nenhuma). Não confundir com PaymentMethod
+// (como foi/será pago) nem com Bill.paid (se a conta a pagar em si já foi
+// quitada) — esse campo é só pra saber se falta gerar a conta.
+enum PurchasePaymentStatus {
+  TO_PAY
+  PAID
+}
+
 enum ApprovalStatus {
   PENDING
   APPROVED
@@ -98,11 +109,6 @@ enum PayableType {
   NO_BILL
 }
 
-enum ExternalLaunchStatus {
-  NOT_LAUNCHED
-  LAUNCHED
-}
-
 enum PurchaseHistoryAction {
   CREATED
   UPDATED
@@ -115,6 +121,7 @@ enum PurchaseHistoryAction {
   BILL_CREATED
   BILL_PAID
   DELETION_REQUESTED
+  PAYMENT_STATUS_CHANGED
 }
 
 enum ApprovalLevel {
@@ -258,6 +265,15 @@ model User {
   // flag à parte porque só uma pessoa deve ter isso, mesmo que existam
   // vários Proprietários.
   isAdminMaster Boolean @default(false)
+
+  // Permissão extra e explícita pra aprovar/reprovar compras. Por padrão
+  // só Comprador, Proprietário e Admin Master (isAdminMaster) aprovam —
+  // essa flag libera aprovação pra qualquer outro usuário específico (ex.:
+  // um Administrativo ou Gerente de confiança), sem mudar o perfil dele.
+  // Só quem já pode aprovar por conta própria (Admin Master ou
+  // Proprietário) pode marcar/desmarcar essa flag em outro usuário — ver
+  // ensureCanGrantApprovalPermission em users.service.ts.
+  canApprovePurchases Boolean @default(false)
 
   // Conta criada pelo autocadastro público de teste (/demo/signup, loja
   // isDemo=true). demoExpiresAt é o prazo (1h a partir do cadastro) —
@@ -501,6 +517,12 @@ model Purchase {
   origin      PurchaseOrigin   @default(NORMAL)
   method      PaymentMethod
 
+  // "A pagar" (padrão) ou "Pago" — ver comentário no enum. Quem mexe em
+  // Conciliar NF/Conta a Pagar (canManagePurchaseBilling) marca como Pago
+  // quando a compra já foi quitada sem passar pelo módulo financeiro,
+  // silenciando o alerta de "falta gerar conta a pagar" na lista.
+  paymentStatus PurchasePaymentStatus @default(TO_PAY)
+
   requiresApproval Boolean @default(false)
 
   externalOrderCode String?
@@ -515,6 +537,19 @@ model Purchase {
   // compras cadastradas no modo simplificado (sem item a item).
   orderMirrorUrl  String?
   orderMirrorName String?
+
+  // Fluxo 2 (compra sem NF e nem vai ter): descrição textual dos produtos
+  // comprados, preenchida obrigatoriamente na hora de gerar a Conta a Pagar
+  // quando não existe FiscalDocument tipo INVOICE nem COUPON pra essa
+  // compra. Serve de referência futura pra vincular ao estoque manualmente
+  // (a foto do cupom, quando enviada, vai como FiscalDocument tipo COUPON —
+  // não precisa de campo próprio aqui).
+  noInvoiceProductsNote String?
+
+  // Fluxo 2: quando os itens dessa compra (sem NF) foram vinculados
+  // manualmente ao Estoque (aba "Compras sem NF" em Vincular NF). null =
+  // ainda pendente. Equivalente ao IncomingGoodsNf.stockLinkedAt do Fluxo 1.
+  stockLinkedAt DateTime?
 
   storeId     String
   supplierId  String?
@@ -664,9 +699,11 @@ model Bill {
 
   status BillStatus @default(OPEN)
 
-  externalLaunchStatus ExternalLaunchStatus @default(NOT_LAUNCHED)
-  externalSystemName   String?
-  externalCode         String?
+  // Preenchido quando alguém marca manualmente uma conta vencida como
+  // "incluir nos pagamentos de hoje" — não muda o vencimento nem o status
+  // (continua aparecendo como Vencida), só faz ela entrar também na lista
+  // "Hoje" e no relatório do dia. Fica null de novo quando a conta é paga.
+  queuedForPaymentAt DateTime?
 
   hasBillFile Boolean @default(false)
 
@@ -713,9 +750,9 @@ model Bill {
   @@index([status])
   @@index([type])
   @@index([paymentMethod])
-  @@index([externalLaunchStatus])
   @@index([dueDate])
   @@index([barcode])
+  @@index([queuedForPaymentAt])
   @@index([pixKey])
 }
 
@@ -1262,6 +1299,7 @@ enum StockMovementOrigin {
   MANUAL // lançamento avulso (entrada ou ajuste/baixa manual, item por item)
   IMPORTACAO_PLANILHA // planilha modelo (Nome/Categoria/Quantidade/Valor)
   CONSUMO_VENDA // baixa automática calculada a partir da importação de vendas (aba Produtos)
+  COMPRA_SEM_NF // Fluxo 2: vínculo manual de itens de uma compra sem NF (descrição/foto do cupom), sem XML pra ler
 }
 
 // Ledger de entradas/saídas de UM StockItem. sourceRef é uma chave

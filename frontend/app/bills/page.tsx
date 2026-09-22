@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
     AlertTriangle,
     Building2,
@@ -9,9 +9,12 @@ import {
     CalendarDays,
     Check,
     CheckCircle2,
+    ChevronDown,
+    ChevronUp,
     ClipboardCopy,
     Clock,
     CreditCard,
+    Download,
     ExternalLink,
     FileText,
     Landmark,
@@ -20,6 +23,7 @@ import {
     Search,
     SlidersHorizontal,
     Wallet,
+    X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -55,12 +59,9 @@ type Bill = {
 
     dueDate: string;
     paidAt?: string | null;
+    queuedForPaymentAt?: string | null;
 
     status: string;
-
-    externalLaunchStatus: string;
-    externalSystemName?: string | null;
-    externalCode?: string | null;
 
     hasBillFile: boolean;
 
@@ -248,14 +249,84 @@ function endOfRollingWeek() {
 
 type PeriodKey = 'OVERDUE' | 'TODAY' | 'WEEK' | 'MONTH' | 'ALL';
 
+// Janelas por vencimento que espelham exatamente os buckets calculados no
+// Dashboard Financeiro (financial-dashboard.service.ts) — semana de
+// segunda a domingo (não "rolling") e mês corrido completo (não só daqui
+// pra frente). Usadas só quando a página chega via link do dashboard
+// (?period=...&paid=...), pra que o clique mostre exatamente as contas
+// que compõem o número que a pessoa clicou.
+type DashboardPeriod = 'HOJE' | 'SEMANA' | 'MES' | 'VENCIDAS';
+type DashboardPaid = 'PAGAS' | 'APAGAR';
+
+function startOfThisWeekMonday() {
+    const today = startOfToday();
+    const weekday = today.getDay(); // 0 = domingo
+    const diffToMonday = weekday === 0 ? 6 : weekday - 1;
+
+    const start = new Date(today);
+    start.setDate(start.getDate() - diffToMonday);
+    return start;
+}
+
+function dashboardPeriodRange(
+    period: DashboardPeriod,
+): { gte: Date; lt: Date } | null {
+    if (period === 'HOJE') {
+        const start = startOfToday();
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+        return { gte: start, lt: end };
+    }
+
+    if (period === 'SEMANA') {
+        const start = startOfThisWeekMonday();
+        const end = new Date(start);
+        end.setDate(end.getDate() + 7);
+        return { gte: start, lt: end };
+    }
+
+    if (period === 'MES') {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        return { gte: start, lt: end };
+    }
+
+    return null;
+}
+
+const dashboardPeriodLabel: Record<DashboardPeriod, string> = {
+    HOJE: 'hoje',
+    SEMANA: 'esta semana',
+    MES: 'este mês',
+    VENCIDAS: 'vencidas',
+};
+
+const dashboardPaidLabel: Record<DashboardPaid, string> = {
+    PAGAS: 'pagas',
+    APAGAR: 'a pagar',
+};
+
 // Os cards de período são a forma principal de enxergar o que está em
 // aberto — "hoje", "esta semana" e "este mês" são janelas que começam
-// hoje (não incluem o que já venceu, que tem card próprio).
+// hoje (não incluem o que já venceu, que tem card próprio). Exceção: uma
+// vencida que a pessoa marcou manualmente com "Incluir em hoje"
+// (queuedForPaymentAt) entra também no card "Hoje" — ela continua
+// vencida (badge/selo não muda), só passa a contar junto do que precisa
+// ser pago hoje na prática.
 function matchesPeriod(bill: Bill, period: PeriodKey): boolean {
     const displayStatus = getDisplayStatus(bill);
 
     if (period === 'OVERDUE') {
         return displayStatus === 'OVERDUE';
+    }
+
+    if (
+        period === 'TODAY' &&
+        displayStatus === 'OVERDUE' &&
+        bill.queuedForPaymentAt
+    ) {
+        return true;
     }
 
     if (displayStatus !== 'OPEN') {
@@ -330,7 +401,37 @@ function getDueDateMessage(bill: Bill) {
 }
 
 export default function BillsPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="p-6 text-sm text-zinc-500">
+                    Carregando...
+                </div>
+            }
+        >
+            <BillsPageInner />
+        </Suspense>
+    );
+}
+
+function BillsPageInner() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Filtro vindo de um link do Dashboard Financeiro. Quando presente,
+    // ele manda na lista final — os cards de período normais continuam
+    // visíveis, mas clicar em qualquer um deles ou em "Limpar filtro"
+    // remove esses parâmetros da URL e volta pro comportamento normal.
+    const dashboardPeriod = searchParams.get(
+        'period',
+    ) as DashboardPeriod | null;
+    const dashboardPaid = searchParams.get('paid') as DashboardPaid | null;
+    const billIdFilter = searchParams.get('billId');
+    const hasDashboardFilter = Boolean(dashboardPeriod || billIdFilter);
+
+    function clearDashboardFilter() {
+        router.replace('/bills');
+    }
 
     const [bills, setBills] = useState<Bill[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -347,6 +448,24 @@ export default function BillsPage() {
     const [paymentMethodFilter, setPaymentMethodFilter] =
         useState('');
     const [showMoreFilters, setShowMoreFilters] = useState(false);
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(
+        new Set(),
+    );
+    const [downloadingReport, setDownloadingReport] = useState(false);
+
+    function toggleExpanded(id: string) {
+        setExpandedIds((current) => {
+            const next = new Set(current);
+
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+
+            return next;
+        });
+    }
 
     async function loadBaseData() {
         try {
@@ -403,6 +522,10 @@ export default function BillsPage() {
     }
 
     function selectPeriod(period: PeriodKey) {
+        if (hasDashboardFilter) {
+            router.replace('/bills');
+        }
+
         setPeriodFilter(period);
         setStatusFilter('');
     }
@@ -430,7 +553,6 @@ export default function BillsPage() {
                     bill.pixKey,
                     bill.beneficiary,
                     bill.bankName,
-                    bill.externalCode,
                 ]
                     .filter(Boolean)
                     .join(' ')
@@ -483,6 +605,42 @@ export default function BillsPage() {
     // sentido juntos — escolher uma situação manual ignora o card de
     // período selecionado.
     const filteredBills = useMemo(() => {
+        if (billIdFilter) {
+            return searchedBills.filter((bill) => bill.id === billIdFilter);
+        }
+
+        if (dashboardPeriod) {
+            return searchedBills.filter((bill) => {
+                const status = getDisplayStatus(bill);
+
+                if (dashboardPeriod === 'VENCIDAS') {
+                    return status === 'OVERDUE';
+                }
+
+                const range = dashboardPeriodRange(dashboardPeriod);
+
+                if (!range) {
+                    return false;
+                }
+
+                const dueDate = normalizeDate(bill.dueDate);
+
+                if (dueDate < range.gte || dueDate >= range.lt) {
+                    return false;
+                }
+
+                if (dashboardPaid === 'PAGAS') {
+                    return status === 'PAID';
+                }
+
+                if (dashboardPaid === 'APAGAR') {
+                    return status === 'OPEN' || status === 'OVERDUE';
+                }
+
+                return true;
+            });
+        }
+
         return searchedBills.filter((bill) => {
             if (statusFilter) {
                 return getDisplayStatus(bill) === statusFilter;
@@ -490,7 +648,14 @@ export default function BillsPage() {
 
             return matchesPeriod(bill, periodFilter);
         });
-    }, [searchedBills, statusFilter, periodFilter]);
+    }, [
+        searchedBills,
+        statusFilter,
+        periodFilter,
+        dashboardPeriod,
+        dashboardPaid,
+        billIdFilter,
+    ]);
 
     async function copyText(
         value: string | null | undefined,
@@ -538,36 +703,6 @@ export default function BillsPage() {
         }
     }
 
-    async function markAsLaunched(bill: Bill) {
-        const externalCode =
-            window.prompt(
-                'Informe o código do lançamento no OMIE, se existir:',
-                bill.externalCode || '',
-            ) || undefined;
-
-        try {
-            setProcessingId(bill.id);
-
-            await api.patch(`/bills/${bill.id}/launch`, {
-                externalSystemName: 'OMIE',
-                externalCode,
-            });
-
-            toast.success(
-                'Conta marcada como lançada no OMIE.',
-            );
-
-            await loadBills();
-        } catch (error: any) {
-            toast.error(
-                error?.response?.data?.message ||
-                'Erro ao atualizar lançamento.',
-            );
-        } finally {
-            setProcessingId(null);
-        }
-    }
-
     async function cancelBill(bill: Bill) {
         const confirmed = window.confirm(
             `Cancelar a conta "${bill.description}"?`,
@@ -594,6 +729,72 @@ export default function BillsPage() {
         }
     }
 
+    async function toggleQueueToday(bill: Bill) {
+        try {
+            setProcessingId(bill.id);
+
+            await api.patch(`/bills/${bill.id}/queue-today`, {});
+
+            toast.success(
+                bill.queuedForPaymentAt
+                    ? 'Conta removida dos pagamentos de hoje.'
+                    : 'Conta incluída nos pagamentos de hoje.',
+            );
+            await loadBills();
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data?.message ||
+                'Erro ao atualizar a conta.',
+            );
+        } finally {
+            setProcessingId(null);
+        }
+    }
+
+    async function downloadTodayReport() {
+        try {
+            setDownloadingReport(true);
+
+            const response = await api.get('/bills/report/today', {
+                params: { storeId: getActiveStore()?.id || undefined },
+                responseType: 'blob',
+            });
+
+            const blobUrl = window.URL.createObjectURL(
+                new Blob([response.data]),
+            );
+
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `contas-a-pagar-${new Date()
+                .toISOString()
+                .slice(0, 10)}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error: any) {
+            let message = 'Erro ao gerar o relatório do dia.';
+            const data = error?.response?.data;
+
+            if (data instanceof Blob) {
+                try {
+                    const text = await data.text();
+                    const parsed = JSON.parse(text);
+                    message = Array.isArray(parsed?.message)
+                        ? parsed.message.join(', ')
+                        : parsed?.message || message;
+                } catch {
+                    // mantém a mensagem padrão
+                }
+            }
+
+            toast.error(message);
+        } finally {
+            setDownloadingReport(false);
+        }
+    }
 
     return (
         <AppLayout title="Contas a Pagar">
@@ -605,12 +806,24 @@ export default function BillsPage() {
                         </h2>
 
                         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                            Controle vencimentos, PIX, boletos,
-                            cartões e lançamentos no OMIE.
+                            Controle vencimentos, PIX, boletos
+                            e cartões.
                         </p>
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            type="button"
+                            onClick={downloadTodayReport}
+                            disabled={downloadingReport}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-5 py-3 font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                        >
+                            <Download size={18} />
+                            {downloadingReport
+                                ? 'Gerando...'
+                                : 'Relatório do dia'}
+                        </button>
+
                         <button
                             type="button"
                             onClick={() => router.push('/bills/reconcile')}
@@ -630,6 +843,31 @@ export default function BillsPage() {
                         </button>
                     </div>
                 </header>
+
+                {hasDashboardFilter && (
+                    <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 dark:bg-cyan-500/[0.06]">
+                        <p className="text-sm text-cyan-600 dark:text-cyan-400">
+                            {billIdFilter
+                                ? 'Mostrando a conta selecionada no Dashboard Financeiro.'
+                                : `Filtro do Dashboard Financeiro: contas ${dashboardPaid
+                                    ? dashboardPaidLabel[dashboardPaid]
+                                    : ''
+                                } com vencimento ${dashboardPeriod
+                                    ? dashboardPeriodLabel[dashboardPeriod]
+                                    : ''
+                                }.`}
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={clearDashboardFilter}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/30 px-3 py-1.5 text-sm font-medium text-cyan-600 hover:bg-cyan-500/10 dark:text-cyan-400"
+                        >
+                            <X size={14} />
+                            Limpar filtro
+                        </button>
+                    </section>
+                )}
 
                 <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                     {periodCards.map((card) => {
@@ -810,18 +1048,22 @@ export default function BillsPage() {
                             </p>
                         </div>
                     ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                             {filteredBills.map((bill) => (
-                                <BillCard
+                                <BillRow
                                     key={bill.id}
                                     bill={bill}
                                     processing={
                                         processingId === bill.id
                                     }
+                                    expanded={expandedIds.has(bill.id)}
+                                    onToggleExpanded={() =>
+                                        toggleExpanded(bill.id)
+                                    }
                                     onCopy={copyText}
                                     onPay={markAsPaid}
-                                    onLaunch={markAsLaunched}
                                     onCancel={cancelBill}
+                                    onToggleQueueToday={toggleQueueToday}
                                     onOpenPurchase={(purchaseId) =>
                                         router.push(
                                             `/purchases/${purchaseId}`,
@@ -837,17 +1079,21 @@ export default function BillsPage() {
     );
 }
 
-function BillCard({
+function BillRow({
     bill,
     processing,
+    expanded,
+    onToggleExpanded,
     onCopy,
     onPay,
-    onLaunch,
     onCancel,
+    onToggleQueueToday,
     onOpenPurchase,
 }: {
     bill: Bill;
     processing: boolean;
+    expanded: boolean;
+    onToggleExpanded: () => void;
 
     onCopy: (
         value: string | null | undefined,
@@ -855,8 +1101,8 @@ function BillCard({
     ) => Promise<void>;
 
     onPay: (bill: Bill) => Promise<void>;
-    onLaunch: (bill: Bill) => Promise<void>;
     onCancel: (bill: Bill) => Promise<void>;
+    onToggleQueueToday: (bill: Bill) => Promise<void>;
     onOpenPurchase: (purchaseId: string) => void;
 }) {
     const displayStatus = getDisplayStatus(bill);
@@ -866,31 +1112,101 @@ function BillCard({
 
     return (
         <article
-            className={`rounded-3xl border p-5 ${displayStatus === 'OVERDUE'
+            className={`overflow-hidden rounded-2xl border ${displayStatus === 'OVERDUE'
                 ? 'border-red-500/30 bg-red-500/[0.04]'
                 : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950'
                 }`}
         >
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="rounded-xl bg-cyan-500/10 p-2 text-cyan-400">
-                            <ReceiptText size={19} />
-                        </div>
+            <button
+                type="button"
+                onClick={onToggleExpanded}
+                className="flex w-full flex-col gap-2 p-4 text-left sm:flex-row sm:items-center sm:gap-4"
+            >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="hidden shrink-0 rounded-xl bg-cyan-500/10 p-2 text-cyan-400 sm:block">
+                        <ReceiptText size={18} />
+                    </div>
 
-                        <h4 className="text-lg font-semibold">
+                    <div className="min-w-0">
+                        <p className="truncate font-semibold">
+                            {bill.supplier?.name ||
+                                bill.description}
+                        </p>
+                        <p className="truncate text-xs text-zinc-500">
                             {bill.description}
-                        </h4>
+                        </p>
+                    </div>
+                </div>
 
-                        <span
-                            className={`rounded-full border px-3 py-1 text-xs font-medium ${billStatusColor[displayStatus] ||
-                                billStatusColor.OPEN
-                                }`}
-                        >
-                            {billStatusLabel[displayStatus] ||
-                                displayStatus}
-                        </span>
+                <div className="flex shrink-0 items-center gap-2">
+                    <span
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium ${billStatusColor[displayStatus] ||
+                            billStatusColor.OPEN
+                            }`}
+                    >
+                        {billStatusLabel[displayStatus] ||
+                            displayStatus}
+                    </span>
 
+                    {bill.queuedForPaymentAt &&
+                        displayStatus === 'OVERDUE' && (
+                            <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 text-xs font-medium text-orange-500">
+                                Nos pagamentos de hoje
+                            </span>
+                        )}
+                </div>
+
+                <div className="shrink-0 text-left sm:w-32 sm:text-right">
+                    <p className="text-xs text-zinc-500">
+                        Vencimento
+                    </p>
+                    <p
+                        className={`text-sm font-medium ${displayStatus === 'OVERDUE'
+                            ? 'text-red-500'
+                            : ''
+                            }`}
+                    >
+                        {formatDate(bill.dueDate)}
+                    </p>
+                </div>
+
+                <div className="shrink-0 text-left sm:w-36 sm:text-right">
+                    <p className="text-lg font-bold text-cyan-500">
+                        {formatCurrency(bill.value)}
+                    </p>
+                </div>
+
+                <div className="shrink-0 text-zinc-400">
+                    {expanded ? (
+                        <ChevronUp size={18} />
+                    ) : (
+                        <ChevronDown size={18} />
+                    )}
+                </div>
+            </button>
+
+            {displayStatus === 'OVERDUE' && (
+                <div className="px-4 pb-3 sm:px-4">
+                    <button
+                        type="button"
+                        disabled={processing}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleQueueToday(bill);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-500 hover:bg-orange-500/20 disabled:opacity-50"
+                    >
+                        <Clock size={13} />
+                        {bill.queuedForPaymentAt
+                            ? 'Remover dos pagamentos de hoje'
+                            : 'Incluir nos pagamentos de hoje'}
+                    </button>
+                </div>
+            )}
+
+            {expanded && (
+                <div className="border-t border-zinc-200 dark:border-zinc-800 p-4 sm:p-5">
+                    <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs text-blue-400">
                             {paymentMethodLabel[
                                 bill.paymentMethod
@@ -985,40 +1301,12 @@ function BillCard({
                             </a>
                         )}
 
-                        <span
-                            className={`rounded-xl border px-3 py-2 text-sm ${bill.externalLaunchStatus ===
-                                'LAUNCHED'
-                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                                : 'border-orange-500/30 bg-orange-500/10 text-orange-400'
-                                }`}
-                        >
-                            {bill.externalLaunchStatus ===
-                                'LAUNCHED'
-                                ? `Lançado${bill.externalSystemName
-                                    ? ` no ${bill.externalSystemName}`
-                                    : ''
-                                }${bill.externalCode
-                                    ? ` • ${bill.externalCode}`
-                                    : ''
-                                }`
-                                : 'Sem lançamento no OMIE'}
-                        </span>
                     </div>
 
                     <p className="mt-3 text-xs text-zinc-600">
                         Cadastrada por {bill.launchedBy.name} em{' '}
                         {formatDate(bill.createdAt)}
                     </p>
-                </div>
-
-                <div className="min-w-[260px] border-t border-zinc-200 dark:border-zinc-800 pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
-                    <p className="text-sm text-zinc-500">
-                        Valor da conta
-                    </p>
-
-                    <strong className="mt-1 block text-3xl text-cyan-400">
-                        {formatCurrency(bill.value)}
-                    </strong>
 
                     {bill.paidAt && (
                         <p className="mt-1 text-xs text-emerald-400">
@@ -1026,7 +1314,7 @@ function BillCard({
                         </p>
                     )}
 
-                    <div className="mt-5 grid grid-cols-1 gap-2">
+                    <div className="mt-5 flex flex-wrap gap-2">
                         {!isInactive && (
                             <button
                                 type="button"
@@ -1038,22 +1326,6 @@ function BillCard({
                                 Marcar como paga
                             </button>
                         )}
-
-                        {bill.externalLaunchStatus !==
-                            'LAUNCHED' &&
-                            displayStatus !== 'CANCELED' && (
-                                <button
-                                    type="button"
-                                    disabled={processing}
-                                    onClick={() =>
-                                        onLaunch(bill)
-                                    }
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-sm font-medium text-blue-400 hover:bg-blue-500/20 disabled:opacity-50"
-                                >
-                                    <ExternalLink size={17} />
-                                    Marcar lançada no OMIE
-                                </button>
-                            )}
 
                         {displayStatus !== 'CANCELED' && (
                             <button
@@ -1069,7 +1341,7 @@ function BillCard({
                         )}
                     </div>
                 </div>
-            </div>
+            )}
         </article>
     );
 }

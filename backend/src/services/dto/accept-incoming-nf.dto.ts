@@ -2,6 +2,7 @@ import {
     IsBoolean,
     IsDateString,
     IsEnum,
+    IsIn,
     IsOptional,
     IsString,
 } from 'class-validator';
@@ -40,4 +41,13 @@ export class AcceptIncomingNfDto {
     @IsOptional()
     @IsString()
     barcode?: string;
+
+    // Escolha explícita de Boleto/PIX/Nenhum feita na hora — tem prioridade
+    // sobre a inferência por conteúdo de pixKey/barcode em
+    // derivePaymentDefaults (ver bill-payment-defaults.util.ts). Sem isso,
+    // escolher "Boleto" sem ainda ter o código virava "sem boleto" por
+    // engano.
+    @IsOptional()
+    @IsIn(['PIX', 'BOLETO', 'NONE'])
+    paymentType?: 'PIX' | 'BOLETO' | 'NONE';
 }

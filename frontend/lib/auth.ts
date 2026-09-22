@@ -40,6 +40,10 @@ export type AuthUser = {
     // independente do role, e é quem sempre pode cadastrar/editar outro
     // Proprietário.
     isAdminMaster?: boolean;
+    // Permissão extra pra aprovar/reprovar compras, fora do que o perfil já
+    // dá por padrão (Comprador/Proprietário/Admin Master) — ver
+    // canApprovePurchase() abaixo e purchases.service.ts no backend.
+    canApprovePurchases?: boolean;
     // Conta de teste grátis (autocadastro em /demo). demoExpiresAt vem como
     // string ISO (serializado no cookie) — bloqueado depois desse horário,
     // ver app-layout.tsx (banner) e lib/api.ts (401 força logout).
@@ -73,6 +77,40 @@ export function canAssignRole(actingUser: AuthUser, targetRole: UserRole) {
     const allowed = ROLE_ASSIGNERS[targetRole] ?? DEFAULT_ROLE_ASSIGNERS;
 
     return allowed.includes(actingUser.role);
+}
+
+// Espelha canApprovePurchase() do backend (purchases.service.ts) — só pra
+// decidir se mostra os botões Aprovar/Reprovar na tela. Quem não pode, o
+// backend também recusa (403), isso aqui é só pra não mostrar um botão que
+// vai dar erro.
+export function canApprovePurchase(user: AuthUser | null) {
+    if (!user) return false;
+    if (user.isAdminMaster) return true;
+    if (user.role === 'PROPRIETARIO' || user.role === 'COMPRADOR') return true;
+
+    return user.canApprovePurchases === true;
+}
+
+// Só Admin Master ou Proprietário podem conceder/tirar a permissão extra
+// canApprovePurchases de outro usuário — espelha
+// ensureCanGrantApprovalPermission() do backend (users.service.ts).
+export function canGrantApprovalPermission(user: AuthUser | null) {
+    if (!user) return false;
+
+    return Boolean(user.isAdminMaster) || user.role === 'PROPRIETARIO';
+}
+
+// "Aceitar e gerar conta a pagar" (Conciliar NF, Criar Conta a Pagar a
+// partir de uma compra) — espelha canManagePurchaseBilling() do backend
+// (purchases.service.ts). Estoquista continua só recebendo a compra
+// (botão Receber, sem essa restrição).
+export function canManagePurchaseBilling(user: AuthUser | null) {
+    if (!user) return false;
+    if (user.isAdminMaster) return true;
+
+    return ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'].includes(
+        user.role,
+    );
 }
 
 export function getToken() {

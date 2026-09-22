@@ -10,7 +10,6 @@ import {
 
 import {
     BillPaymentMethod,
-    ExternalLaunchStatus,
     PayableType,
     PixKeyType,
 } from '@prisma/client';
@@ -46,18 +45,6 @@ export class CreateBillDto {
     @IsOptional()
     @IsString()
     categoryId?: string;
-
-    @IsOptional()
-    @IsEnum(ExternalLaunchStatus)
-    externalLaunchStatus?: ExternalLaunchStatus;
-
-    @IsOptional()
-    @IsString()
-    externalSystemName?: string;
-
-    @IsOptional()
-    @IsString()
-    externalCode?: string;
 
     @IsOptional()
     @IsBoolean()
@@ -110,4 +97,12 @@ export class CreateBillDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    // Fluxo 2 (compra sem NF e nem vai ter): descrição dos produtos
+    // comprados, obrigatória quando a compra vinculada não tem nenhum
+    // FiscalDocument (nem INVOICE, nem COUPON) — ver validação em
+    // bills.service.ts create(). Persistida em Purchase.noInvoiceProductsNote.
+    @IsOptional()
+    @IsString()
+    noInvoiceProductsNote?: string;
 }

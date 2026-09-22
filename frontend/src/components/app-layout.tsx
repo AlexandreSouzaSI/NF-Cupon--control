@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
     Bell,
     Building2,
@@ -26,7 +26,13 @@ import {
     type ActiveStore,
 } from '@/lib/active-store';
 import { getTheme, toggleTheme, type Theme } from '@/lib/theme';
-import { menu, menuColorStyles, isModuleEnabled, type StoreModuleKey } from '@/lib/menu';
+import {
+    canAccessHref,
+    isModuleEnabled,
+    menu,
+    menuColorStyles,
+    type StoreModuleKey,
+} from '@/lib/menu';
 import { TourGuide } from './tour/TourGuide';
 
 type AppLayoutProps = {
@@ -44,6 +50,7 @@ type StoreStatus = 'loading' | 'needs-selection' | 'ready' | 'error';
 
 export function AppLayout({ children, title }: AppLayoutProps) {
     const router = useRouter();
+    const pathname = usePathname();
 
     const [user, setUser] = useState<AuthUser | null>(null);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -188,6 +195,29 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.isDemo, user?.demoExpiresAt]);
 
+    // Guarda central de página: assim que a loja ativa está resolvida,
+    // confere se o perfil logado pode acessar a rota atual usando a mesma
+    // matriz do menu (canAccessHref) — cobre quem digita a URL direto ou
+    // clica num link salvo de uma tela que não deveria ver. Manda pro
+    // Início em vez de deixar a página renderizar e quebrar tentando
+    // buscar dados que a API já vai recusar.
+    useEffect(() => {
+        if (!user || storeStatus !== 'ready') return;
+
+        const allowed = canAccessHref(
+            user.role,
+            pathname,
+            user.isDemo,
+            activeStore?.enabledModules,
+        );
+
+        if (!allowed) {
+            toast.error('Seu perfil não tem acesso a essa tela.');
+            router.replace('/home');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, pathname, storeStatus, activeStore]);
+
     function handleSelectStore(store: StoreOption) {
         setActiveStore(store);
         setActiveStoreState(store);
@@ -285,6 +315,24 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                         Sair
                     </button>
                 </div>
+            </main>
+        );
+    }
+
+    // Perfil sem acesso a essa rota: não desenha a tela (evitaria mostrar
+    // dado de relance antes do redirect do useEffect acima terminar) — só
+    // o loading discreto, igual ao de "Carregando lojas...".
+    if (
+        !canAccessHref(
+            user.role,
+            pathname,
+            user.isDemo,
+            activeStore?.enabledModules,
+        )
+    ) {
+        return (
+            <main className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">Redirecionando...</p>
             </main>
         );
     }

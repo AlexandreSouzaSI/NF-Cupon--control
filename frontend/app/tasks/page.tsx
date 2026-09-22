@@ -86,6 +86,7 @@ type Occurrence = {
         description: string | null;
         recurrence: Recurrence;
         storeId: string;
+        store: { id: string; name: string };
         attachmentUrl: string | null;
         attachmentName: string | null;
         assignedTo: { id: string; name: string };
@@ -112,6 +113,38 @@ function formatDate(value: string) {
         year: 'numeric',
         timeZone: 'UTC',
     });
+}
+
+// Paleta fixa de cores pra destacar a loja no card — cada loja sempre cai
+// na mesma cor (hash simples do nome), então dá pra reconhecer de relance
+// sem precisar ler o texto toda vez.
+const STORE_BADGE_COLORS = [
+    'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    'bg-pink-500/10 text-pink-600 dark:text-pink-400',
+    'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+];
+
+function storeBadgeColor(storeName: string) {
+    let hash = 0;
+
+    for (let i = 0; i < storeName.length; i++) {
+        hash = (hash * 31 + storeName.charCodeAt(i)) % STORE_BADGE_COLORS.length;
+    }
+
+    return STORE_BADGE_COLORS[hash];
+}
+
+function StoreBadge({ name }: { name: string }) {
+    return (
+        <span
+            className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${storeBadgeColor(name)}`}
+        >
+            {name}
+        </span>
+    );
 }
 
 function recurrenceDetail(task: Pick<TaskDef, 'recurrence' | 'weekday' | 'dayOfMonth' | 'dueDate'>) {
@@ -146,14 +179,29 @@ function TasksPageInner() {
     const searchParams = useSearchParams();
     const requestedTab = searchParams.get('tab');
 
+    // Vem do card de pessoa no Dashboard ("Quadro de tarefas por pessoa")
+    // — abre já filtrado nas tarefas dela, sem mexer na aba Gerenciar.
+    const requestedAssigneeId = searchParams.get('assignee');
+    const requestedAssigneeName = searchParams.get('assigneeName');
+
     const [tab, setTab] = useState<'quadro' | 'gerenciar'>(
         requestedTab === 'gerenciar' && canManage ? 'gerenciar' : 'quadro',
     );
 
     // Sincroniza a URL com a aba ativa — usado pelo tutorial "Como criar
-    // tarefas" (em Dúvidas) pra abrir direto em "/tasks?tab=gerenciar".
+    // tarefas" (em Dúvidas) pra abrir direto em "/tasks?tab=gerenciar", e
+    // pelo Dashboard pra abrir com um responsável já filtrado.
     useEffect(() => {
-        router.replace(`/tasks?tab=${tab}`);
+        const params = new URLSearchParams({ tab });
+
+        if (tab === 'quadro' && requestedAssigneeId) {
+            params.set('assignee', requestedAssigneeId);
+            if (requestedAssigneeName) {
+                params.set('assigneeName', requestedAssigneeName);
+            }
+        }
+
+        router.replace(`/tasks?${params.toString()}`);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab]);
 
@@ -163,8 +211,8 @@ function TasksPageInner() {
                 <div>
                     <h2 className="text-2xl font-bold">Tarefas</h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        Quadro de tarefas da loja ativa, diárias, semanais,
-                        mensais ou ocasionais.
+                        Quadro geral com as tarefas de todas as suas lojas,
+                        diárias, semanais, mensais ou ocasionais.
                     </p>
                 </div>
 
@@ -194,7 +242,12 @@ function TasksPageInner() {
                 )}
 
                 {tab === 'quadro' ? (
-                    <QuadroTab currentUserId={user?.id || ''} canManage={canManage} />
+                    <QuadroTab
+                        currentUserId={user?.id || ''}
+                        canManage={canManage}
+                        initialAssigneeId={requestedAssigneeId}
+                        initialAssigneeName={requestedAssigneeName}
+                    />
                 ) : (
                     <GerenciarTab />
                 )}
@@ -277,9 +330,13 @@ const BOARD_COLUMNS: {
 function QuadroTab({
     currentUserId,
     canManage,
+    initialAssigneeId,
+    initialAssigneeName,
 }: {
     currentUserId: string;
     canManage: boolean;
+    initialAssigneeId?: string | null;
+    initialAssigneeName?: string | null;
 }) {
     const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
     const [loading, setLoading] = useState(true);
@@ -291,20 +348,36 @@ function QuadroTab({
     // do tablet pra cima, as 4 colunas ficam lado a lado, tipo Trello.
     const [activeColumn, setActiveColumn] = useState(BOARD_COLUMNS[0].key);
 
+    // Filtro por responsável — chega pronto quando vem do card de pessoa no
+    // Dashboard (Quadro de tarefas por pessoa); a pessoa pode limpar pra
+    // voltar a ver o quadro geral.
+    const [assigneeFilter, setAssigneeFilter] = useState<{
+        id: string;
+        name: string;
+    } | null>(
+        initialAssigneeId
+            ? { id: initialAssigneeId, name: initialAssigneeName || 'pessoa' }
+            : null,
+    );
+
+    function clearAssigneeFilter() {
+        setAssigneeFilter(null);
+    }
+
+    const visibleOccurrences = assigneeFilter
+        ? occurrences.filter(
+            (occurrence) => occurrence.task.assignedTo.id === assigneeFilter.id,
+        )
+        : occurrences;
+
+    // Sem storeId: o backend já devolve o quadro geral, com as tarefas de
+    // todas as lojas que a pessoa tem acesso (Anchieta, Contagem, Raiz...)
+    // numa lista só — cada card mostra a loja pelo badge.
     async function load() {
-        const store = getActiveStore();
-
-        if (!store) {
-            setLoading(false);
-            return;
-        }
-
         try {
             setLoading(true);
 
-            const response = await api.get('/tasks/occurrences', {
-                params: { storeId: store.id },
-            });
+            const response = await api.get('/tasks/occurrences');
 
             setOccurrences(response.data);
         } catch {
@@ -461,6 +534,8 @@ function QuadroTab({
                     </h3>
                     <StatusBadge status={occurrence.status} />
                 </div>
+
+                <StoreBadge name={occurrence.task.store.name} />
 
                 {occurrence.task.description && (
                     <p className="text-sm text-zinc-600 dark:text-zinc-400 lg:text-[15px]">
@@ -706,11 +781,30 @@ function QuadroTab({
 
     return (
         <div className="space-y-5">
+            {assigneeFilter && (
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2.5 text-sm">
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                        Mostrando tarefas de{' '}
+                        <span className="font-semibold">
+                            {assigneeFilter.name}
+                        </span>
+                    </span>
+                    <button
+                        type="button"
+                        onClick={clearAssigneeFilter}
+                        className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                    >
+                        <X size={13} />
+                        Ver quadro geral
+                    </button>
+                </div>
+            )}
+
             {loading ? (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
                     Carregando...
                 </p>
-            ) : occurrences.length === 0 ? (
+            ) : visibleOccurrences.length === 0 ? (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
                     Nenhuma tarefa por aqui.
                 </p>
@@ -718,7 +812,7 @@ function QuadroTab({
                 <>
                     <div className="flex gap-2 overflow-x-auto pb-1 md:hidden">
                         {BOARD_COLUMNS.map((column) => {
-                            const count = occurrences.filter((occurrence) =>
+                            const count = visibleOccurrences.filter((occurrence) =>
                                 column.statuses.includes(occurrence.status),
                             ).length;
                             const active = activeColumn === column.key;
@@ -748,7 +842,7 @@ function QuadroTab({
 
                     <div className="flex flex-col gap-4 md:grid md:grid-cols-4 md:gap-5 lg:gap-6 2xl:mx-auto 2xl:max-w-[1700px]">
                         {BOARD_COLUMNS.map((column) => {
-                            const columnItems = occurrences.filter((occurrence) =>
+                            const columnItems = visibleOccurrences.filter((occurrence) =>
                                 column.statuses.includes(occurrence.status),
                             );
 
@@ -831,18 +925,15 @@ function GerenciarTab() {
     );
 
     async function load() {
-        const store = getActiveStore();
-
-        if (!store) {
-            setLoading(false);
-            return;
-        }
-
         try {
             setLoading(true);
 
+            // Sem storeId: traz as tarefas cadastradas de todas as lojas
+            // que a pessoa tem acesso, igual ao Quadro — só a criação
+            // continua pedindo pra escolher a loja (é um dado obrigatório
+            // da tarefa).
             const [tasksRes, usersRes, storesRes] = await Promise.all([
-                api.get('/tasks', { params: { storeId: store.id, active: true } }),
+                api.get('/tasks', { params: { active: true } }),
                 api.get('/users'),
                 api.get('/stores'),
             ]);
@@ -990,7 +1081,7 @@ function GerenciarTab() {
                 <div>
                     <h3 className="text-lg font-bold">Tarefas cadastradas</h3>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        Lista da loja ativa no topo — ao criar, escolha a loja da tarefa
+                        Todas as lojas juntas — ao criar, escolha a loja da tarefa
                     </p>
                 </div>
 
@@ -1316,7 +1407,7 @@ function GerenciarTab() {
                 </p>
             ) : tasks.length === 0 ? (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    Nenhuma tarefa cadastrada ainda pra essa loja.
+                    Nenhuma tarefa cadastrada ainda.
                 </p>
             ) : (
                 <div className="space-y-3">
@@ -1326,6 +1417,9 @@ function GerenciarTab() {
                             className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4"
                         >
                             <div>
+                                <div className="mb-1">
+                                    <StoreBadge name={task.store.name} />
+                                </div>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <p className="font-semibold">{task.title}</p>
                                     {(task.restrictedFromAdministrativo ||
