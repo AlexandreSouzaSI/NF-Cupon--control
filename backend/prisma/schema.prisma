@@ -873,6 +873,12 @@ model Purchase {
   @@index([dueDate])
   @@index([approvedById])
   @@index([invoiceResponsibleId])
+  // Índices compostos pra acelerar a lista de Compras — ela sempre filtra
+  // por loja(s) + status e ordena por criação; sem esses dois, Postgres
+  // tem que usar só um índice simples e filtrar/ordenar o resto na mão
+  // conforme a tabela cresce.
+  @@index([storeId, status])
+  @@index([createdAt])
 }
 
 model PurchaseItem {
@@ -1023,6 +1029,11 @@ model Bill {
   @@index([barcode])
   @@index([queuedForPaymentAt])
   @@index([pixKey])
+  // Composto pra acelerar a lista de Contas a Pagar (loja + status,
+  // mesmo raciocínio do índice equivalente em Purchase) + createdAt pra
+  // quando alguém ordenar/paginar por data de criação em vez de vencimento.
+  @@index([storeId, status])
+  @@index([createdAt])
 }
 
 // Dados do Convênio de Pagamentos no Sicredi — usados só pra montar o

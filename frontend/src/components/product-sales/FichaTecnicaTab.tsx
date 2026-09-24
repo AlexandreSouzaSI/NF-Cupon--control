@@ -14,6 +14,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
+import { AutocompleteInput } from './AutocompleteInput';
 
 type ItemOverview = {
     tipo: 'estoque' | 'producao';
@@ -377,25 +378,17 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                                                     size={14}
                                                                     className="shrink-0 text-orange-500"
                                                                 />
-                                                                <select
+                                                                <AutocompleteInput
+                                                                    options={producaoItens}
                                                                     value={linha.productionItemId}
-                                                                    onChange={(e) =>
+                                                                    onChange={(id) =>
                                                                         selecionarProducao(
                                                                             linha.key,
-                                                                            e.target.value,
+                                                                            id,
                                                                         )
                                                                     }
-                                                                    className="flex-1 bg-transparent py-1 text-sm outline-none"
-                                                                >
-                                                                    <option value="">
-                                                                        Selecione o item de produção...
-                                                                    </option>
-                                                                    {producaoItens.map((p) => (
-                                                                        <option key={p.id} value={p.id}>
-                                                                            {p.nome}
-                                                                        </option>
-                                                                    ))}
-                                                                </select>
+                                                                    placeholder="Digite o nome do item de produção..."
+                                                                />
                                                                 <button
                                                                     onClick={() =>
                                                                         alternarParaEstoque(linha.key)
@@ -441,25 +434,17 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                                         className="flex items-center gap-2"
                                                     >
                                                         <div className="flex flex-1 items-center gap-2 rounded-lg border border-zinc-200 bg-transparent px-2 py-1 dark:border-zinc-700">
-                                                            <select
+                                                            <AutocompleteInput
+                                                                options={estoqueItens}
                                                                 value={linha.stockItemId}
-                                                                onChange={(e) =>
+                                                                onChange={(id) =>
                                                                     selecionarEstoque(
                                                                         linha.key,
-                                                                        e.target.value,
+                                                                        id,
                                                                     )
                                                                 }
-                                                                className="flex-1 bg-transparent py-1.5 text-sm outline-none"
-                                                            >
-                                                                <option value="">
-                                                                    De qual item do Estoque vem isso?
-                                                                </option>
-                                                                {estoqueItens.map((i) => (
-                                                                    <option key={i.id} value={i.id}>
-                                                                        {i.nome}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
+                                                                placeholder="De qual item do Estoque vem isso?"
+                                                            />
                                                             <button
                                                                 onClick={() =>
                                                                     alternarParaProducao(linha.key)

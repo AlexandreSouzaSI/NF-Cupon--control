@@ -221,18 +221,22 @@ export class WhatsappService {
     private async sendQuotationRequest(params: QuotationSupplierInvitedEvent) {
         const phone = normalizePhone(params.phone);
 
-        const text = [
-            `Olá, ${params.supplierName}! Pedimos uma cotação de *${params.categoryName}* pra ${params.storeName}.`,
-            `${params.itemsCount} ${params.itemsCount === 1 ? 'item' : 'itens'} na lista.`,
-            '',
-            `Preencha os preços aqui: ${params.link}`,
+        // Manda em duas mensagens: a primeira só com o texto (sem link
+        // nenhum, pra não quebrar a formatação), a segunda só com a URL
+        // sozinha — assim o WhatsApp reconhece e transforma em link
+        // clicável de verdade, em vez de aparecer como texto puro dentro
+        // de uma frase.
+        const greeting = [
+            `Olá, ${params.supplierName}! Sou do ${params.storeName} e gostaria que preenchesse essa cotação de *${params.categoryName}* (${params.itemsCount} ${params.itemsCount === 1 ? 'item' : 'itens'}) no link abaixo. Obrigado!`,
         ].join('\n');
+        const text = `${greeting}\n\n${params.link}`;
 
         let providerMessageId: string | undefined;
 
         try {
-            const result = await this.provider.sendText(phone, text);
+            const result = await this.provider.sendText(phone, greeting);
             providerMessageId = result.providerMessageId;
+            await this.provider.sendText(phone, params.link);
         } catch (error: any) {
             this.logger.warn(
                 `Falha ao enviar convite de cotação pra ${phone}: ${error?.message || error}`,
@@ -264,18 +268,17 @@ export class WhatsappService {
             currency: 'BRL',
         });
 
-        const text = [
-            `Você ganhou a cotação de *${params.categoryName}* pra ${params.storeName}!`,
-            `Valor total do pedido: ${totalLabel}.`,
-            '',
-            `Confirme o pedido aqui: ${params.link}`,
+        const greeting = [
+            `Olá! Você ganhou a cotação de *${params.categoryName}* pra ${params.storeName}. Valor total do pedido: ${totalLabel}. Confirme no link abaixo. Obrigado!`,
         ].join('\n');
+        const text = `${greeting}\n\n${params.link}`;
 
         let providerMessageId: string | undefined;
 
         try {
-            const result = await this.provider.sendText(phone, text);
+            const result = await this.provider.sendText(phone, greeting);
             providerMessageId = result.providerMessageId;
+            await this.provider.sendText(phone, params.link);
         } catch (error: any) {
             this.logger.warn(
                 `Falha ao enviar confirmação de pedido pra ${phone}: ${error?.message || error}`,

@@ -16,6 +16,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
+import { AutocompleteInput } from './AutocompleteInput';
 
 type ProductionUnidade = 'KG' | 'ML' | 'UNIDADE';
 
@@ -395,20 +396,18 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
 
                         {formReceita.map((linha) => (
                             <div key={linha.key} className="flex flex-wrap items-center gap-2">
-                                <select
+                                <AutocompleteInput
+                                    options={stockItems.map((s) => ({
+                                        id: s.id,
+                                        nome: `${s.nome} (${unidadeLabel(s.unidadeMedida)})`,
+                                    }))}
                                     value={linha.stockItemId}
-                                    onChange={(e) =>
-                                        atualizarLinha(linha.key, 'stockItemId', e.target.value)
+                                    onChange={(id) =>
+                                        atualizarLinha(linha.key, 'stockItemId', id)
                                     }
+                                    placeholder="Selecione o item do estoque..."
                                     className="min-w-[220px] flex-1 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
-                                >
-                                    <option value="">Selecione o item do estoque...</option>
-                                    {stockItems.map((s) => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.nome} ({unidadeLabel(s.unidadeMedida)})
-                                        </option>
-                                    ))}
-                                </select>
+                                />
 
                                 <input
                                     type="number"

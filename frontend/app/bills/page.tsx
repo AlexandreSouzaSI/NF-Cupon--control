@@ -19,6 +19,7 @@ import {
     ExternalLink,
     FileText,
     Landmark,
+    Pencil,
     Plus,
     ReceiptText,
     Search,
@@ -1218,6 +1219,7 @@ function BillsPageInner() {
                                             `/purchases/${purchaseId}`,
                                         )
                                     }
+                                    onSaved={loadBills}
                                 />
                             ))}
                         </div>
@@ -1249,6 +1251,7 @@ function BillRow({
     onCancel,
     onToggleQueueToday,
     onOpenPurchase,
+    onSaved,
 }: {
     bill: Bill;
     processing: boolean;
@@ -1264,11 +1267,17 @@ function BillRow({
     onCancel: (bill: Bill) => Promise<void>;
     onToggleQueueToday: (bill: Bill) => Promise<void>;
     onOpenPurchase: (purchaseId: string) => void;
+    onSaved: () => Promise<void>;
 }) {
     const displayStatus = getDisplayStatus(bill);
     const isInactive =
         displayStatus === 'PAID' ||
         displayStatus === 'CANCELED';
+
+    // Edição da forma de pagamento (boleto/PIX/dados bancários) direto no
+    // card — antes só dava pra ver, não pra corrigir/completar depois que
+    // a conta já tinha sido criada.
+    const [editingPayment, setEditingPayment] = useState(false);
 
     return (
         <article
@@ -1374,6 +1383,17 @@ function BillRow({
                                 billTypeLabel[bill.type] ||
                                 bill.paymentMethod}
                         </span>
+
+                        {!isInactive && !editingPayment && (
+                            <button
+                                type="button"
+                                onClick={() => setEditingPayment(true)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            >
+                                <Pencil size={12} />
+                                Editar forma de pagamento
+                            </button>
+                        )}
                     </div>
 
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1419,10 +1439,21 @@ function BillRow({
                         </button>
                     )}
 
-                    <PaymentDetails
-                        bill={bill}
-                        onCopy={onCopy}
-                    />
+                    {editingPayment ? (
+                        <PaymentEditForm
+                            bill={bill}
+                            onCancel={() => setEditingPayment(false)}
+                            onSaved={async () => {
+                                setEditingPayment(false);
+                                await onSaved();
+                            }}
+                        />
+                    ) : (
+                        <PaymentDetails
+                            bill={bill}
+                            onCopy={onCopy}
+                        />
+                    )}
 
                     {bill.notes && (
                         <div className="mt-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
@@ -1503,6 +1534,203 @@ function BillRow({
                 </div>
             )}
         </article>
+    );
+}
+
+// Formulário de edição da forma de pagamento (boleto/PIX/transferência)
+// direto no card já expandido — reaproveita o PUT /bills/:id, que já
+// aceita todos esses campos (o que faltava era só a tela). Pensado pra
+// quando a conta nasceu "sem boleto" e o boleto/chave chegou depois, ou
+// pra corrigir um dado digitado errado sem precisar excluir e recriar a
+// conta inteira.
+function PaymentEditForm({
+    bill,
+    onCancel,
+    onSaved,
+}: {
+    bill: Bill;
+    onCancel: () => void;
+    onSaved: () => Promise<void>;
+}) {
+    const [paymentMethod, setPaymentMethod] = useState(bill.paymentMethod);
+    const [barcode, setBarcode] = useState(bill.barcode || '');
+    const [pixKey, setPixKey] = useState(bill.pixKey || '');
+    const [pixKeyType, setPixKeyType] = useState(bill.pixKeyType || '');
+    const [pixQrCode, setPixQrCode] = useState(bill.pixQrCode || '');
+    const [bankName, setBankName] = useState(bill.bankName || '');
+    const [bankAgency, setBankAgency] = useState(bill.bankAgency || '');
+    const [bankAccount, setBankAccount] = useState(bill.bankAccount || '');
+    const [beneficiary, setBeneficiary] = useState(bill.beneficiary || '');
+    const [saving, setSaving] = useState(false);
+
+    async function handleSave() {
+        try {
+            setSaving(true);
+
+            await api.put(`/bills/${bill.id}`, {
+                paymentMethod,
+                barcode: barcode || undefined,
+                pixKey: pixKey || undefined,
+                pixKeyType: pixKeyType || undefined,
+                pixQrCode: pixQrCode || undefined,
+                bankName: bankName || undefined,
+                bankAgency: bankAgency || undefined,
+                bankAccount: bankAccount || undefined,
+                beneficiary: beneficiary || undefined,
+            });
+
+            toast.success('Forma de pagamento atualizada.');
+            await onSaved();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message ||
+                'Erro ao salvar forma de pagamento.';
+
+            toast.error(
+                Array.isArray(message) ? message.join(', ') : message,
+            );
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div className="mt-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+            <p className="mb-3 text-sm font-semibold">
+                Editar forma de pagamento
+            </p>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="text-xs text-zinc-500">
+                    Forma de pagamento
+                    <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                    >
+                        {Object.entries(paymentMethodLabel).map(
+                            ([value, label]) => (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            ),
+                        )}
+                    </select>
+                </label>
+            </div>
+
+            {paymentMethod === 'BANK_SLIP' && (
+                <label className="mt-3 block text-xs text-zinc-500">
+                    Código de barras / linha digitável
+                    <input
+                        value={barcode}
+                        onChange={(e) => setBarcode(e.target.value)}
+                        placeholder="Cole aqui o código do boleto"
+                        className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 font-mono text-sm outline-none focus:border-emerald-500"
+                    />
+                </label>
+            )}
+
+            {paymentMethod === 'PIX' && (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="text-xs text-zinc-500">
+                        Chave PIX
+                        <input
+                            value={pixKey}
+                            onChange={(e) => setPixKey(e.target.value)}
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        />
+                    </label>
+
+                    <label className="text-xs text-zinc-500">
+                        Tipo da chave
+                        <select
+                            value={pixKeyType}
+                            onChange={(e) => setPixKeyType(e.target.value)}
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        >
+                            <option value="">Não informado</option>
+                            {Object.entries(pixKeyTypeLabel).map(
+                                ([value, label]) => (
+                                    <option key={value} value={value}>
+                                        {label}
+                                    </option>
+                                ),
+                            )}
+                        </select>
+                    </label>
+
+                    <label className="text-xs text-zinc-500 sm:col-span-2">
+                        PIX copia e cola (opcional)
+                        <textarea
+                            value={pixQrCode}
+                            onChange={(e) => setPixQrCode(e.target.value)}
+                            rows={2}
+                            className="mt-1 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 font-mono text-xs outline-none focus:border-emerald-500"
+                        />
+                    </label>
+                </div>
+            )}
+
+            {paymentMethod === 'BANK_TRANSFER' && (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <label className="text-xs text-zinc-500">
+                        Banco
+                        <input
+                            value={bankName}
+                            onChange={(e) => setBankName(e.target.value)}
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        />
+                    </label>
+
+                    <label className="text-xs text-zinc-500">
+                        Agência
+                        <input
+                            value={bankAgency}
+                            onChange={(e) => setBankAgency(e.target.value)}
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        />
+                    </label>
+
+                    <label className="text-xs text-zinc-500">
+                        Conta
+                        <input
+                            value={bankAccount}
+                            onChange={(e) => setBankAccount(e.target.value)}
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        />
+                    </label>
+
+                    <label className="text-xs text-zinc-500">
+                        Favorecido
+                        <input
+                            value={beneficiary}
+                            onChange={(e) => setBeneficiary(e.target.value)}
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        />
+                    </label>
+                </div>
+            )}
+
+            <div className="mt-4 flex gap-2">
+                <button
+                    type="button"
+                    disabled={saving}
+                    onClick={handleSave}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                    {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+                <button
+                    type="button"
+                    disabled={saving}
+                    onClick={onCancel}
+                    className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 dark:border-zinc-700 px-4 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                    Cancelar
+                </button>
+            </div>
+        </div>
     );
 }
 

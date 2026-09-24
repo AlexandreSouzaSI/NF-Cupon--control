@@ -241,6 +241,8 @@ export class BillsService {
             supplierId?: string;
             startDate?: string;
             endDate?: string;
+            page?: number;
+            pageSize?: number;
         },
     ) {
         const allowedStoreIds =
@@ -250,41 +252,69 @@ export class BillsService {
             this.ensureStoreAccess(filters.storeId, user);
         }
 
-        return this.prisma.bill.findMany({
-            where: {
-                status: filters?.status,
-                purchaseId: filters?.purchaseId,
-                supplierId: filters?.supplierId,
-                storeId:
-                    filters?.storeId ||
-                    (allowedStoreIds
-                        ? {
-                            in: allowedStoreIds,
-                        }
-                        : undefined),
-                dueDate: {
-                    gte: filters?.startDate
-                        ? new Date(
-                            `${filters.startDate}T00:00:00.000Z`,
-                        )
-                        : undefined,
-                    lte: filters?.endDate
-                        ? new Date(
-                            `${filters.endDate}T23:59:59.999Z`,
-                        )
-                        : undefined,
-                },
+        const where = {
+            status: filters?.status,
+            purchaseId: filters?.purchaseId,
+            supplierId: filters?.supplierId,
+            storeId:
+                filters?.storeId ||
+                (allowedStoreIds
+                    ? {
+                        in: allowedStoreIds,
+                    }
+                    : undefined),
+            dueDate: {
+                gte: filters?.startDate
+                    ? new Date(
+                        `${filters.startDate}T00:00:00.000Z`,
+                    )
+                    : undefined,
+                lte: filters?.endDate
+                    ? new Date(
+                        `${filters.endDate}T23:59:59.999Z`,
+                    )
+                    : undefined,
             },
-            orderBy: [
-                {
-                    dueDate: 'asc',
-                },
-                {
-                    createdAt: 'desc',
-                },
-            ],
-            include: this.defaultInclude(),
-        });
+        };
+
+        const orderBy = [
+            { dueDate: 'asc' as const },
+            { createdAt: 'desc' as const },
+        ];
+
+        // Paginado só quando page/pageSize são informados (mesmo padrão
+        // usado em Compras/NF de Entrada) — a tela de Contas a Pagar hoje
+        // monta os cards de período (Hoje/Vencidas/etc.) a partir da lista
+        // inteira do intervalo pedido, então sem paginação continua
+        // funcionando como sempre funcionou; quem quiser resultado
+        // paginado (listas longas sem filtro de período) passa
+        // page/pageSize.
+        if (!filters?.page && !filters?.pageSize) {
+            return this.prisma.bill.findMany({
+                where,
+                orderBy,
+                include: this.defaultInclude(),
+            });
+        }
+
+        const page = filters?.page && filters.page > 0 ? filters.page : 1;
+        const pageSize =
+            filters?.pageSize && filters.pageSize > 0
+                ? filters.pageSize
+                : 20;
+
+        const [items, total] = await Promise.all([
+            this.prisma.bill.findMany({
+                where,
+                orderBy,
+                include: this.defaultInclude(),
+                skip: (page - 1) * pageSize,
+                take: pageSize,
+            }),
+            this.prisma.bill.count({ where }),
+        ]);
+
+        return { items, total, page, pageSize };
     }
 
     async findOne(id: string, user: any) {

@@ -4,13 +4,14 @@ import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { getUser, type UserRole } from '@/lib/auth';
-import { CalendarDays, ClipboardList, Scale } from 'lucide-react';
+import { CalendarDays, ClipboardList, List, Scale } from 'lucide-react';
 
 import { ScheduleTab } from '../../src/components/cotacao/ScheduleTab';
 import { SuggestedListTab } from '../../src/components/cotacao/SuggestedListTab';
 import { QuotationsTab } from '../../src/components/cotacao/QuotationsTab';
+import { ListasTab } from '../../src/components/cotacao/ListasTab';
 
-type TabKey = 'lista' | 'agenda' | 'cotacoes';
+type TabKey = 'lista' | 'agenda' | 'cotacoes' | 'listas';
 
 const tabs: { key: TabKey; label: string; icon: typeof CalendarDays; roles: UserRole[] }[] = [
     {
@@ -29,6 +30,12 @@ const tabs: { key: TabKey; label: string; icon: typeof CalendarDays; roles: User
         key: 'agenda',
         label: 'Agenda',
         icon: CalendarDays,
+        roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
+    },
+    {
+        key: 'listas',
+        label: 'Listas',
+        icon: List,
         roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
     },
 ];
@@ -101,6 +108,7 @@ function CotacaoPageInner() {
                 {activeTab === 'lista' && <SuggestedListTab />}
                 {activeTab === 'cotacoes' && <QuotationsTab />}
                 {activeTab === 'agenda' && <ScheduleTab />}
+                {activeTab === 'listas' && <ListasTab />}
             </div>
         </AppLayout>
     );

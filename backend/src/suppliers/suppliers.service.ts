@@ -226,6 +226,31 @@ export class SuppliersService {
         });
     }
 
+    async renameCategory(id: string, name: string) {
+        const trimmed = name.trim();
+
+        if (!trimmed) {
+            throw new ConflictException('Informe um nome pra lista.');
+        }
+
+        const nameNormalized = normalizeSupplierName(trimmed);
+
+        const existing = await this.prisma.supplierCategory.findUnique({
+            where: { nameNormalized },
+        });
+
+        if (existing && existing.id !== id) {
+            throw new ConflictException(
+                'Já existe uma categoria com esse nome.',
+            );
+        }
+
+        return this.prisma.supplierCategory.update({
+            where: { id },
+            data: { name: trimmed, nameNormalized },
+        });
+    }
+
     async removeCategory(id: string) {
         // Vínculo com fornecedor (SupplierCategoryLink) e agenda
         // (QuotationScheduleEntry) caem em cascata (onDelete: Cascade no

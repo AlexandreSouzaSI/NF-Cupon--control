@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminMasterGuard } from '../auth/admin-master.guard';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -23,6 +23,14 @@ export class SuppliersController {
     @Post('categories')
     async createCategory(@Body() body: CreateSupplierCategoryDto) {
         return this.suppliersService.createCategory(body);
+    }
+
+    @Patch('categories/:id')
+    async renameCategory(
+        @Param('id') id: string,
+        @Body('name') name: string,
+    ) {
+        return this.suppliersService.renameCategory(id, name);
     }
 
     // Excluir categoria de verdade — restrito ao dono do sistema

@@ -77,6 +77,8 @@ export class BillsController {
         @Query('supplierId') supplierId?: string,
         @Query('startDate') startDate?: string,
         @Query('endDate') endDate?: string,
+        @Query('page') page?: string,
+        @Query('pageSize') pageSize?: string,
     ) {
         return this.billsService.findAll(user, {
             status,
@@ -85,6 +87,8 @@ export class BillsController {
             supplierId,
             startDate,
             endDate,
+            page: page ? Number(page) : undefined,
+            pageSize: pageSize ? Number(pageSize) : undefined,
         });
     }
 

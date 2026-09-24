@@ -125,12 +125,16 @@ export class PurchasesController {
         @Query('storeId') storeId?: string,
         @Query('supplierId') supplierId?: string,
         @Query('category') category?: PurchaseCategory,
+        @Query('page') page?: string,
+        @Query('pageSize') pageSize?: string,
     ) {
         return this.purchasesService.findAll(user, {
             status,
             storeId,
             supplierId,
             category,
+            page: page ? Number(page) : undefined,
+            pageSize: pageSize ? Number(pageSize) : undefined,
         });
     }
 

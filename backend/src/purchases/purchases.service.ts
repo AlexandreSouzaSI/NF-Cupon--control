@@ -315,6 +315,8 @@ export class PurchasesService {
             storeId?: string;
             supplierId?: string;
             category?: PurchaseCategory;
+            page?: number;
+            pageSize?: number;
         },
     ) {
         if (!this.canCreatePurchase(user)) {
@@ -342,24 +344,50 @@ export class PurchasesService {
             ? filters.status
             : { notIn: [PurchaseStatus.WAITING_APPROVAL, PurchaseStatus.REJECTED] };
 
-        return this.prisma.purchase.findMany({
-            where: {
-                status: statusFilter,
-                supplierId: filters?.supplierId,
-                category: filters?.category,
-                storeId:
-                    filters?.storeId ||
-                    (allowedStoreIds
-                        ? {
-                            in: allowedStoreIds,
-                        }
-                        : undefined),
-            },
-            orderBy: {
-                createdAt: 'desc',
-            },
-            include: this.defaultInclude(),
-        });
+        const where = {
+            status: statusFilter,
+            supplierId: filters?.supplierId,
+            category: filters?.category,
+            storeId:
+                filters?.storeId ||
+                (allowedStoreIds
+                    ? {
+                        in: allowedStoreIds,
+                    }
+                    : undefined),
+        };
+
+        // Paginado (mesmo padrão de findIncomingGoodsNf) — sem page/pageSize
+        // informados, mantém o comportamento antigo de trazer tudo, pra não
+        // quebrar quem já chama esse método sem paginação (relatórios,
+        // exportações internas etc.). A tela de Compras no frontend sempre
+        // manda page/pageSize.
+        if (!filters?.page && !filters?.pageSize) {
+            return this.prisma.purchase.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                include: this.defaultInclude(),
+            });
+        }
+
+        const page = filters?.page && filters.page > 0 ? filters.page : 1;
+        const pageSize =
+            filters?.pageSize && filters.pageSize > 0
+                ? filters.pageSize
+                : 20;
+
+        const [items, total] = await Promise.all([
+            this.prisma.purchase.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                include: this.defaultInclude(),
+                skip: (page - 1) * pageSize,
+                take: pageSize,
+            }),
+            this.prisma.purchase.count({ where }),
+        ]);
+
+        return { items, total, page, pageSize };
     }
 
     async findOne(id: string, user: any) {

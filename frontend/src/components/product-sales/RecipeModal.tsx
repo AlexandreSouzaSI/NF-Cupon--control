@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { Factory, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { AutocompleteInput } from './AutocompleteInput';
 
 type RecipeLine = {
     key: number;
@@ -239,22 +240,14 @@ export function RecipeModal({
                                                     size={14}
                                                     className="shrink-0 text-orange-500"
                                                 />
-                                                <select
+                                                <AutocompleteInput
+                                                    options={itensProducao}
                                                     value={linha.productionItemId}
-                                                    onChange={(e) =>
-                                                        selecionarProducao(linha.key, e.target.value)
+                                                    onChange={(id) =>
+                                                        selecionarProducao(linha.key, id)
                                                     }
-                                                    className="flex-1 bg-transparent py-1 text-sm outline-none"
-                                                >
-                                                    <option value="">
-                                                        Selecione o item de produção...
-                                                    </option>
-                                                    {itensProducao.map((p) => (
-                                                        <option key={p.id} value={p.id}>
-                                                            {p.nome}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    placeholder="Digite o nome do item de produção..."
+                                                />
                                                 <button
                                                     onClick={() => alternarParaEstoque(linha.key)}
                                                     title="Usar item do Estoque em vez de Produção"
@@ -301,22 +294,12 @@ export function RecipeModal({
                                 return (
                                     <div key={linha.key} className="flex items-center gap-2">
                                         <div className="flex flex-1 items-center gap-2 rounded-xl border border-zinc-200 bg-transparent px-2 py-1 dark:border-zinc-700">
-                                            <select
+                                            <AutocompleteInput
+                                                options={itensEstoque}
                                                 value={linha.stockItemId}
-                                                onChange={(e) =>
-                                                    selecionarEstoque(linha.key, e.target.value)
-                                                }
-                                                className="flex-1 bg-transparent py-1 text-sm outline-none"
-                                            >
-                                                <option value="">
-                                                    De qual item do Estoque vem isso?
-                                                </option>
-                                                {itensEstoque.map((i) => (
-                                                    <option key={i.id} value={i.id}>
-                                                        {i.nome}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                onChange={(id) => selecionarEstoque(linha.key, id)}
+                                                placeholder="De qual item do Estoque vem isso?"
+                                            />
                                             <button
                                                 onClick={() => alternarParaProducao(linha.key)}
                                                 title="Usar item de Produção (pré-preparo) em vez do Estoque bruto"
