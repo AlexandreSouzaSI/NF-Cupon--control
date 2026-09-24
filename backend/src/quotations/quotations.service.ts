@@ -23,9 +23,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
     QUOTATION_ORDER_CONFIRM_REQUESTED_EVENT,
+    QUOTATION_ORDER_CONFIRMED_EVENT,
     QUOTATION_SUPPLIER_INVITED_EVENT,
 } from '../common/events';
 import type {
+    QuotationOrderConfirmedEvent,
     QuotationOrderConfirmRequestedEvent,
     QuotationSupplierInvitedEvent,
 } from '../common/events';
@@ -922,6 +924,36 @@ export class QuotationsService {
     // criação automática da Purchase.
     // ---------------------------------------------------------------
 
+    // Monta o endereço formatado em uma linha só a partir dos campos
+    // estruturados da loja (usados originalmente pra emissão de NF-e) —
+    // reaproveitado tanto na mensagem de "você ganhou" quanto no rodapé
+    // do PDF de confirmação. Cai pro campo livre `address` se os
+    // estruturados ainda não tiverem sido preenchidos em Cadastros → Lojas.
+    private formatStoreEndereco(store: {
+        logradouro: string | null;
+        numero: string | null;
+        complemento: string | null;
+        bairro: string | null;
+        municipio: string | null;
+        uf: string | null;
+        cep: string | null;
+        address: string | null;
+    }) {
+        const partes = [
+            store.logradouro && store.numero
+                ? `${store.logradouro}, ${store.numero}`
+                : store.logradouro,
+            store.complemento || undefined,
+            store.bairro || undefined,
+            store.municipio && store.uf
+                ? `${store.municipio}/${store.uf}`
+                : store.municipio || undefined,
+            store.cep ? `CEP ${store.cep}` : undefined,
+        ].filter((parte): parte is string => Boolean(parte));
+
+        return partes.length > 0 ? partes.join(', ') : store.address || null;
+    }
+
     // Calcula o total de uma cotação pro preço enviado por um fornecedor
     // específico — mesma lógica usada em getQuotationDetail, mas
     // isolada aqui porque é reaproveitada tanto no pedido de confirmação
@@ -1004,20 +1036,7 @@ export class QuotationsService {
         const link = `${frontendUrl}/cotacao-confirmar/${confirmToken}`;
 
         const store = quotation.store;
-        const enderecoPartes = [
-            store.logradouro && store.numero
-                ? `${store.logradouro}, ${store.numero}`
-                : store.logradouro,
-            store.complemento || undefined,
-            store.bairro || undefined,
-            store.municipio && store.uf
-                ? `${store.municipio}/${store.uf}`
-                : store.municipio || undefined,
-            store.cep ? `CEP ${store.cep}` : undefined,
-        ].filter((parte): parte is string => Boolean(parte));
-        const storeEndereco = enderecoPartes.length > 0
-            ? enderecoPartes.join(', ')
-            : store.address || null;
+        const storeEndereco = this.formatStoreEndereco(store);
 
         const event: QuotationOrderConfirmRequestedEvent = {
             userId: user.id,
@@ -1070,12 +1089,20 @@ export class QuotationsService {
         const isWinner =
             quotation.selectedSupplierId === quotationSupplier.supplierId;
 
+        const store = quotation.store;
+
         return {
             supplierName: quotationSupplier.supplier.name,
             storeName: quotation.store.name,
             categoryName: quotation.category.name,
             quotationStatus: quotation.status,
             isWinner,
+            // Dados fiscais da loja — só aparecem no PDF/tela quando o
+            // pedido já foi confirmado (rodapé com dados pra faturamento),
+            // mas vêm sempre no payload; o frontend decide quando mostrar.
+            storeCnpj: store.cnpj || null,
+            storeInscricaoEstadual: store.inscricaoEstadual || null,
+            storeEndereco: this.formatStoreEndereco(store),
             jaConfirmado: Boolean(quotationSupplier.confirmedAt),
             podeConfirmar:
                 isWinner &&
@@ -1207,6 +1234,20 @@ export class QuotationsService {
             message: `${quotationSupplier.supplier.name} confirmou o pedido de "${quotation.category.name}" — compra criada aguardando recebimento.`,
             type: NotificationType.PURCHASE_CREATED,
         });
+
+        // Aviso extra por WhatsApp — separado da notificação in-app acima,
+        // só pra quem marcou notifyQuotationConfirmed em Cadastros →
+        // Colaboradores (ver whatsapp.service.ts).
+        const confirmedEvent: QuotationOrderConfirmedEvent = {
+            quotationSupplierId: quotationSupplier.id,
+            supplierName: quotationSupplier.supplier.name,
+            categoryName: quotation.category.name,
+            storeName: quotation.store.name,
+            itemsCount: quotation.items.length,
+            total,
+        };
+
+        this.eventEmitter.emit(QUOTATION_ORDER_CONFIRMED_EVENT, confirmedEvent);
 
         return { ok: true, purchaseId: purchase.id };
     }

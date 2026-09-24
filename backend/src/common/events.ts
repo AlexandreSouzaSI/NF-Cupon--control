@@ -114,3 +114,19 @@ export type QuotationOrderConfirmRequestedEvent = {
     storeInscricaoEstadual: string | null;
     storeEndereco: string | null;
 };
+
+// Disparado quando o próprio fornecedor confirma o pedido na página
+// pública (confirmPublicOrder, Fase 6) — aviso interno pro time, separado
+// da mensagem que vai pro fornecedor. QuotationsService só monta os dados
+// do pedido; quem estiver ouvindo decide pra quem manda (hoje:
+// WhatsappService, pros usuários com notifyQuotationConfirmed=true).
+export const QUOTATION_ORDER_CONFIRMED_EVENT = 'quotation.order.confirmed';
+
+export type QuotationOrderConfirmedEvent = {
+    quotationSupplierId: string;
+    supplierName: string;
+    categoryName: string;
+    storeName: string;
+    itemsCount: number;
+    total: number;
+};

@@ -291,6 +291,14 @@ model User {
   // resposta que chega no webhook precisa achar exatamente uma pessoa.
   phone String? @unique
 
+  // Quem tem essa flag marcada recebe um WhatsApp toda vez que um
+  // fornecedor confirma um pedido de cotação (ver
+  // QUOTATION_ORDER_CONFIRMED_EVENT em common/events.ts) — separado do
+  // envio pro próprio fornecedor, é o aviso interno "fulano confirmou".
+  // Pode marcar mais de uma pessoa; exige `phone` cadastrado pra
+  // realmente receber (sem telefone, fica marcado mas não manda nada).
+  notifyQuotationConfirmed Boolean @default(false)
+
   userStores UserStore[]
 
   purchasesCreated            Purchase[] @relation("PurchaseCreatedBy")
@@ -2048,6 +2056,11 @@ enum WhatsappMessageKind {
   // Cotação: link pro fornecedor confirmar (clicar OK) o pedido fechado
   // depois de escolhido como vencedor.
   QUOTATION_ORDER_CONFIRMATION
+  // Cotação: aviso interno pro time (quem marcou
+  // User.notifyQuotationConfirmed) quando o fornecedor confirma o pedido —
+  // diferente do QUOTATION_ORDER_CONFIRMATION acima, que vai pro
+  // fornecedor.
+  QUOTATION_ORDER_CONFIRMED_INTERNAL
 }
 
 // Registro de uma mensagem de WhatsApp mandada pelo sistema, guardado pra

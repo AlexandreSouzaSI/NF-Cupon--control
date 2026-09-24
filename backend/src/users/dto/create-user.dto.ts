@@ -44,4 +44,11 @@ export class CreateUserDto {
     @IsOptional()
     @IsBoolean()
     canApprovePurchases?: boolean;
+
+    // Recebe WhatsApp quando um fornecedor confirma um pedido de cotação
+    // (Cadastros → Colaboradores). Exige `phone` preenchido pra funcionar
+    // de verdade, mas pode ser marcado antes.
+    @IsOptional()
+    @IsBoolean()
+    notifyQuotationConfirmed?: boolean;
 }

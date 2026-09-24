@@ -24,6 +24,7 @@ type User = {
     role: string;
     active: boolean;
     canApprovePurchases?: boolean;
+    notifyQuotationConfirmed?: boolean;
     userStores: {
         store: Store;
     }[];
@@ -117,6 +118,7 @@ export function UsersTab() {
         active: true,
         storeIds: [] as string[],
         canApprovePurchases: false,
+        notifyQuotationConfirmed: false,
     });
 
     const loggedUser = getUser();
@@ -194,6 +196,7 @@ export function UsersTab() {
             active: true,
             storeIds: [],
             canApprovePurchases: false,
+            notifyQuotationConfirmed: false,
         });
     }
 
@@ -209,6 +212,7 @@ export function UsersTab() {
             active: user.active,
             storeIds: user.userStores.map((item) => item.store.id),
             canApprovePurchases: user.canApprovePurchases || false,
+            notifyQuotationConfirmed: user.notifyQuotationConfirmed || false,
         });
 
         // O form fica acima da lista (ou antes dela, empilhado no
@@ -262,6 +266,7 @@ export function UsersTab() {
                 role: form.role,
                 active: form.active,
                 storeIds: form.storeIds,
+                notifyQuotationConfirmed: form.notifyQuotationConfirmed,
             };
 
             if (form.password.trim()) {
@@ -412,6 +417,28 @@ export function UsersTab() {
                         <p className="mt-1 text-xs text-zinc-500">
                             Opcional — usado só pra mandar aviso de tarefa no
                             WhatsApp. Login continua sendo por e-mail.
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
+                        <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                            <input
+                                type="checkbox"
+                                checked={form.notifyQuotationConfirmed}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        notifyQuotationConfirmed: e.target.checked,
+                                    })
+                                }
+                            />
+                            Avisar quando fornecedor confirmar pedido de cotação
+                        </label>
+                        <p className="mt-1 text-xs text-zinc-500">
+                            Manda um WhatsApp pra essa pessoa toda vez que um
+                            fornecedor aceitar um pedido de cotação. Pode marcar
+                            mais de uma pessoa. Precisa de telefone cadastrado
+                            acima pra funcionar.
                         </p>
                     </div>
 
@@ -606,6 +633,12 @@ export function UsersTab() {
                                             {user.canApprovePurchases && (
                                                 <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-400">
                                                     Aprova compras (extra)
+                                                </span>
+                                            )}
+
+                                            {user.notifyQuotationConfirmed && (
+                                                <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-500">
+                                                    Avisa pedido confirmado
                                                 </span>
                                             )}
                                         </div>

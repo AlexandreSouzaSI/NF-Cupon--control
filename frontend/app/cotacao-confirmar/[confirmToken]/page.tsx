@@ -26,6 +26,9 @@ type OrderConfirmation = {
     podeConfirmar: boolean;
     total: number;
     items: ConfirmItem[];
+    storeCnpj: string | null;
+    storeInscricaoEstadual: string | null;
+    storeEndereco: string | null;
 };
 
 function formatQtd(valor: number, unidade: UnidadeMedida) {
@@ -204,6 +207,26 @@ export default function CotacaoConfirmarPage() {
                         <CheckCircle2 size={16} />
                         {confirming ? 'Confirmando...' : 'Confirmar pedido'}
                     </button>
+                )}
+
+                {jaConfirmado && (
+                    <div className="mt-10 flex items-center gap-3 border-t border-zinc-800 pt-4 print:border-zinc-300">
+                        <img
+                            src="/icons/icon-512.png"
+                            alt="NuGalho"
+                            className="h-10 w-10 shrink-0 rounded-md object-contain"
+                        />
+                        <div className="text-xs leading-relaxed text-zinc-500 print:text-black">
+                            <p className="font-semibold text-zinc-300 print:text-black">
+                                {data.storeName}
+                            </p>
+                            {data.storeCnpj && <p>CNPJ: {data.storeCnpj}</p>}
+                            {data.storeInscricaoEstadual && (
+                                <p>IE: {data.storeInscricaoEstadual}</p>
+                            )}
+                            {data.storeEndereco && <p>{data.storeEndereco}</p>}
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

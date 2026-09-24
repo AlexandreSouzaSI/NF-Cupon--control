@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { normalizePhone } from '../common/phone.util';
 import {
     QUOTATION_ORDER_CONFIRM_REQUESTED_EVENT,
+    QUOTATION_ORDER_CONFIRMED_EVENT,
     QUOTATION_SUPPLIER_INVITED_EVENT,
     TASK_OCCURRENCE_CREATED_EVENT,
     TASK_OCCURRENCE_OVERDUE_EVENT,
@@ -13,6 +14,7 @@ import {
     WHATSAPP_TASK_START_EVENT,
 } from '../common/events';
 import type {
+    QuotationOrderConfirmedEvent,
     QuotationOrderConfirmRequestedEvent,
     QuotationSupplierInvitedEvent,
     TaskOccurrenceCreatedEvent,
@@ -94,6 +96,14 @@ export class WhatsappService {
         payload: QuotationOrderConfirmRequestedEvent,
     ) {
         await this.sendQuotationOrderConfirmation(payload);
+    }
+
+    // Cotação: o próprio fornecedor confirmou o pedido na página pública —
+    // aviso interno, separado do que vai pro fornecedor (ver
+    // src/common/events.ts).
+    @OnEvent(QUOTATION_ORDER_CONFIRMED_EVENT)
+    async handleQuotationOrderConfirmed(payload: QuotationOrderConfirmedEvent) {
+        await this.sendQuotationOrderConfirmedInternal(payload);
     }
 
     // Não lança erro se a pessoa não tem telefone cadastrado — só não
@@ -221,11 +231,10 @@ export class WhatsappService {
     private async sendQuotationRequest(params: QuotationSupplierInvitedEvent) {
         const phone = normalizePhone(params.phone);
 
-        // Manda em duas mensagens: a primeira só com o texto (sem link
-        // nenhum, pra não quebrar a formatação), a segunda só com a URL
-        // sozinha — assim o WhatsApp reconhece e transforma em link
-        // clicável de verdade, em vez de aparecer como texto puro dentro
-        // de uma frase.
+        // Manda numa mensagem só, com o link no final do texto — o
+        // WhatsApp reconhece a URL dentro da própria mensagem e já
+        // transforma em link clicável (com preview), sem precisar mandar
+        // separado.
         const greeting = [
             `Olá, ${params.supplierName}! Sou do ${params.storeName} e gostaria que preenchesse essa cotação de *${params.categoryName}* (${params.itemsCount} ${params.itemsCount === 1 ? 'item' : 'itens'}) no link abaixo. Obrigado!`,
         ].join('\n');
@@ -234,9 +243,8 @@ export class WhatsappService {
         let providerMessageId: string | undefined;
 
         try {
-            const result = await this.provider.sendText(phone, greeting);
+            const result = await this.provider.sendText(phone, text);
             providerMessageId = result.providerMessageId;
-            await this.provider.sendText(phone, params.link);
         } catch (error: any) {
             this.logger.warn(
                 `Falha ao enviar convite de cotação pra ${phone}: ${error?.message || error}`,
@@ -295,9 +303,8 @@ export class WhatsappService {
         let providerMessageId: string | undefined;
 
         try {
-            const result = await this.provider.sendText(phone, greeting);
+            const result = await this.provider.sendText(phone, text);
             providerMessageId = result.providerMessageId;
-            await this.provider.sendText(phone, params.link);
         } catch (error: any) {
             this.logger.warn(
                 `Falha ao enviar confirmação de pedido pra ${phone}: ${error?.message || error}`,
@@ -314,6 +321,59 @@ export class WhatsappService {
                 providerMessageId,
             },
         });
+    }
+
+    // Aviso interno — manda pra todo mundo que marcou
+    // notifyQuotationConfirmed em Cadastros → Colaboradores e tem telefone
+    // cadastrado. Diferente do método acima: aqui pode ser zero, um ou
+    // vários destinatários, um WhatsappOutboundMessage por pessoa.
+    private async sendQuotationOrderConfirmedInternal(
+        params: QuotationOrderConfirmedEvent,
+    ) {
+        const recipients = await this.prisma.user.findMany({
+            where: {
+                notifyQuotationConfirmed: true,
+                active: true,
+                phone: { not: null },
+            },
+            select: { id: true, phone: true },
+        });
+
+        if (recipients.length === 0) return;
+
+        const totalLabel = params.total.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+        });
+
+        const text = `${params.supplierName} aceitou o seu pedido de ${params.itemsCount} ${params.itemsCount === 1 ? 'item' : 'itens'} (${params.categoryName} — ${params.storeName}) pelo valor de ${totalLabel}.`;
+
+        for (const recipient of recipients) {
+            if (!recipient.phone) continue;
+
+            const phone = normalizePhone(recipient.phone);
+            let providerMessageId: string | undefined;
+
+            try {
+                const result = await this.provider.sendText(phone, text);
+                providerMessageId = result.providerMessageId;
+            } catch (error: any) {
+                this.logger.warn(
+                    `Falha ao enviar aviso de pedido confirmado pra ${phone}: ${error?.message || error}`,
+                );
+            }
+
+            await this.prisma.whatsappOutboundMessage.create({
+                data: {
+                    userId: recipient.id,
+                    phone,
+                    kind: WhatsappMessageKind.QUOTATION_ORDER_CONFIRMED_INTERNAL,
+                    quotationSupplierId: params.quotationSupplierId,
+                    text,
+                    providerMessageId,
+                },
+            });
+        }
     }
 
     // Chamado pelo controller do webhook, já com o payload específico do

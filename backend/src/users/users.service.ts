@@ -161,6 +161,7 @@ export class UsersService {
                 phone,
                 active: true,
                 canApprovePurchases: dto.canApprovePurchases ?? false,
+                notifyQuotationConfirmed: dto.notifyQuotationConfirmed ?? false,
                 userStores: {
                     create:
                         dto.storeIds?.map((storeId) => ({
@@ -336,6 +337,7 @@ export class UsersService {
                     phone: normalizedPhone,
                     active: dto.active,
                     canApprovePurchases: dto.canApprovePurchases,
+                    notifyQuotationConfirmed: dto.notifyQuotationConfirmed,
                 },
             });
 
