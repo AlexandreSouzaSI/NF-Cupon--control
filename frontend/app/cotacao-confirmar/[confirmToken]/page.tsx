@@ -212,7 +212,7 @@ export default function CotacaoConfirmarPage() {
                 {jaConfirmado && (
                     <div className="mt-10 flex items-center gap-3 border-t border-zinc-800 pt-4 print:border-zinc-300">
                         <img
-                            src="/icons/icon-512.png"
+                            src="/icons/logo-nugalho.jpeg"
                             alt="NuGalho"
                             className="h-10 w-10 shrink-0 rounded-md object-contain"
                         />
