@@ -129,4 +129,14 @@ export type QuotationOrderConfirmedEvent = {
     storeName: string;
     itemsCount: number;
     total: number;
+    // Itens do pedido (nome, quantidade, unidade, preço unitário) — vão
+    // listados na própria mensagem de aviso interno, em vez de só a
+    // contagem, pra quem recebe já saber o que foi pedido sem abrir o
+    // sistema.
+    items: {
+        descricao: string;
+        quantidade: number;
+        unidade: string;
+        unitPrice: number | null;
+    }[];
 };

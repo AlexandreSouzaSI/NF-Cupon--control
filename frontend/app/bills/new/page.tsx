@@ -58,7 +58,50 @@ type Purchase = {
     // de liberar o salvamento da conta.
     fiscalDocuments?: { type: string }[];
     noInvoiceProductsNote?: string | null;
+
+    // Itens da compra — usados só pra pré-preencher a Descrição da conta
+    // com o que foi pedido (nome, quantidade e valor), em vez de deixar
+    // só o texto genérico da Compra.
+    items?: {
+        name: string;
+        quantity: string | number;
+        unit?: string | null;
+        unitPrice?: string | number | null;
+        total?: string | number | null;
+    }[];
 };
+
+function formatItemsSummary(
+    items: Purchase['items'],
+): string {
+    if (!items || items.length === 0) return '';
+
+    return items
+        .map((item) => {
+            const qty = Number(item.quantity);
+            const qtyLabel = Number.isFinite(qty)
+                ? qty.toLocaleString('pt-BR', {
+                    maximumFractionDigits: 3,
+                })
+                : item.quantity;
+            const unit = item.unit ? ` ${item.unit}` : '';
+
+            const unitPrice =
+                item.unitPrice != null
+                    ? Number(item.unitPrice)
+                    : null;
+            const priceLabel =
+                unitPrice != null
+                    ? ` x R$ ${unitPrice.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    })}`
+                    : '';
+
+            return `${item.name} (${qtyLabel}${unit}${priceLabel})`;
+        })
+        .join(', ');
+}
 
 type BillType =
     | 'BOLETO'
@@ -375,9 +418,14 @@ function NewBillPageInner() {
 
                 setPurchase(loadedPurchase);
 
+                const itemsSummary = formatItemsSummary(
+                    loadedPurchase.items,
+                );
+
                 setForm({
-                    description:
-                        loadedPurchase.description,
+                    description: itemsSummary
+                        ? `${loadedPurchase.description} — ${itemsSummary}`
+                        : loadedPurchase.description,
 
                     value: String(
                         loadedPurchase.value,

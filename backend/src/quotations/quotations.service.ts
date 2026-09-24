@@ -1245,6 +1245,12 @@ export class QuotationsService {
             storeName: quotation.store.name,
             itemsCount: quotation.items.length,
             total,
+            items: purchaseItemsData.map((item) => ({
+                descricao: item.name,
+                quantidade: Number(item.quantity),
+                unidade: item.unit,
+                unitPrice: item.unitPrice != null ? Number(item.unitPrice) : null,
+            })),
         };
 
         this.eventEmitter.emit(QUOTATION_ORDER_CONFIRMED_EVENT, confirmedEvent);

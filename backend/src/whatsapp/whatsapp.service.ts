@@ -346,7 +346,28 @@ export class WhatsappService {
             currency: 'BRL',
         });
 
-        const text = `${params.supplierName} aceitou o seu pedido de ${params.itemsCount} ${params.itemsCount === 1 ? 'item' : 'itens'} (${params.categoryName} — ${params.storeName}) pelo valor de ${totalLabel}.`;
+        const itensLabel = params.items
+            .map((item) => {
+                const qtd = item.quantidade.toLocaleString('pt-BR', {
+                    maximumFractionDigits: 3,
+                });
+                const precoLabel =
+                    item.unitPrice != null
+                        ? ` x ${item.unitPrice.toLocaleString('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                          })}`
+                        : '';
+                return `- ${item.descricao} (${qtd} ${item.unidade}${precoLabel})`;
+            })
+            .join('\n');
+
+        const text = [
+            `${params.supplierName} aceitou o seu pedido de ${params.itemsCount} ${params.itemsCount === 1 ? 'item' : 'itens'} (${params.categoryName} — ${params.storeName}) pelo valor de ${totalLabel}.`,
+            itensLabel,
+        ]
+            .filter(Boolean)
+            .join('\n\n');
 
         for (const recipient of recipients) {
             if (!recipient.phone) continue;
