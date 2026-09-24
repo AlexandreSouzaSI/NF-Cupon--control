@@ -105,6 +105,17 @@ export class ProductSalesController {
         );
     }
 
+    // Visão geral pra aba Ficha Técnica: todo prato conhecido da loja com
+    // os ingredientes/itens de produção já cadastrados nele — usada pra
+    // montar a lista editável em tela (sem abrir modal por prato).
+    @Get('recipes-overview')
+    async getFichaTecnicaOverview(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+    ) {
+        return this.productSalesService.getFichaTecnicaOverview(storeId, user);
+    }
+
     // Planilha modelo pra importação de fichas técnicas, com a coluna A
     // já preenchida com o nome de cada produto que já tem venda
     // importada nesta loja — garante que o nome bate certinho com o que
@@ -244,13 +255,14 @@ export class ProductSalesController {
     }
 
     // Salva a ficha técnica inteira de um prato (substitui a lista
-    // anterior). Body: { storeId, produto, itens: [{ ingrediente, gramas }] }
+    // anterior). Body: { storeId, produto, itens: [{ stockItemId, gramas }] }
     @Put('recipe')
     async saveRecipe(
         @CurrentUser() user: any,
         @Body('storeId') storeId: string,
         @Body('produto') produto: string,
-        @Body('itens') itens: { ingrediente: string; gramas: number }[],
+        @Body('itens')
+        itens: { stockItemId?: string; productionItemId?: string; gramas: number }[],
     ) {
         return this.productSalesService.saveRecipe(user, {
             storeId,
@@ -259,33 +271,34 @@ export class ProductSalesController {
         });
     }
 
-    // Ingredientes já cadastrados na loja — pra autocomplete na hora de
-    // montar a ficha técnica.
+    // Catálogo de itens de estoque da loja — pra seletor na hora de
+    // montar a ficha técnica de um prato (vínculo direto, sem digitar
+    // nome), e pra tela de configuração da Lista de Compra.
     @Get('ingredients')
-    async listIngredients(
+    async listStockItemsCatalog(
         @CurrentUser() user: any,
         @Query('storeId') storeId: string,
     ) {
-        return this.productSalesService.listIngredients(user, storeId);
+        return this.productSalesService.listStockItemsCatalog(user, storeId);
     }
 
-    // Configura como um ingrediente é contado: KG (peso) ou UNIDADE
-    // (contagem — Pastel, Coxinha, Costelinha Suína...), e opcionalmente
-    // o peso de uma peça/pacote inteiro (Picanha peça, Batata Frita
-    // pacote de 400g) pra sugerir também "quantas peças/pacotes"
-    // comprar, além do KG.
+    // Configura como um item de estoque é contado na Lista de Compra de
+    // Produtos: KG/LITRO (peso/volume) ou UNIDADE (contagem — Pastel,
+    // Coxinha, Costelinha Suína...), e opcionalmente o peso de uma
+    // peça/pacote inteiro (Picanha peça, Batata Frita pacote de 400g)
+    // pra sugerir também "quantas peças/pacotes" comprar, além do KG.
     @Put('ingredients/:id')
-    async atualizarConfigIngrediente(
+    async atualizarConfigStockItem(
         @Param('id') id: string,
         @CurrentUser() user: any,
-        @Body('unidadeMedida') unidadeMedida?: 'KG' | 'UNIDADE',
+        @Body('unidadeMedida') unidadeMedida?: 'KG' | 'LITRO' | 'UNIDADE',
         @Body('pesoUnidadeGramas') pesoUnidadeGramas?: number | null,
         @Body('isProteina') isProteina?: boolean,
         @Body('porcaoPadraoGramas') porcaoPadraoGramas?: number | null,
         @Body('categoriaLista') categoriaLista?: string | null,
         @Body('ordemLista') ordemLista?: number | null,
     ) {
-        return this.productSalesService.atualizarConfigIngrediente(user, id, {
+        return this.productSalesService.atualizarConfigStockItem(user, id, {
             unidadeMedida,
             pesoUnidadeGramas,
             isProteina,

@@ -91,11 +91,15 @@ export function ImportEstoqueTab({ onImported }: { onImported: () => void }) {
                     Planilha modelo
                 </p>
                 <p className="mb-3 text-xs text-zinc-500">
-                    Colunas: <strong>Nome</strong> (obrigatório), Categoria, Quantidade
-                    e Valor — as três últimas são opcionais. Nome cadastra ou atualiza
-                    o item; se vier Quantidade, já lança uma <strong>entrada</strong>{' '}
-                    que soma no saldo atual (reimportar a mesma planilha soma de novo,
-                    não substitui).
+                    Colunas: <strong>Nome</strong> (obrigatório), Descrição, Categoria,
+                    Quantidade, Valor, Mínimo e Máximo — as seis últimas são opcionais.
+                    Categoria aceita só Hortifruti, Matéria Prima, Revenda, Embalagens,
+                    Limpeza ou Ativo. Nome cadastra ou atualiza o item; se vier
+                    Quantidade, já lança uma <strong>entrada</strong> que soma no saldo
+                    atual (reimportar a mesma planilha soma de novo, não substitui).
+                    Mínimo e Máximo, se vierem preenchidos, sempre{' '}
+                    <strong>substituem</strong> o valor atual do item (alimentam a
+                    sugestão de compra).
                 </p>
 
                 <div className="flex flex-wrap gap-2">

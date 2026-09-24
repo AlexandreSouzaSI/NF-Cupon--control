@@ -1,4 +1,5 @@
 import {
+    ConflictException,
     ForbiddenException,
     Injectable,
     NotFoundException,
@@ -223,6 +224,35 @@ export class EmployeesService {
             where: { id },
             data: { active: false },
         });
+    }
+
+    // Exclusão de verdade — restrita ao dono do sistema (AdminMasterGuard
+    // no controller). Apaga os pagamentos do funcionário junto (histórico
+    // dele deixa de existir de vez) e a linha do funcionário em si.
+    async removeDefinitivo(id: string) {
+        const employee = await this.prisma.employee.findUnique({
+            where: { id },
+        });
+
+        if (!employee) {
+            throw new NotFoundException('Funcionário não encontrado.');
+        }
+
+        try {
+            await this.prisma.employeePayment.deleteMany({
+                where: { employeeId: id },
+            });
+            await this.prisma.employee.delete({ where: { id } });
+        } catch (error: any) {
+            if (error?.code === 'P2003') {
+                throw new ConflictException(
+                    'Esse funcionário tem vínculos que impedem a exclusão definitiva.',
+                );
+            }
+            throw error;
+        }
+
+        return { ok: true };
     }
 
     private lastDayOfMonth(year: number, month: number) {

@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Hash, Package, Scale } from 'lucide-react';
 
-type UnidadeMedida = 'KG' | 'UNIDADE';
+type UnidadeMedida = 'KG' | 'LITRO' | 'UNIDADE';
 
 type Porcao = { gramas: number; quantidade: number };
 

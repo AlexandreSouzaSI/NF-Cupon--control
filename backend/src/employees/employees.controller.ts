@@ -20,6 +20,7 @@ import { extname, join } from 'path';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { AdminMasterGuard } from '../auth/admin-master.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequiresModule } from '../auth/requires-module.decorator';
 import { ModuleAccessGuard } from '../auth/module-access.guard';
@@ -207,5 +208,15 @@ export class EmployeesController {
         @CurrentUser() user: any,
     ) {
         return this.employeesService.remove(id, user);
+    }
+
+    // Exclusão de verdade (apaga a linha, não só active:false) — restrita
+    // ao dono do sistema (isAdminMaster). @UseGuards aqui se soma ao
+    // guard da classe (RolesGuard continua exigindo Administrativo/
+    // Proprietário, e some com AdminMasterGuard em cima).
+    @Delete(':id/definitivo')
+    @UseGuards(AdminMasterGuard)
+    async removeDefinitivo(@Param('id') id: string) {
+        return this.employeesService.removeDefinitivo(id);
     }
 }

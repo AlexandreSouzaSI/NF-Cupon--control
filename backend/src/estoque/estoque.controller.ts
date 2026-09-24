@@ -1,6 +1,7 @@
 import {
     Body,
     Controller,
+    Delete,
     Get,
     Param,
     Patch,
@@ -23,7 +24,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { RequiresModule } from '../auth/requires-module.decorator';
 import { ModuleAccessGuard } from '../auth/module-access.guard';
 
-import { EstoqueService } from './estoque.service';
+import { EstoqueService, ESTOQUE_CATEGORIAS } from './estoque.service';
 import { CreateStockItemDto } from './dto/create-stock-item.dto';
 import { UpdateStockItemDto } from './dto/update-stock-item.dto';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
@@ -53,20 +54,39 @@ export class EstoqueController {
         @CurrentUser() user: any,
         @Query('storeId') storeId: string,
         @Query('categoria') categoria?: string,
+        @Query('descricao') descricao?: string,
         @Query('search') search?: string,
         @Query('onlyNegative') onlyNegative?: string,
     ) {
         return this.estoqueService.listItems(user, {
             storeId,
             categoria,
+            descricao,
             search,
             onlyNegative: onlyNegative === 'true',
         });
     }
 
+    // Resumo pra aba Dashboard — cards, distribuição por categoria e
+    // últimas movimentações. Vem antes de "itens/:id" nas outras rotas
+    // por convenção, mas prefixo diferente ("dashboard") não colide.
+    @Get('dashboard')
+    async getDashboard(@CurrentUser() user: any, @Query('storeId') storeId: string) {
+        return this.estoqueService.getDashboard(user, storeId);
+    }
+
     @Get('categorias')
     async listCategorias(@CurrentUser() user: any, @Query('storeId') storeId: string) {
         return this.estoqueService.listCategorias(user, storeId);
+    }
+
+    // As 4 opções fixas de Categoria (Hortifruti/Matéria Prima/Revenda/
+    // Ativo) — usado pelo select de criar/editar item. Diferente de
+    // "categorias" acima, que devolve só as que já têm algum item (pra
+    // filtro da lista).
+    @Get('categorias-fixas')
+    listCategoriasFixas() {
+        return ESTOQUE_CATEGORIAS;
     }
 
     // Itens abaixo do estoque mínimo — base da Lista de Compra do
@@ -82,6 +102,17 @@ export class EstoqueController {
         return this.estoqueService.createItem(body, user);
     }
 
+    // Edição em massa da unidade de medida (checkbox por item na lista +
+    // um select pra aplicar em todos os marcados de uma vez). Precisa
+    // vir antes de "itens/:id" pra não colidir no roteamento.
+    @Patch('itens/bulk-unidade')
+    async bulkUpdateUnidade(
+        @Body() body: { ids: string[]; unidadeMedida: string },
+        @CurrentUser() user: any,
+    ) {
+        return this.estoqueService.bulkUpdateUnidade(body.ids, body.unidadeMedida, user);
+    }
+
     @Patch('itens/:id')
     async updateItem(
         @Param('id') id: string,
@@ -89,6 +120,15 @@ export class EstoqueController {
         @CurrentUser() user: any,
     ) {
         return this.estoqueService.updateItem(id, body, user);
+    }
+
+    // Exclusão de verdade — mais restrita que o resto do módulo (que já
+    // libera Gerente/Comprador/Estoquista). @Roles aqui no método
+    // sobrescreve o @Roles da classe (RolesGuard usa getAllAndOverride).
+    @Delete('itens/:id')
+    @Roles(UserRole.ADMINISTRATIVO)
+    async removeItem(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.estoqueService.removeItem(id, user);
     }
 
     // --- Movimentações ---
@@ -158,9 +198,10 @@ export class EstoqueController {
 
     // --- Importação por planilha ---
 
-    // Planilha modelo — cabeçalho Nome/Categoria/Quantidade/Valor, só
-    // Nome obrigatório. Precisa vir antes de nenhuma rota ":id" conflitar
-    // (não tem risco aqui, mas mantendo o padrão dos outros módulos).
+    // Planilha modelo — cabeçalho Nome/Descrição/Categoria/Quantidade/
+    // Valor, só Nome obrigatório. Precisa vir antes de nenhuma rota ":id"
+    // conflitar (não tem risco aqui, mas mantendo o padrão dos outros
+    // módulos).
     @Get('modelo')
     async gerarModelo(@Res() res: Response) {
         const buffer = await this.estoqueService.gerarModeloPlanilha();

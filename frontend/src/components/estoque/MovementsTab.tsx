@@ -6,12 +6,12 @@ import { getActiveStore } from '@/lib/active-store';
 import { toast } from 'sonner';
 import { ArrowDownCircle, ArrowUpCircle, Loader2 } from 'lucide-react';
 
-type StockItemOption = { id: string; nome: string; unidadeMedida: 'KG' | 'UNIDADE' };
+type StockItemOption = { id: string; nome: string; unidadeMedida: 'KG' | 'LITRO' | 'UNIDADE' };
 
 type Movement = {
     id: string;
     stockItemNome: string;
-    unidadeMedida: 'KG' | 'UNIDADE';
+    unidadeMedida: 'KG' | 'LITRO' | 'UNIDADE';
     tipo: 'ENTRADA' | 'SAIDA';
     origem: 'NF_COMPRA' | 'MANUAL' | 'IMPORTACAO_PLANILHA' | 'CONSUMO_VENDA';
     quantidade: number;
@@ -238,7 +238,11 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
                                         >
                                             {mov.tipo === 'ENTRADA' ? '+' : '-'}
                                             {mov.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}{' '}
-                                            {mov.unidadeMedida === 'KG' ? 'kg' : 'un'}
+                                            {mov.unidadeMedida === 'KG'
+                                                ? 'kg'
+                                                : mov.unidadeMedida === 'LITRO'
+                                                  ? 'L'
+                                                  : 'un'}
                                         </td>
                                         <td className="px-4 py-3 text-right text-zinc-500">
                                             {mov.valorTotal != null

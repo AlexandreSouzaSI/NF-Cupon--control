@@ -28,6 +28,20 @@ import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { LinkNfItemsDto } from './dto/link-nf-items.dto';
 import { LinkPurchaseItemsDto } from './dto/link-purchase-items.dto';
 
+// Categoria de negócio do StockItem — fixa nessas 6 opções (o frontend só
+// deixa escolher uma delas; StockItem.categoria continua String no schema
+// só pra não quebrar dado antigo fora dessa lista). "Ativo" é reservada
+// pro futuro (bem físico reutilizável — copo de vidro, equipamento — não
+// consumível), não usada em nenhum item hoje.
+export const ESTOQUE_CATEGORIAS = [
+    'Hortifruti',
+    'Matéria Prima',
+    'Revenda',
+    'Embalagens',
+    'Limpeza',
+    'Ativo',
+] as const;
+
 // Mesmo normalizador usado em product-sales.service.ts (Ingredient,
 // produtoChave) — maiúsculo, sem espaço duplicado/nas pontas. Mantido
 // como cópia local (não exportado de lá) só pra não criar acoplamento
@@ -91,7 +105,13 @@ export class EstoqueService {
 
     async listItems(
         user: any,
-        params: { storeId: string; categoria?: string; search?: string; onlyNegative?: boolean },
+        params: {
+            storeId: string;
+            categoria?: string;
+            descricao?: string;
+            search?: string;
+            onlyNegative?: boolean;
+        },
     ) {
         if (!params.storeId) {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
@@ -105,6 +125,12 @@ export class EstoqueService {
         };
 
         if (params.categoria) where.categoria = params.categoria;
+        // Filtro por Descrição — texto livre, então contains sem exigir
+        // bater com a normalização de nomeChave (que é só pra busca por
+        // Nome).
+        if (params.descricao) {
+            where.descricao = { contains: params.descricao, mode: 'insensitive' };
+        }
         if (params.search) {
             where.nomeChave = { contains: normalizarNome(params.search) };
         }
@@ -114,7 +140,6 @@ export class EstoqueService {
 
         const items = await this.prisma.stockItem.findMany({
             where,
-            include: { ingredient: { select: { id: true, nome: true } } },
             orderBy: { nome: 'asc' },
         });
 
@@ -127,11 +152,23 @@ export class EstoqueService {
             ? Number(item.valorMedioUnitario)
             : null;
         const estoqueMinimo = item.estoqueMinimo != null ? Number(item.estoqueMinimo) : null;
+        const estoqueMaximo = item.estoqueMaximo != null ? Number(item.estoqueMaximo) : null;
         const abaixoDoMinimo = estoqueMinimo != null && quantidadeAtual < estoqueMinimo;
+        // Sugestão de compra: se tem Máximo cadastrado, mira repor até lá
+        // (nível alvo) — senão cai no comportamento antigo de repor só até
+        // o Mínimo. Só dispara quando já está abaixo do mínimo (ponto de
+        // pedido), igual antes.
+        const quantidadeSugerida = abaixoDoMinimo
+            ? Math.max(
+                estoqueMaximo != null ? estoqueMaximo - quantidadeAtual : estoqueMinimo! - quantidadeAtual,
+                0,
+            )
+            : 0;
 
         return {
             id: item.id,
             nome: item.nome,
+            descricao: item.descricao,
             categoria: item.categoria,
             unidadeMedida: item.unidadeMedida,
             quantidadeAtual,
@@ -142,10 +179,9 @@ export class EstoqueService {
                     : null,
             negativo: quantidadeAtual < 0,
             estoqueMinimo,
+            estoqueMaximo,
             abaixoDoMinimo,
-            quantidadeSugerida: abaixoDoMinimo ? estoqueMinimo! - quantidadeAtual : 0,
-            ingredientId: item.ingredientId,
-            ingredienteNome: item.ingredient?.nome ?? null,
+            quantidadeSugerida,
             active: item.active,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
@@ -183,7 +219,6 @@ export class EstoqueService {
                 active: true,
                 estoqueMinimo: { not: null },
             },
-            include: { ingredient: { select: { id: true, nome: true } } },
             orderBy: { nome: 'asc' },
         });
 
@@ -199,6 +234,92 @@ export class EstoqueService {
             }));
     }
 
+    // Resumo pra aba Dashboard do Estoque — cards (qtd de itens, itens
+    // abaixo do mínimo, valor total parado, itens negativos), distribuição
+    // por Categoria (contagem + valor) e as últimas movimentações. Tudo
+    // calculado em cima do mesmo serializeItem() usado na listagem, pra
+    // não duplicar a conta de valorEstoque/abaixoDoMinimo.
+    async getDashboard(user: any, storeId: string) {
+        if (!storeId) {
+            throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
+        }
+
+        this.ensureStoreAccess(storeId, user);
+
+        const [items, ultimasMovimentacoes] = await Promise.all([
+            this.prisma.stockItem.findMany({
+                where: { storeId, active: true },
+            }),
+            this.prisma.stockMovement.findMany({
+                where: { storeId },
+                include: { stockItem: { select: { nome: true, unidadeMedida: true } } },
+                orderBy: { data: 'desc' },
+                take: 8,
+            }),
+        ]);
+
+        const serializados = items.map((item) => this.serializeItem(item));
+
+        const totalItens = serializados.length;
+        const itensAbaixoDoMinimo = serializados.filter((i) => i.abaixoDoMinimo).length;
+        const itensNegativos = serializados.filter((i) => i.negativo).length;
+        const valorTotalEstoque = serializados.reduce(
+            (soma, i) => soma + (i.valorEstoque || 0),
+            0,
+        );
+
+        // Distribuição por Categoria — usa a lista fixa (ESTOQUE_CATEGORIAS)
+        // como base pra sempre devolver todas as categorias em uso, mais um
+        // grupo "Sem categoria" pro que não foi classificado ainda.
+        const porCategoriaMap = new Map<string, { quantidadeItens: number; valorEstoque: number }>();
+        for (const item of serializados) {
+            const chave = item.categoria || 'Sem categoria';
+            const atual = porCategoriaMap.get(chave) || { quantidadeItens: 0, valorEstoque: 0 };
+            atual.quantidadeItens += 1;
+            atual.valorEstoque += item.valorEstoque || 0;
+            porCategoriaMap.set(chave, atual);
+        }
+
+        const porCategoria = Array.from(porCategoriaMap.entries())
+            .map(([categoria, dados]) => ({
+                categoria,
+                quantidadeItens: dados.quantidadeItens,
+                valorEstoque: Number(dados.valorEstoque.toFixed(2)),
+            }))
+            .sort((a, b) => b.valorEstoque - a.valorEstoque);
+
+        const itensCriticos = serializados
+            .filter((i) => i.abaixoDoMinimo)
+            .sort((a, b) => a.quantidadeAtual - b.quantidadeAtual)
+            .slice(0, 8)
+            .map((i) => ({
+                id: i.id,
+                nome: i.nome,
+                unidadeMedida: i.unidadeMedida,
+                quantidadeAtual: i.quantidadeAtual,
+                estoqueMinimo: i.estoqueMinimo,
+                quantidadeSugerida: i.quantidadeSugerida,
+            }));
+
+        return {
+            totalItens,
+            itensAbaixoDoMinimo,
+            itensNegativos,
+            valorTotalEstoque: Number(valorTotalEstoque.toFixed(2)),
+            porCategoria,
+            itensCriticos,
+            ultimasMovimentacoes: ultimasMovimentacoes.map((mov) => ({
+                id: mov.id,
+                stockItemNome: mov.stockItem.nome,
+                unidadeMedida: mov.stockItem.unidadeMedida,
+                tipo: mov.tipo,
+                origem: mov.origem,
+                quantidade: Number(mov.quantidade),
+                data: mov.data,
+            })),
+        };
+    }
+
     async createItem(dto: CreateStockItemDto, user: any) {
         this.ensureStoreAccess(dto.storeId, user);
 
@@ -212,41 +333,20 @@ export class EstoqueService {
             throw new BadRequestException('Já existe um item de estoque com esse nome.');
         }
 
-        if (dto.ingredientId) {
-            await this.assertIngredientLivre(dto.storeId, dto.ingredientId);
-        }
-
         const item = await this.prisma.stockItem.create({
             data: {
                 storeId: dto.storeId,
                 nome: dto.nome.trim(),
                 nomeChave,
+                descricao: dto.descricao?.trim() || null,
                 categoria: dto.categoria?.trim() || null,
                 unidadeMedida: (dto.unidadeMedida as IngredientUnidade) || 'KG',
-                ingredientId: dto.ingredientId || null,
                 estoqueMinimo: dto.estoqueMinimo ?? null,
+                estoqueMaximo: dto.estoqueMaximo ?? null,
             },
-            include: { ingredient: { select: { id: true, nome: true } } },
         });
 
         return this.serializeItem(item);
-    }
-
-    private async assertIngredientLivre(storeId: string, ingredientId: string, ignoreStockItemId?: string) {
-        const ingredient = await this.prisma.ingredient.findUnique({
-            where: { id: ingredientId },
-            include: { stockItem: true },
-        });
-
-        if (!ingredient || ingredient.storeId !== storeId) {
-            throw new BadRequestException('Ingrediente não encontrado nessa loja.');
-        }
-
-        if (ingredient.stockItem && ingredient.stockItem.id !== ignoreStockItemId) {
-            throw new BadRequestException(
-                `O ingrediente "${ingredient.nome}" já está vinculado a outro item de estoque.`,
-            );
-        }
     }
 
     async updateItem(id: string, dto: UpdateStockItemDto, user: any) {
@@ -261,27 +361,66 @@ export class EstoqueService {
             data.nome = dto.nome.trim();
             data.nomeChave = normalizarNome(dto.nome);
         }
+        if (dto.descricao !== undefined) data.descricao = dto.descricao?.trim() || null;
         if (dto.categoria !== undefined) data.categoria = dto.categoria?.trim() || null;
         if (dto.unidadeMedida !== undefined) data.unidadeMedida = dto.unidadeMedida as IngredientUnidade;
         if (dto.active !== undefined) data.active = dto.active;
         if (dto.estoqueMinimo !== undefined) data.estoqueMinimo = dto.estoqueMinimo;
-
-        if (dto.ingredientId !== undefined) {
-            if (dto.ingredientId) {
-                await this.assertIngredientLivre(item.storeId, dto.ingredientId, item.id);
-                data.ingredient = { connect: { id: dto.ingredientId } };
-            } else {
-                data.ingredient = { disconnect: true };
-            }
-        }
+        if (dto.estoqueMaximo !== undefined) data.estoqueMaximo = dto.estoqueMaximo;
 
         const updated = await this.prisma.stockItem.update({
             where: { id },
             data,
-            include: { ingredient: { select: { id: true, nome: true } } },
         });
 
         return this.serializeItem(updated);
+    }
+
+    // Edição em massa da unidade de medida — pra quando o usuário marca
+    // vários itens (ex: todas as bebidas) e troca todos pra Litro de
+    // uma vez, sem precisar abrir item por item.
+    async bulkUpdateUnidade(ids: string[], unidadeMedida: string, user: any) {
+        if (!ids || ids.length === 0) {
+            throw new BadRequestException('Selecione ao menos um item.');
+        }
+
+        if (!Object.values(IngredientUnidade).includes(unidadeMedida as IngredientUnidade)) {
+            throw new BadRequestException('Unidade de medida inválida.');
+        }
+
+        const items = await this.prisma.stockItem.findMany({ where: { id: { in: ids } } });
+
+        if (items.length === 0) {
+            throw new NotFoundException('Nenhum item de estoque encontrado.');
+        }
+
+        const storeIds = Array.from(new Set(items.map((i) => i.storeId)));
+        for (const storeId of storeIds) {
+            this.ensureStoreAccess(storeId, user);
+        }
+
+        await this.prisma.stockItem.updateMany({
+            where: { id: { in: items.map((i) => i.id) } },
+            data: { unidadeMedida: unidadeMedida as IngredientUnidade },
+        });
+
+        return { ok: true, atualizados: items.length };
+    }
+
+    // Exclusão de verdade (não é o "active: false" usado em outros
+    // lugares) — só quem tem @Roles(ADMINISTRATIVO) no controller chega
+    // aqui. Apaga em cascata todo o histórico de movimentação desse item
+    // (StockMovement/StockSupplierItemMapping têm onDelete: Cascade no
+    // schema) — por isso é restrito e o frontend pede confirmação antes.
+    async removeItem(id: string, user: any) {
+        const item = await this.prisma.stockItem.findUnique({ where: { id } });
+        if (!item) throw new NotFoundException('Item de estoque não encontrado.');
+
+        this.ensureStoreAccess(item.storeId, user);
+
+        await this.prisma.stockItem.delete({ where: { id } });
+
+        return { ok: true };
     }
 
     // ---------------------------------------------------------------
@@ -366,7 +505,6 @@ export class EstoqueService {
 
         const atualizado = await this.prisma.stockItem.findUnique({
             where: { id: dto.stockItemId },
-            include: { ingredient: { select: { id: true, nome: true } } },
         });
 
         return this.serializeItem(atualizado);
@@ -475,7 +613,7 @@ export class EstoqueService {
             stockItemId?: string;
             novoNome?: string;
             novaCategoria?: string;
-            novaUnidadeMedida?: 'KG' | 'UNIDADE';
+            novaUnidadeMedida?: 'KG' | 'LITRO' | 'UNIDADE';
         },
     ) {
         if (params.stockItemId) {
@@ -895,14 +1033,39 @@ export class EstoqueService {
     }
 
     // ---------------------------------------------------------------
-    // Importação por planilha modelo (Nome / Categoria / Quantidade / Valor)
+    // Importação por planilha modelo (Nome / Descrição / Categoria /
+    // Quantidade / Valor / Mínimo / Máximo). Categoria é sempre uma das
+    // ESTOQUE_CATEGORIAS (Hortifruti/Matéria Prima/Revenda/Embalagens/
+    // Limpeza/Ativo) — Descrição é livre, uma classificação mais fina só
+    // pra organização (ex: "Proteínas - Frigorífico", "Bebidas - Whisky
+    // e Gin"). Mínimo/Máximo alimentam a sugestão de compra (ver
+    // serializeItem/listaCompra).
     // ---------------------------------------------------------------
 
     async gerarModeloPlanilha(): Promise<Buffer> {
-        const linhas = [['Nome', 'Categoria', 'Quantidade', 'Valor']];
+        const linhas = [
+            ['Nome', 'Descrição', 'Categoria', 'Quantidade', 'Valor', 'Mínimo', 'Máximo'],
+            [
+                'Picanha',
+                'Proteínas - Frigorífico',
+                ESTOQUE_CATEGORIAS[1],
+                '',
+                '',
+                '',
+                '',
+            ],
+        ];
 
         const worksheet = XLSX.utils.aoa_to_sheet(linhas);
-        worksheet['!cols'] = [{ wch: 32 }, { wch: 20 }, { wch: 14 }, { wch: 14 }];
+        worksheet['!cols'] = [
+            { wch: 32 },
+            { wch: 30 },
+            { wch: 16 },
+            { wch: 14 },
+            { wch: 14 },
+            { wch: 12 },
+            { wch: 12 },
+        ];
 
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Estoque');
@@ -910,10 +1073,12 @@ export class EstoqueService {
         return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     }
 
-    // Nome é o único campo obrigatório — Categoria/Quantidade/Valor
-    // ficam em branco à vontade. Nome cadastra/atualiza o item;
-    // Quantidade (se vier) já lança uma ENTRADA — soma no saldo atual,
-    // nunca substitui (reimportar a mesma planilha soma de novo).
+    // Nome é o único campo obrigatório — Descrição/Categoria/Quantidade/
+    // Valor/Mínimo/Máximo ficam em branco à vontade. Nome cadastra/
+    // atualiza o item; Quantidade (se vier) já lança uma ENTRADA — soma
+    // no saldo atual, nunca substitui (reimportar a mesma planilha soma
+    // de novo). Mínimo/Máximo sempre SUBSTITUEM o valor atual do item
+    // quando vêm preenchidos (não somam) — é configuração, não saldo.
     async importarPlanilha(storeId: string, file: Express.Multer.File, user: any) {
         if (!storeId) {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
@@ -946,9 +1111,12 @@ export class EstoqueService {
 
         type LinhaPlanilha = {
             nome: string;
+            descricao: string | null;
             categoria: string | null;
             quantidade: number | null;
             valor: number | null;
+            estoqueMinimo: number | null;
+            estoqueMaximo: number | null;
         };
 
         const linhas: LinhaPlanilha[] = [];
@@ -962,9 +1130,12 @@ export class EstoqueService {
 
             linhas.push({
                 nome: String(nomeCelula).trim(),
-                categoria: linha[1] != null && String(linha[1]).trim() !== '' ? String(linha[1]).trim() : null,
-                quantidade: parseNumeroCell(linha[2]),
-                valor: parseNumeroCell(linha[3]),
+                descricao: linha[1] != null && String(linha[1]).trim() !== '' ? String(linha[1]).trim() : null,
+                categoria: linha[2] != null && String(linha[2]).trim() !== '' ? String(linha[2]).trim() : null,
+                quantidade: parseNumeroCell(linha[3]),
+                valor: parseNumeroCell(linha[4]),
+                estoqueMinimo: parseNumeroCell(linha[5]),
+                estoqueMaximo: parseNumeroCell(linha[6]),
             });
         }
 
@@ -989,11 +1160,14 @@ export class EstoqueService {
                 let stockItem;
 
                 if (existing) {
-                    stockItem = linha.categoria
-                        ? await tx.stockItem.update({
-                            where: { id: existing.id },
-                            data: { categoria: linha.categoria },
-                        })
+                    const data: Prisma.StockItemUpdateInput = {};
+                    if (linha.categoria) data.categoria = linha.categoria;
+                    if (linha.descricao) data.descricao = linha.descricao;
+                    if (linha.estoqueMinimo != null) data.estoqueMinimo = linha.estoqueMinimo;
+                    if (linha.estoqueMaximo != null) data.estoqueMaximo = linha.estoqueMaximo;
+
+                    stockItem = Object.keys(data).length > 0
+                        ? await tx.stockItem.update({ where: { id: existing.id }, data })
                         : existing;
                     atualizados += 1;
                 } else {
@@ -1002,7 +1176,10 @@ export class EstoqueService {
                             storeId,
                             nome: linha.nome,
                             nomeChave,
+                            descricao: linha.descricao,
                             categoria: linha.categoria,
+                            estoqueMinimo: linha.estoqueMinimo,
+                            estoqueMaximo: linha.estoqueMaximo,
                         },
                     });
                     criados += 1;
@@ -1031,11 +1208,13 @@ export class EstoqueService {
     // ---------------------------------------------------------------
 
     // Reage a toda nova planilha de vendas importada em Produtos: soma o
-    // consumo de cada ingrediente NAQUELA importação (mesma conta de
-    // ingredientsSummary, mas restrita a um único productSalesImportId)
-    // e desconta do StockItem vinculado a cada ingrediente. Item sem
-    // vínculo simplesmente não é tocado — segue só manual/NF. Deixa
-    // saldo negativo se faltar (sem travar), como decidido.
+    // consumo de cada item de estoque NAQUELA importação (mesma conta de
+    // ProductSalesService.ingredientsSummary, mas restrita a um único
+    // productSalesImportId) e desconta direto do StockItem — a ficha
+    // técnica (ProductRecipeItem) já aponta pro StockItem real, sem
+    // precisar de nenhum vínculo indireto. Prato sem ficha técnica
+    // simplesmente não é tocado — segue só manual/NF. Deixa saldo
+    // negativo se faltar (sem travar), como decidido.
     @OnEvent(PRODUCT_SALES_IMPORTED_EVENT)
     async aplicarBaixaAutomatica(event: ProductSalesImportedEvent) {
         const consumo = await this.calcularConsumoPorImportacao(
@@ -1045,24 +1224,17 @@ export class EstoqueService {
 
         if (consumo.size === 0) return;
 
-        const stockItems = await this.prisma.stockItem.findMany({
-            where: { storeId: event.storeId, ingredientId: { in: Array.from(consumo.keys()) } },
-        });
-
-        if (stockItems.length === 0) return;
-
         await this.prisma.$transaction(async (tx) => {
-            for (const stockItem of stockItems) {
-                const quantidade = consumo.get(stockItem.ingredientId as string);
+            for (const [stockItemId, quantidade] of consumo.entries()) {
                 if (!quantidade || quantidade <= 0) continue;
 
                 await this.applyMovement(tx, {
                     storeId: event.storeId,
-                    stockItemId: stockItem.id,
+                    stockItemId,
                     tipo: StockMovementType.SAIDA,
                     origem: StockMovementOrigin.CONSUMO_VENDA,
                     quantidade,
-                    sourceRef: `venda:${event.productSalesImportId}:item:${stockItem.id}`,
+                    sourceRef: `venda:${event.productSalesImportId}:item:${stockItemId}`,
                 });
             }
         });
@@ -1070,10 +1242,13 @@ export class EstoqueService {
 
     // Mesma lógica de ProductSalesService.ingredientsSummary, só que
     // restrita a UMA importação (não um período) — devolve
-    // Map<ingredientId, quantidadeConsumida>. Fica aqui (não
+    // Map<stockItemId, quantidadeConsumida>. Fica aqui (não
     // reaproveitada de lá) pra não criar dependência de EstoqueModule
     // em cima de ProductSalesModule; os dois só se falam pelo evento
-    // (ver src/common/events.ts).
+    // (ver src/common/events.ts). Só as linhas de ficha técnica ligadas
+    // DIRETO a um StockItem — as ligadas a um ProductionItem (aba
+    // Produção, repasse pro Estoque bruto) são tratadas à parte, em
+    // ProductionService.aplicarBaixaAutomatica.
     private async calcularConsumoPorImportacao(storeId: string, importId: string) {
         const [entries, recipeItems] = await Promise.all([
             this.prisma.productSalesEntry.findMany({
@@ -1081,12 +1256,12 @@ export class EstoqueService {
                 select: { produtoChave: true, quantidade: true },
             }),
             this.prisma.productRecipeItem.findMany({
-                where: { storeId },
+                where: { storeId, stockItemId: { not: null } },
                 select: {
                     produtoChave: true,
-                    ingredientId: true,
+                    stockItemId: true,
                     gramas: true,
-                    ingredient: { select: { unidadeMedida: true } },
+                    stockItem: { select: { unidadeMedida: true } },
                 },
             }),
         ]);
@@ -1097,24 +1272,26 @@ export class EstoqueService {
             quantidadePorProduto.set(entry.produtoChave, atual + Number(entry.quantidade));
         }
 
-        const consumoPorIngrediente = new Map<string, number>();
+        const consumoPorStockItem = new Map<string, number>();
 
         for (const item of recipeItems) {
+            if (!item.stockItemId || !item.stockItem) continue;
+
             const vendido = quantidadePorProduto.get(item.produtoChave);
             if (!vendido || vendido <= 0) continue;
 
             const gramas = Number(item.gramas);
             const quantidade =
-                item.ingredient.unidadeMedida === 'UNIDADE'
+                item.stockItem.unidadeMedida === 'UNIDADE'
                     ? vendido * gramas
                     : (vendido * gramas) / 1000;
 
-            consumoPorIngrediente.set(
-                item.ingredientId,
-                (consumoPorIngrediente.get(item.ingredientId) || 0) + quantidade,
+            consumoPorStockItem.set(
+                item.stockItemId,
+                (consumoPorStockItem.get(item.stockItemId) || 0) + quantidade,
             );
         }
 
-        return consumoPorIngrediente;
+        return consumoPorStockItem;
     }
 }

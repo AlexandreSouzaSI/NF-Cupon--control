@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     Injectable,
     NotFoundException,
@@ -237,6 +238,30 @@ export class StoresService {
                 active: false,
             },
         });
+    }
+
+    // Exclusão de verdade da loja — restrita ao dono do sistema
+    // (AdminMasterGuard no controller). MUITO destrutivo: várias tabelas
+    // têm onDelete: Cascade pra Store (ex.: StockItem/StockMovement), então
+    // apagar a loja pode arrastar histórico de estoque, compras, NFs e
+    // contas junto. Não existe confirmação extra aqui de propósito — a UI
+    // é quem deve pedir confirmação forte (digitar o nome da loja) antes
+    // de chamar essa rota.
+    async removeDefinitivo(id: string) {
+        await this.ensureStoreExists(id);
+
+        try {
+            await this.prisma.store.delete({ where: { id } });
+        } catch (error: any) {
+            if (error?.code === 'P2003') {
+                throw new ConflictException(
+                    'Essa loja tem dados vinculados que impedem a exclusão definitiva.',
+                );
+            }
+            throw error;
+        }
+
+        return { ok: true };
     }
 
     async linkUser(storeId: string, userId: string) {

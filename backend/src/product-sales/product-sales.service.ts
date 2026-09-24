@@ -13,6 +13,7 @@ import {
     PRODUCT_SALES_IMPORTED_EVENT,
     type ProductSalesImportedEvent,
 } from '../common/events';
+import { LISTAS_CURADAS_POR_LOJA } from './recipe-template-dish-lists';
 
 // Normaliza pra facilitar agrupar o mesmo produto entre importações
 // diferentes (e, mais pra frente, casar com o nome do item na NF de
@@ -26,15 +27,18 @@ function normalizarProduto(nome: string): string {
         .replace(/\s+/g, ' ');
 }
 
-// Quanto de um ingrediente um prato vendido consumiu, respeitando o
-// tipo de unidade DELE (não é sempre peso): ingrediente KG divide por
-// 1000 (o "gramas" da ficha técnica é peso mesmo); ingrediente UNIDADE
+// Quanto de um item de estoque um prato vendido consumiu, respeitando o
+// tipo de unidade DELE (não é sempre peso): item KG/LITRO divide por
+// 1000 (o "gramas" da ficha técnica é peso/volume mesmo); item UNIDADE
 // não divide (o "gramas" da ficha técnica ali guarda quantas UNIDADES o
-// prato leva, ex: Coxinha 5 = 5 coxinhas). Reaproveitado tanto no
-// consumo real (ingredientsSummary) quanto na sugestão de compra
-// (listaCompraSugerida).
+// prato leva, ex: Coxinha 5 = 5 coxinhas). Aceita tanto IngredientUnidade
+// (StockItem) quanto ProductionUnidade (ProductionItem) — as duas só têm
+// a mesma regra (tudo divide por 1000, exceto UNIDADE), então uma
+// assinatura em string serve pras duas. Reaproveitado no consumo real
+// (ingredientsSummary), na sugestão de compra (listaCompraSugerida) e no
+// "repasse" via Produção (ver getStockItemRecipeExpansion).
 function calcularQuantidade(
-    unidadeMedida: IngredientUnidade,
+    unidadeMedida: string,
     quantidadeVendida: number,
     gramasOuUnidades: number,
 ): number {
@@ -152,11 +156,11 @@ const MARGEM_SEGURANCA_SUGESTAO = 0.2;
 const MARGENS_OPCOES_VENDIDAS = [0.1, 0.2, 0.3];
 
 // Lista padrão de proteínas/cortes passada pelo chefe de produção,
-// usada pelo botão "Importar lista padrão" (aba Ingredientes) pra
-// criar/ajustar de uma vez os Ingredient dessa loja com a categoria e a
-// ordem certas (ver importarListaPadrao). Mesma lista pra qualquer
-// loja — hoje usada em Anchieta e Contagem. A ordem dentro do array
-// É a ordem de exibição na Lista de Compra (ordemLista).
+// usada pelo botão "Importar lista padrão" pra criar/ajustar de uma vez
+// os StockItem dessa loja com a categoria e a ordem certas (ver
+// importarListaPadrao). Mesma lista pra qualquer loja — hoje usada em
+// Anchieta e Contagem. A ordem dentro do array É a ordem de exibição na
+// Lista de Compra (ordemLista).
 const LISTA_PADRAO_PROTEINAS: { categoria: string; nome: string }[] = [
     // Proteínas e Cortes
     ...[
@@ -829,8 +833,9 @@ export class ProductSalesService {
         };
     }
 
-    // Ficha técnica de UM prato: lista de ingredientes + gramas que ele
-    // leva (ex: Chapa de Contra Filé -> Batata 400g, Contra Filé 400g).
+    // Ficha técnica de UM prato: lista de itens de estoque/produção +
+    // gramas que ele leva (ex: Chapa de Contra Filé -> Batata 400g,
+    // Contra Filé 400g).
     async getRecipe(user: any, params: { storeId: string; produto: string }) {
         this.ensureStoreAccess(params.storeId, user);
 
@@ -838,30 +843,44 @@ export class ProductSalesService {
 
         const itens = await this.prisma.productRecipeItem.findMany({
             where: { storeId: params.storeId, produtoChave },
-            include: { ingredient: { select: { id: true, nome: true } } },
+            include: {
+                stockItem: { select: { id: true, nome: true, unidadeMedida: true } },
+                productionItem: { select: { id: true, nome: true, unidadeMedida: true } },
+            },
             orderBy: { createdAt: 'asc' },
         });
 
         return itens.map((item) => ({
             id: item.id,
-            ingredienteId: item.ingredientId,
-            ingrediente: item.ingredient.nome,
+            tipo: item.productionItemId ? 'producao' : 'estoque',
+            stockItemId: item.stockItemId,
+            ingrediente: item.stockItem?.nome ?? null,
+            stockItemUnidade: item.stockItem?.unidadeMedida ?? null,
+            productionItemId: item.productionItemId,
+            productionItemNome: item.productionItem?.nome ?? null,
             gramas: Number(item.gramas),
         }));
     }
 
     // Substitui a ficha técnica inteira de um prato pela lista enviada
     // (apaga as linhas antigas e recria) — mais simples que tentar dar
-    // diff de quem adicionou/removeu/editou uma linha. Cada ingrediente é
-    // criado automaticamente na primeira vez que alguém digita o nome
-    // dele (findOrCreate por nome normalizado), igual ao fornecedor
-    // digitável das Compras.
+    // diff de quem adicionou/removeu/editou uma linha. Cada linha aponta
+    // pra um StockItem OU ProductionItem JÁ CADASTRADO (vínculo direto —
+    // não cria mais nada por nome digitado; quem quiser um item novo
+    // cadastra primeiro no Estoque ou na Produção).
     async saveRecipe(
         user: any,
         params: {
             storeId: string;
             produto: string;
-            itens: { ingrediente: string; gramas: number }[];
+            // Cada linha usa OU stockItemId (Estoque bruto, fluxo
+            // original), OU productionItemId (Produção — pré-preparo já
+            // cadastrado na aba Produção). Nunca os dois.
+            itens: {
+                stockItemId?: string;
+                productionItemId?: string;
+                gramas: number;
+            }[];
         },
     ) {
         if (!params.storeId) {
@@ -881,10 +900,46 @@ export class ProductSalesService {
 
         const itensValidos = (params.itens || []).filter(
             (item) =>
-                item.ingrediente &&
-                item.ingrediente.trim() &&
+                (item.stockItemId || item.productionItemId) &&
                 Number(item.gramas) > 0,
         );
+
+        if (itensValidos.length > 0) {
+            const productionItemIds = itensValidos
+                .map((item) => item.productionItemId)
+                .filter((id): id is string => !!id);
+
+            const stockItemIds = itensValidos
+                .map((item) => item.stockItemId)
+                .filter((id): id is string => !!id);
+
+            const [foundProduction, foundStock] = await Promise.all([
+                productionItemIds.length > 0
+                    ? this.prisma.productionItem.findMany({
+                        where: { id: { in: productionItemIds }, storeId: params.storeId },
+                        select: { id: true },
+                    })
+                    : Promise.resolve([]),
+                stockItemIds.length > 0
+                    ? this.prisma.stockItem.findMany({
+                        where: { id: { in: stockItemIds }, storeId: params.storeId },
+                        select: { id: true },
+                    })
+                    : Promise.resolve([]),
+            ]);
+
+            if (foundProduction.length !== new Set(productionItemIds).size) {
+                throw new BadRequestException(
+                    'Um ou mais itens de produção selecionados não foram encontrados nesta loja.',
+                );
+            }
+
+            if (foundStock.length !== new Set(stockItemIds).size) {
+                throw new BadRequestException(
+                    'Um ou mais itens de estoque selecionados não foram encontrados nesta loja.',
+                );
+            }
+        }
 
         return this.prisma.$transaction(async (tx) => {
             await tx.productRecipeItem.deleteMany({
@@ -892,29 +947,13 @@ export class ProductSalesService {
             });
 
             for (const item of itensValidos) {
-                const nomeChave = normalizarProduto(item.ingrediente);
-
-                const ingredient = await tx.ingredient.upsert({
-                    where: {
-                        storeId_nomeChave: {
-                            storeId: params.storeId,
-                            nomeChave,
-                        },
-                    },
-                    update: {},
-                    create: {
-                        storeId: params.storeId,
-                        nome: item.ingrediente.trim(),
-                        nomeChave,
-                    },
-                });
-
                 await tx.productRecipeItem.create({
                     data: {
                         storeId: params.storeId,
                         produtoChave,
                         produto,
-                        ingredientId: ingredient.id,
+                        productionItemId: item.productionItemId || null,
+                        stockItemId: item.productionItemId ? null : item.stockItemId,
                         gramas: Number(item.gramas),
                     },
                 });
@@ -922,42 +961,52 @@ export class ProductSalesService {
 
             const itens = await tx.productRecipeItem.findMany({
                 where: { storeId: params.storeId, produtoChave },
-                include: { ingredient: { select: { id: true, nome: true } } },
+                include: {
+                    stockItem: { select: { id: true, nome: true } },
+                    productionItem: { select: { id: true, nome: true } },
+                },
                 orderBy: { createdAt: 'asc' },
             });
 
             return itens.map((item) => ({
                 id: item.id,
-                ingredienteId: item.ingredientId,
-                ingrediente: item.ingredient.nome,
+                tipo: item.productionItemId ? 'producao' : 'estoque',
+                productionItemId: item.productionItemId,
+                productionItemNome: item.productionItem?.nome ?? null,
+                stockItemId: item.stockItemId,
+                ingrediente: item.stockItem?.nome ?? null,
                 gramas: Number(item.gramas),
             }));
         });
     }
 
-    // Lista de ingredientes já cadastrados pela loja — pra sugestão
-    // (autocomplete) na hora de montar a ficha técnica de um prato, e
-    // pra tela de configuração (unidade de medida / peso da peça).
-    async listIngredients(user: any, storeId: string) {
+    // Catálogo de itens de estoque ativos da loja — pra sugestão
+    // (autocomplete/seletor) na hora de montar a ficha técnica de um
+    // prato, e pra tela de configuração (unidade de medida / peso da
+    // peça / proteína / categoria da lista).
+    async listStockItemsCatalog(user: any, storeId: string) {
         this.ensureStoreAccess(storeId, user);
 
-        return this.prisma.ingredient.findMany({
-            where: { storeId },
+        return this.prisma.stockItem.findMany({
+            where: { storeId, active: true },
             orderBy: { nome: 'asc' },
         });
     }
 
-    // Configura como um ingrediente deve ser contado: KG (peso, padrão)
-    // ou UNIDADE (contagem — Pastel, Coxinha, Costelinha Suína...), e
-    // opcionalmente o peso de UMA peça/pacote inteiro (só faz sentido
-    // pra KG — Picanha peça ~1200g, Batata Frita pacote 400g) pra além
-    // do KG total, sugerir também "quantas peças/pacotes" comprar. Não
-    // mexe em nenhuma ficha técnica já cadastrada — o valor guardado em
+    // Configura como um item de estoque deve ser contado na Lista de
+    // Compra de Produtos: KG/LITRO (peso/volume, padrão) ou UNIDADE
+    // (contagem — Pastel, Coxinha, Costelinha Suína...), e opcionalmente
+    // o peso de UMA peça/pacote inteiro (só faz sentido pra KG — Picanha
+    // peça ~1200g, Batata Frita pacote 400g) pra além do KG total,
+    // sugerir também "quantas peças/pacotes" comprar. Não mexe em
+    // nenhuma ficha técnica já cadastrada — o valor guardado em
     // ProductRecipeItem.gramas continua o mesmo, só muda como ele é
-    // interpretado dali pra frente (ver calcularQuantidade).
-    async atualizarConfigIngrediente(
+    // interpretado dali pra frente (ver calcularQuantidade). unidadeMedida
+    // aqui é a mesma usada pelo Estoque (StockItem.unidadeMedida) — mudar
+    // aqui também muda como o item aparece no módulo Estoque.
+    async atualizarConfigStockItem(
         user: any,
-        ingredientId: string,
+        stockItemId: string,
         data: {
             unidadeMedida?: IngredientUnidade;
             pesoUnidadeGramas?: number | null;
@@ -967,15 +1016,15 @@ export class ProductSalesService {
             ordemLista?: number | null;
         },
     ) {
-        const ingredient = await this.prisma.ingredient.findUnique({
-            where: { id: ingredientId },
+        const stockItem = await this.prisma.stockItem.findUnique({
+            where: { id: stockItemId },
         });
 
-        if (!ingredient) {
-            throw new NotFoundException('Ingrediente não encontrado.');
+        if (!stockItem) {
+            throw new NotFoundException('Item de estoque não encontrado.');
         }
 
-        this.ensureStoreAccess(ingredient.storeId, user);
+        this.ensureStoreAccess(stockItem.storeId, user);
 
         if (
             data.unidadeMedida &&
@@ -984,8 +1033,8 @@ export class ProductSalesService {
             throw new BadRequestException('Unidade de medida inválida.');
         }
 
-        return this.prisma.ingredient.update({
-            where: { id: ingredientId },
+        return this.prisma.stockItem.update({
+            where: { id: stockItemId },
             data: {
                 unidadeMedida: data.unidadeMedida,
                 pesoUnidadeGramas:
@@ -1019,13 +1068,12 @@ export class ProductSalesService {
         });
     }
 
-    // Cria (ou ajusta) de uma vez todos os ingredientes da lista padrão
-    // do chefe de produção (LISTA_PADRAO_PROTEINAS) nesta loja: cada
-    // item vira/atualiza um Ingredient com isProteina=true, categoria e
-    // ordem certas. Reaproveita o mesmo find-or-create por nome
-    // normalizado do saveRecipe — se o ingrediente já existir (mesmo
-    // nome normalizado), só ajusta categoria/ordem/isProteina, sem
-    // duplicar nem mexer em receitas já vinculadas a ele.
+    // Cria (ou ajusta) de uma vez todos os itens da lista padrão de
+    // proteínas/cortes do chefe de produção (LISTA_PADRAO_PROTEINAS)
+    // nesta loja: cada item vira/atualiza um StockItem com
+    // isProteina=true, categoria e ordem certas. Se o item já existir no
+    // Estoque (mesmo nome normalizado), só ajusta categoria/ordem/
+    // isProteina, sem duplicar nem mexer no saldo físico já lançado.
     async importarListaPadrao(user: any, storeId: string) {
         if (!storeId) {
             throw new BadRequestException(
@@ -1046,7 +1094,7 @@ export class ProductSalesService {
 
                 const nomeChave = normalizarProduto(item.nome);
 
-                await tx.ingredient.upsert({
+                await tx.stockItem.upsert({
                     where: { storeId_nomeChave: { storeId, nomeChave } },
                     update: {
                         isProteina: true,
@@ -1057,6 +1105,7 @@ export class ProductSalesService {
                         storeId,
                         nome: item.nome,
                         nomeChave,
+                        categoria: 'Matéria Prima',
                         isProteina: true,
                         categoriaLista: item.categoria,
                         ordemLista: ordem,
@@ -1073,14 +1122,177 @@ export class ProductSalesService {
         });
     }
 
-    // Quanto de cada ingrediente foi consumido no período importado —
-    // soma, pra cada prato vendido que leva aquele ingrediente na ficha
-    // técnica, quantidadeVendida * gramas/1000 (ingrediente KG, peso) ou
-    // quantidadeVendida * gramas (ingrediente UNIDADE, contagem — ver
-    // calcularQuantidade). Isso é o que resolve "quantos contra filé eu
-    // vendi" ou "quantas coxinhas eu vendi", já somando todos os pratos
-    // diferentes que usam aquele ingrediente (chapa, espeto etc.), não
-    // só um produto isolado.
+    // Monta, pra cada prato (produtoChave) da loja, a lista de "fatores de
+    // consumo por StockItem" — quanto de CADA item de estoque é gasto
+    // toda vez que 1 unidade daquele prato é vendida, JÁ na unidade real
+    // do StockItem (kg, litro-equivalente ou contagem, sem precisar
+    // dividir por 1000 de novo depois).
+    //
+    // Duas origens por linha da ficha técnica, ambas cabendo no mesmo
+    // "fator":
+    //   - Linha direta (ProductRecipeItem.stockItemId): fator =
+    //     calcularQuantidade(stockItem.unidadeMedida, 1, gramas).
+    //   - Linha via Produção (ProductRecipeItem.productionItemId): o
+    //     prato consome X do ProductionItem (mesma conta acima, só que na
+    //     unidade do ProductionItem); esse X, por sua vez, consome
+    //     ProductionRecipeItem.quantidade de CADA StockItem componente
+    //     pra cada 1 unidade do ProductionItem produzida (baseQuantidade é
+    //     sempre 1 — ver ProductionTab). Então o fator final por StockItem
+    //     componente = X * ProductionRecipeItem.quantidade. É esse
+    //     "repasse" que resolve o pedido do usuário: um prato como "Chapa
+    //     de Picanha" que na ficha técnica só aponta pro pré-preparo
+    //     "Picanha 200g" ainda assim conta como consumo de Picanha crua no
+    //     Estoque, sem precisar de nenhum ingrediente separado.
+    //
+    // "gramasDireto" só vem preenchido pra linha direta — é usado pelas
+    // visões de "porção"/"tamanho" (ingredientsSummary, ShoppingList), que
+    // não fazem sentido pro repasse via Produção (lá não existe UM
+    // tamanho de porção único, pode ter vários componentes).
+    private async getStockItemRecipeExpansion(storeId: string) {
+        const recipeItems = await this.prisma.productRecipeItem.findMany({
+            where: { storeId },
+            select: {
+                produtoChave: true,
+                produto: true,
+                gramas: true,
+                stockItemId: true,
+                stockItem: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        unidadeMedida: true,
+                        pesoUnidadeGramas: true,
+                        isProteina: true,
+                        porcaoPadraoGramas: true,
+                        categoriaLista: true,
+                        ordemLista: true,
+                    },
+                },
+                productionItemId: true,
+                productionItem: {
+                    select: {
+                        id: true,
+                        unidadeMedida: true,
+                        recipeItems: {
+                            select: {
+                                quantidade: true,
+                                stockItem: {
+                                    select: {
+                                        id: true,
+                                        nome: true,
+                                        unidadeMedida: true,
+                                        pesoUnidadeGramas: true,
+                                        isProteina: true,
+                                        porcaoPadraoGramas: true,
+                                        categoriaLista: true,
+                                        ordemLista: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        type Info = {
+            nome: string;
+            unidadeMedida: IngredientUnidade;
+            pesoUnidadeGramas: number | null;
+            isProteina: boolean;
+            porcaoPadraoGramas: number | null;
+            categoriaLista: string | null;
+            ordemLista: number | null;
+        };
+
+        type Linha = {
+            stockItemId: string;
+            factorPorDish: number;
+            gramasDireto: number | null;
+        };
+
+        const porProdutoChave = new Map<string, Linha[]>();
+        const infoPorStockItem = new Map<string, Info>();
+
+        function adicionarLinha(produtoChave: string, linha: Linha) {
+            const lista = porProdutoChave.get(produtoChave) || [];
+            lista.push(linha);
+            porProdutoChave.set(produtoChave, lista);
+        }
+
+        for (const item of recipeItems) {
+            const gramas = Number(item.gramas);
+
+            if (item.stockItemId && item.stockItem) {
+                infoPorStockItem.set(item.stockItemId, {
+                    nome: item.stockItem.nome,
+                    unidadeMedida: item.stockItem.unidadeMedida,
+                    pesoUnidadeGramas: item.stockItem.pesoUnidadeGramas
+                        ? Number(item.stockItem.pesoUnidadeGramas)
+                        : null,
+                    isProteina: item.stockItem.isProteina,
+                    porcaoPadraoGramas: item.stockItem.porcaoPadraoGramas
+                        ? Number(item.stockItem.porcaoPadraoGramas)
+                        : null,
+                    categoriaLista: item.stockItem.categoriaLista,
+                    ordemLista: item.stockItem.ordemLista,
+                });
+
+                adicionarLinha(item.produtoChave, {
+                    stockItemId: item.stockItemId,
+                    factorPorDish: calcularQuantidade(
+                        item.stockItem.unidadeMedida,
+                        1,
+                        gramas,
+                    ),
+                    gramasDireto: gramas,
+                });
+                continue;
+            }
+
+            if (item.productionItemId && item.productionItem) {
+                const fatorProducao = calcularQuantidade(
+                    item.productionItem.unidadeMedida,
+                    1,
+                    gramas,
+                );
+
+                for (const componente of item.productionItem.recipeItems) {
+                    if (!componente.stockItem) continue;
+
+                    infoPorStockItem.set(componente.stockItem.id, {
+                        nome: componente.stockItem.nome,
+                        unidadeMedida: componente.stockItem.unidadeMedida,
+                        pesoUnidadeGramas: componente.stockItem.pesoUnidadeGramas
+                            ? Number(componente.stockItem.pesoUnidadeGramas)
+                            : null,
+                        isProteina: componente.stockItem.isProteina,
+                        porcaoPadraoGramas: componente.stockItem.porcaoPadraoGramas
+                            ? Number(componente.stockItem.porcaoPadraoGramas)
+                            : null,
+                        categoriaLista: componente.stockItem.categoriaLista,
+                        ordemLista: componente.stockItem.ordemLista,
+                    });
+
+                    adicionarLinha(item.produtoChave, {
+                        stockItemId: componente.stockItem.id,
+                        factorPorDish: fatorProducao * Number(componente.quantidade),
+                        gramasDireto: null,
+                    });
+                }
+            }
+        }
+
+        return { porProdutoChave, infoPorStockItem };
+    }
+
+    // Quanto de cada item de estoque foi consumido no período importado —
+    // soma, pra cada prato vendido que leva aquele item na ficha técnica
+    // (direto, ou via um pré-preparo da Produção), quantidadeVendida *
+    // fator (ver getStockItemRecipeExpansion). Isso é o que resolve
+    // "quantos contra filé eu vendi" ou "quantas coxinhas eu vendi", já
+    // somando todos os pratos diferentes que usam aquele item (chapa,
+    // espeto, e também pratos que usam um pré-preparo feito com ele).
     async ingredientsSummary(
         user: any,
         params: {
@@ -1112,26 +1324,12 @@ export class ProductSalesService {
         if (params.importId) where.importId = params.importId;
         if (params.categoria) where.categoria = params.categoria;
 
-        const [entries, recipeItems] = await Promise.all([
+        const [entries, expansion] = await Promise.all([
             this.prisma.productSalesEntry.findMany({
                 where,
                 select: { produto: true, produtoChave: true, quantidade: true },
             }),
-            this.prisma.productRecipeItem.findMany({
-                where: { storeId: params.storeId },
-                include: {
-                    ingredient: {
-                        select: {
-                            id: true,
-                            nome: true,
-                            unidadeMedida: true,
-                            pesoUnidadeGramas: true,
-                            isProteina: true,
-                            porcaoPadraoGramas: true,
-                        },
-                    },
-                },
-            }),
+            this.getStockItemRecipeExpansion(params.storeId),
         ]);
 
         const quantidadePorProduto = new Map<
@@ -1183,59 +1381,57 @@ export class ProductSalesService {
         // "gramas" já é contagem, não tamanho de porção).
         const porcoesPorIngrediente = new Map<string, Map<number, number>>();
 
-        for (const item of recipeItems) {
-            const vendido = quantidadePorProduto.get(item.produtoChave);
+        for (const [produtoChave, linhas] of expansion.porProdutoChave.entries()) {
+            const vendido = quantidadePorProduto.get(produtoChave);
 
             // Prato tem ficha técnica cadastrada mas não vendeu nada no
             // recorte atual (ou ainda nunca foi importado) — não entra na
             // conta, mas também não é erro.
             if (!vendido || vendido.quantidade <= 0) continue;
 
-            const gramas = Number(item.gramas);
+            for (const linhaConsumo of linhas) {
+                const info = expansion.infoPorStockItem.get(linhaConsumo.stockItemId);
+                if (!info) continue;
 
-            const quantidade = calcularQuantidade(
-                item.ingredient.unidadeMedida,
-                vendido.quantidade,
-                gramas,
-            );
+                const quantidade = linhaConsumo.factorPorDish * vendido.quantidade;
 
-            const linha = {
-                produto: item.produto,
-                quantidadeVendida: vendido.quantidade,
-                quantidade,
-            };
-
-            const atual = porIngrediente.get(item.ingredientId);
-
-            if (atual) {
-                atual.quantidade += quantidade;
-                atual.pratos.push(linha);
-            } else {
-                porIngrediente.set(item.ingredientId, {
-                    ingredienteId: item.ingredientId,
-                    ingrediente: item.ingredient.nome,
-                    unidadeMedida: item.ingredient.unidadeMedida,
-                    pesoUnidadeGramas: item.ingredient.pesoUnidadeGramas
-                        ? Number(item.ingredient.pesoUnidadeGramas)
-                        : null,
-                    isProteina: item.ingredient.isProteina,
-                    porcaoPadraoGramas: item.ingredient.porcaoPadraoGramas
-                        ? Number(item.ingredient.porcaoPadraoGramas)
-                        : null,
+                const linha = {
+                    produto: vendido.produto,
+                    quantidadeVendida: vendido.quantidade,
                     quantidade,
-                    pratos: [linha],
-                });
-            }
+                };
 
-            if (item.ingredient.unidadeMedida === 'KG') {
-                let porGramas = porcoesPorIngrediente.get(item.ingredientId);
+                const atual = porIngrediente.get(linhaConsumo.stockItemId);
 
-                if (!porGramas) {
-                    porGramas = new Map();
-                    porcoesPorIngrediente.set(item.ingredientId, porGramas);
+                if (atual) {
+                    atual.quantidade += quantidade;
+                    atual.pratos.push(linha);
+                } else {
+                    porIngrediente.set(linhaConsumo.stockItemId, {
+                        ingredienteId: linhaConsumo.stockItemId,
+                        ingrediente: info.nome,
+                        unidadeMedida: info.unidadeMedida,
+                        pesoUnidadeGramas: info.pesoUnidadeGramas,
+                        isProteina: info.isProteina,
+                        porcaoPadraoGramas: info.porcaoPadraoGramas,
+                        quantidade,
+                        pratos: [linha],
+                    });
                 }
 
-                porGramas.set(gramas, (porGramas.get(gramas) || 0) + vendido.quantidade);
+                if (info.unidadeMedida === 'KG' && linhaConsumo.gramasDireto != null) {
+                    let porGramas = porcoesPorIngrediente.get(linhaConsumo.stockItemId);
+
+                    if (!porGramas) {
+                        porGramas = new Map();
+                        porcoesPorIngrediente.set(linhaConsumo.stockItemId, porGramas);
+                    }
+
+                    porGramas.set(
+                        linhaConsumo.gramasDireto,
+                        (porGramas.get(linhaConsumo.gramasDireto) || 0) + vendido.quantidade,
+                    );
+                }
             }
         }
 
@@ -1380,13 +1576,36 @@ export class ProductSalesService {
             });
         }
 
+        // Ingrediente é opcional por linha — uma planilha pode ter só
+        // parte dos pratos preenchida (o resto fica pra depois, numa
+        // próxima importação ou editado direto na aba Ficha Técnica).
+        // Prato sem nenhum ingrediente reconhecido é simplesmente
+        // ignorado (não mexe na ficha técnica que já existir pra ele);
+        // só não deixa mais a importação inteira falhar quando isso
+        // acontece com todos os pratos da planilha de uma vez.
         if (pratos.length === 0) {
-            throw new BadRequestException(
-                'Não encontrei nenhuma linha válida a partir da linha 2 (coluna A = prato, colunas seguintes = "Ingrediente - Gramatura").',
-            );
+            return { totalPratos: 0, totalIngredientes: 0, naoEncontrados: [] };
         }
 
+        // Só vincula a um StockItem que JÁ EXISTE no Estoque desta loja —
+        // não cria mais nada por nome digitado (o Estoque é o catálogo
+        // real, com controle de saldo; criar um item novo só por causa de
+        // uma planilha de ficha técnica deixaria um item "fantasma" sem
+        // categoria/controle nenhum). Nome sem StockItem correspondente
+        // entra em "naoEncontrados" pro usuário cadastrar no Estoque
+        // primeiro e reimportar depois.
+        const stockItems = await this.prisma.stockItem.findMany({
+            where: { storeId, active: true },
+            select: { id: true, nomeChave: true },
+        });
+
+        const stockItemPorNomeChave = new Map(
+            stockItems.map((item) => [item.nomeChave, item.id]),
+        );
+
         await this.salvarBackupFichasTecnicas(storeId);
+
+        const naoEncontrados = new Set<string>();
 
         for (const prato of pratos) {
             await this.prisma.$transaction(async (tx) => {
@@ -1396,19 +1615,19 @@ export class ProductSalesService {
 
                 for (const item of prato.itens) {
                     const nomeChave = normalizarProduto(item.nome);
+                    const stockItemId = stockItemPorNomeChave.get(nomeChave);
 
-                    const ingredient = await tx.ingredient.upsert({
-                        where: { storeId_nomeChave: { storeId, nomeChave } },
-                        update: {},
-                        create: { storeId, nome: item.nome, nomeChave },
-                    });
+                    if (!stockItemId) {
+                        naoEncontrados.add(item.nome);
+                        continue;
+                    }
 
                     await tx.productRecipeItem.create({
                         data: {
                             storeId,
                             produtoChave: prato.produtoChave,
                             produto: prato.produto,
-                            ingredientId: ingredient.id,
+                            stockItemId,
                             gramas: item.gramas,
                         },
                     });
@@ -1419,6 +1638,9 @@ export class ProductSalesService {
         return {
             totalPratos: pratos.length,
             totalIngredientes: pratos.reduce((acc, p) => acc + p.itens.length, 0),
+            naoEncontrados: Array.from(naoEncontrados).sort((a, b) =>
+                a.localeCompare(b, 'pt-BR'),
+            ),
         };
     }
 
@@ -1426,15 +1648,19 @@ export class ProductSalesService {
     // loja e guarda como backup de 1 nível (sobrescreve o anterior) —
     // usado antes de rodar uma importação em massa, pra dar pra desfazer.
     private async salvarBackupFichasTecnicas(storeId: string) {
+        // Só as linhas de StockItem direto — as de Produção
+        // (productionItemId) não entram nesse backup/undo (a importação em
+        // massa por planilha nunca mexe nelas, só na ficha do modal item a
+        // item).
         const atuais = await this.prisma.productRecipeItem.findMany({
-            where: { storeId },
-            include: { ingredient: { select: { nome: true } } },
+            where: { storeId, stockItemId: { not: null } },
+            include: { stockItem: { select: { nome: true } } },
         });
 
         const snapshot = atuais.map((item) => ({
             produtoChave: item.produtoChave,
             produto: item.produto,
-            ingredienteNome: item.ingredient.nome,
+            ingredienteNome: item.stockItem!.nome,
             gramas: Number(item.gramas),
         }));
 
@@ -1481,33 +1707,52 @@ export class ProductSalesService {
             gramas: number;
         }[];
 
+        const stockItems = await this.prisma.stockItem.findMany({
+            where: { storeId, active: true },
+            select: { id: true, nomeChave: true },
+        });
+
+        const stockItemPorNomeChave = new Map(
+            stockItems.map((item) => [item.nomeChave, item.id]),
+        );
+
+        let restaurados = 0;
+        const naoEncontrados = new Set<string>();
+
         await this.prisma.$transaction(async (tx) => {
             await tx.productRecipeItem.deleteMany({ where: { storeId } });
 
             for (const item of snapshot) {
                 const nomeChave = normalizarProduto(item.ingredienteNome);
+                const stockItemId = stockItemPorNomeChave.get(nomeChave);
 
-                const ingredient = await tx.ingredient.upsert({
-                    where: { storeId_nomeChave: { storeId, nomeChave } },
-                    update: {},
-                    create: { storeId, nome: item.ingredienteNome, nomeChave },
-                });
+                if (!stockItemId) {
+                    naoEncontrados.add(item.ingredienteNome);
+                    continue;
+                }
 
                 await tx.productRecipeItem.create({
                     data: {
                         storeId,
                         produtoChave: item.produtoChave,
                         produto: item.produto,
-                        ingredientId: ingredient.id,
+                        stockItemId,
                         gramas: item.gramas,
                     },
                 });
+
+                restaurados += 1;
             }
 
             await tx.productRecipeImportBackup.delete({ where: { storeId } });
         });
 
-        return { restaurados: snapshot.length };
+        return {
+            restaurados,
+            naoEncontrados: Array.from(naoEncontrados).sort((a, b) =>
+                a.localeCompare(b, 'pt-BR'),
+            ),
+        };
     }
 
     // Apaga TODAS as fichas técnicas da loja de uma vez — pensado pra
@@ -1527,6 +1772,121 @@ export class ProductSalesService {
         return { removidos: resultado.count };
     }
 
+    // Acha a lista curada de pratos pelo nome da loja (tolera variação
+    // tipo "Loja Anchieta" — usa "includes" nos dois sentidos). Se não
+    // achar nenhuma loja conhecida, devolve vazio (só usa o que já tem
+    // venda importada).
+    private getListaCuradaPorLoja(nomeLoja: string): string[] {
+        const chaveLoja = normalizarProduto(nomeLoja);
+        if (!chaveLoja) return [];
+
+        const encontrada = LISTAS_CURADAS_POR_LOJA.find((lista) =>
+            chaveLoja.includes(lista.chave),
+        );
+
+        return encontrada?.itens || [];
+    }
+
+    // Nome de cada prato conhecido da loja: une o que já tem venda
+    // importada (produtoChave distinto em ProductSalesEntry) com a lista
+    // curada do cardápio dessa loja (ver recipe-template-dish-lists.ts) —
+    // sem isso, uma loja que ainda não importou vendas (ou importou
+    // pouco) ficava com o modelo/lista de fichas técnicas vazio ou
+    // incompleto, sem bater com o cardápio real dela. Usado tanto pelo
+    // "baixar modelo" (xlsx) quanto pela aba Ficha Técnica (lista na
+    // tela).
+    private async getNomesPratosDaLoja(storeId: string): Promise<string[]> {
+        const [store, entries] = await Promise.all([
+            this.prisma.store.findUnique({
+                where: { id: storeId },
+                select: { name: true },
+            }),
+            this.prisma.productSalesEntry.findMany({
+                where: {
+                    import: { storeId },
+                    ...filtroExcluirAnaliseWhere(),
+                },
+                select: { produto: true },
+                distinct: ['produtoChave'],
+            }),
+        ]);
+
+        const nomesImportados = entries.map((item) => item.produto);
+        const nomesCurados = this.getListaCuradaPorLoja(store?.name || '');
+
+        const vistos = new Set<string>();
+        const nomes: string[] = [];
+        for (const nome of [...nomesImportados, ...nomesCurados]) {
+            const chave = normalizarProduto(nome);
+            if (vistos.has(chave)) continue;
+            vistos.add(chave);
+            nomes.push(nome);
+        }
+        nomes.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+        return nomes;
+    }
+
+    // Lista completa de fichas técnicas da loja pra aba "Ficha Técnica":
+    // todo prato conhecido (importado ou do cardápio curado), com os
+    // ingredientes/itens de produção que já estiverem cadastrados nele —
+    // pra mostrar tudo numa tabela e editar linha a linha sem precisar
+    // abrir um modal por prato.
+    async getFichaTecnicaOverview(storeId: string, user: any) {
+        if (!storeId) {
+            throw new BadRequestException(
+                'Selecione uma loja ativa no topo do sistema.',
+            );
+        }
+
+        this.ensureStoreAccess(storeId, user);
+
+        const [nomes, recipeItems] = await Promise.all([
+            this.getNomesPratosDaLoja(storeId),
+            this.prisma.productRecipeItem.findMany({
+                where: { storeId },
+                include: {
+                    stockItem: { select: { nome: true } },
+                    productionItem: { select: { id: true, nome: true, unidadeMedida: true } },
+                },
+            }),
+        ]);
+
+        const itensPorProdutoChave = new Map<
+            string,
+            { tipo: 'estoque' | 'producao'; nome: string; gramas: number; productionItemId: string | null }[]
+        >();
+
+        for (const item of recipeItems) {
+            const linha = item.productionItemId
+                ? {
+                    tipo: 'producao' as const,
+                    nome: item.productionItem?.nome || '',
+                    gramas: Number(item.gramas),
+                    productionItemId: item.productionItemId,
+                }
+                : {
+                    tipo: 'estoque' as const,
+                    nome: item.stockItem?.nome || '',
+                    gramas: Number(item.gramas),
+                    productionItemId: null,
+                };
+
+            const lista = itensPorProdutoChave.get(item.produtoChave) || [];
+            lista.push(linha);
+            itensPorProdutoChave.set(item.produtoChave, lista);
+        }
+
+        return nomes.map((nome) => {
+            const produtoChave = normalizarProduto(nome);
+            return {
+                produto: nome,
+                produtoChave,
+                itens: itensPorProdutoChave.get(produtoChave) || [],
+            };
+        });
+    }
+
     // Gera a planilha modelo pra importação de fichas técnicas — coluna A
     // já vem preenchida com o nome de cada produto que já tem venda
     // importada nesta loja (mesma lista que aparece na aba Produtos),
@@ -1536,18 +1896,7 @@ export class ProductSalesService {
     async gerarModeloFichasTecnicas(storeId: string, user: any) {
         this.ensureStoreAccess(storeId, user);
 
-        const entries = await this.prisma.productSalesEntry.findMany({
-            where: {
-                import: { storeId },
-                ...filtroExcluirAnaliseWhere(),
-            },
-            select: { produto: true },
-            distinct: ['produtoChave'],
-        });
-
-        const nomes = Array.from(new Set(entries.map((item) => item.produto))).sort(
-            (a, b) => a.localeCompare(b, 'pt-BR'),
-        );
+        const nomes = await this.getNomesPratosDaLoja(storeId);
 
         const linhas: (string | null)[][] = [
             ['Prato', 'Ingrediente 1', 'Ingrediente 2', 'Ingrediente 3', 'Ingrediente 4'],
@@ -1565,6 +1914,47 @@ export class ProductSalesService {
 
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Fichas Tecnicas');
+
+        // Segunda aba só com instrução — a planilha some da aba "Fichas
+        // Tecnicas" (coluna A) já vem com o nome de cada prato, mas as
+        // colunas de ingrediente ficam vazias de propósito (é o usuário
+        // quem preenche). Se importar assim, sem preencher nada, a
+        // importação não cria nenhuma ficha (não tem "Ingrediente -
+        // Gramatura" em nenhuma célula) — essa aba existe pra deixar claro
+        // que isso é esperado, não um erro.
+        const instrucoes: (string | null)[][] = [
+            ['Como preencher esta planilha'],
+            [null],
+            [
+                'A aba "Fichas Tecnicas" já vem com o nome de cada prato na coluna A — não mexa nessa coluna.',
+            ],
+            [
+                'Preencha as colunas "Ingrediente 1" a "Ingrediente 4" (uma célula por ingrediente) no formato:',
+            ],
+            ['Nome do ingrediente - Gramatura'],
+            [null],
+            ['Exemplos:'],
+            ['Contra Filé - 400'],
+            ['Batata - 250'],
+            ['Molho da Casa - 50'],
+            [null],
+            [
+                'Prato que leva só 1 ingrediente: preenche só a coluna "Ingrediente 1" e deixa as outras em branco.',
+            ],
+            [
+                'Prato com mais de 4 ingredientes: use a primeira coluna livre pra um ingrediente combinado, ou cadastre os demais depois pelo botão "Configurar" na aba Produtos.',
+            ],
+            [
+                'Linha sem nenhum ingrediente preenchido: é ignorada na importação (nenhuma ficha é criada pra aquele prato) — não é erro, é só um prato que ainda não foi cadastrado.',
+            ],
+            [
+                'Depois de preencher, salve o arquivo e importe de volta em Produtos → Importar → "Importar planilha de fichas técnicas".',
+            ],
+        ];
+
+        const worksheetInstrucoes = XLSX.utils.aoa_to_sheet(instrucoes);
+        worksheetInstrucoes['!cols'] = [{ wch: 90 }];
+        XLSX.utils.book_append_sheet(workbook, worksheetInstrucoes, 'Como preencher');
 
         const buffer = XLSX.write(workbook, {
             type: 'buffer',
@@ -1714,7 +2104,7 @@ export class ProductSalesService {
 
         const importIds = periodosAlvo.map((p) => p.id);
 
-        const [entries, recipeItems] = await Promise.all([
+        const [entries, expansion] = await Promise.all([
             this.prisma.productSalesEntry.findMany({
                 where: {
                     importId: { in: importIds },
@@ -1728,34 +2118,38 @@ export class ProductSalesService {
                     quantidade: true,
                 },
             }),
-            // Lista de Compra só considera proteína (carne) OU ingrediente
-            // contado por UNIDADE (Pastel, Coxinha, Camafeu, Costelinha
-            // Suína...) — o resto (acompanhamento sem gramatura relevante
-            // tipo arroz, salada, molho) fica de fora da sugestão de
-            // compra, mesmo tendo ficha técnica cadastrada.
-            this.prisma.productRecipeItem.findMany({
-                where: {
-                    storeId,
-                    ingredient: {
-                        OR: [{ isProteina: true }, { unidadeMedida: 'UNIDADE' }],
-                    },
-                },
-                include: {
-                    ingredient: {
-                        select: {
-                            id: true,
-                            nome: true,
-                            unidadeMedida: true,
-                            pesoUnidadeGramas: true,
-                            isProteina: true,
-                            porcaoPadraoGramas: true,
-                            categoriaLista: true,
-                            ordemLista: true,
-                        },
-                    },
-                },
-            }),
+            this.getStockItemRecipeExpansion(storeId),
         ]);
+
+        // Lista de Compra só considera proteína (carne) OU item contado
+        // por UNIDADE (Pastel, Coxinha, Camafeu, Costelinha Suína...) — o
+        // resto (acompanhamento sem gramatura relevante tipo arroz,
+        // salada, molho) fica de fora da sugestão de compra, mesmo tendo
+        // ficha técnica cadastrada. Vale tanto pra linha direta quanto
+        // pra linha que chega via Produção (repasse) — o que importa é o
+        // StockItem final, não como ele foi consumido.
+        function stockItemQualifica(stockItemId: string): boolean {
+            const info = expansion.infoPorStockItem.get(stockItemId);
+            if (!info) return false;
+            return info.isProteina || info.unidadeMedida === 'UNIDADE';
+        }
+
+        // "recipeItems": uma linha por (produtoChave, StockItem) já
+        // filtrada pra só proteína/UNIDADE — achata o Map de expansão
+        // pra reaproveitar o resto do algoritmo (produtos/tamanhos/
+        // ingredientes) do mesmo jeito que antes.
+        const recipeItems = Array.from(expansion.porProdutoChave.entries())
+            .flatMap(([produtoChave, linhas]) =>
+                linhas
+                    .filter((linha) => stockItemQualifica(linha.stockItemId))
+                    .map((linha) => ({
+                        produtoChave,
+                        stockItemId: linha.stockItemId,
+                        factorPorDish: linha.factorPorDish,
+                        gramasDireto: linha.gramasDireto,
+                        stockItem: expansion.infoPorStockItem.get(linha.stockItemId)!,
+                    })),
+            );
 
         // Quantidade vendida por produto, separado por importação — pra
         // dar pra achar o pico DEPOIS de somar o consumo período a
@@ -1889,35 +2283,35 @@ export class ProductSalesService {
         >();
 
         for (const item of recipeItems) {
-            infoPorIngrediente.set(item.ingredientId, {
-                nome: item.ingredient.nome,
-                unidadeMedida: item.ingredient.unidadeMedida,
-                pesoUnidadeGramas: item.ingredient.pesoUnidadeGramas
-                    ? Number(item.ingredient.pesoUnidadeGramas)
-                    : null,
-                categoriaLista: item.ingredient.categoriaLista,
-                ordemLista: item.ingredient.ordemLista,
+            infoPorIngrediente.set(item.stockItemId, {
+                nome: item.stockItem.nome,
+                unidadeMedida: item.stockItem.unidadeMedida,
+                pesoUnidadeGramas: item.stockItem.pesoUnidadeGramas,
+                categoriaLista: item.stockItem.categoriaLista,
+                ordemLista: item.stockItem.ordemLista,
             });
 
-            const gramas = Number(item.gramas);
-            const porcaoPadrao = item.ingredient.porcaoPadraoGramas
-                ? Number(item.ingredient.porcaoPadraoGramas)
-                : null;
+            // "Tamanho" só faz sentido pra linha DIRETA (gramasDireto !=
+            // null) — o repasse via Produção não tem um único "tamanho de
+            // porção" (pode vir de vários componentes diferentes), então
+            // não entra nessa visão, só na soma geral (ingredientes).
+            const gramas = item.gramasDireto;
+            const porcaoPadrao = item.stockItem.porcaoPadraoGramas;
 
-            let gramasTamanho = gramas;
+            let gramasTamanho = gramas ?? 0;
             let multiplicadorTamanho = 1;
 
-            if (porcaoPadrao && porcaoPadrao > 0 && gramas >= porcaoPadrao) {
+            if (gramas != null && porcaoPadrao && porcaoPadrao > 0 && gramas >= porcaoPadrao) {
                 gramasTamanho = porcaoPadrao;
                 multiplicadorTamanho = Math.max(1, Math.round(gramas / porcaoPadrao));
             }
 
-            const chaveTamanho = `${item.ingredientId}|${gramasTamanho}`;
+            const chaveTamanho = `${item.stockItemId}|${gramasTamanho}`;
 
-            if (item.ingredient.unidadeMedida === 'KG') {
+            if (gramas != null && item.stockItem.unidadeMedida === 'KG') {
                 infoPorTamanho.set(chaveTamanho, {
-                    ingredienteId: item.ingredientId,
-                    ingrediente: item.ingredient.nome,
+                    ingredienteId: item.stockItemId,
+                    ingrediente: item.stockItem.nome,
                     gramas: gramasTamanho,
                 });
             }
@@ -1929,22 +2323,18 @@ export class ProductSalesService {
 
                 if (!vendido) continue;
 
-                const quantidade = calcularQuantidade(
-                    item.ingredient.unidadeMedida,
-                    vendido,
-                    gramas,
-                );
+                const quantidade = item.factorPorDish * vendido;
 
-                let porImport = quantidadePorIngredientePorImport.get(item.ingredientId);
+                let porImport = quantidadePorIngredientePorImport.get(item.stockItemId);
 
                 if (!porImport) {
                     porImport = new Map();
-                    quantidadePorIngredientePorImport.set(item.ingredientId, porImport);
+                    quantidadePorIngredientePorImport.set(item.stockItemId, porImport);
                 }
 
                 porImport.set(importId, (porImport.get(importId) || 0) + quantidade);
 
-                if (item.ingredient.unidadeMedida === 'KG') {
+                if (gramas != null && item.stockItem.unidadeMedida === 'KG') {
                     let porImportTamanho = quantidadePorTamanhoPorImport.get(chaveTamanho);
 
                     if (!porImportTamanho) {

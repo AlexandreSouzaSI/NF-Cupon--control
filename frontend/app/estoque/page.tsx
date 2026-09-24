@@ -100,7 +100,7 @@ function EstoquePageInner() {
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
                         Matéria-prima e produtos de revenda — entrada por NF aceita,
                         lançamento manual ou planilha; a baixa acontece sozinha a cada
-                        nova importação de vendas na aba Produtos (só pra itens
+                        nova importação de vendas na aba Venda/Lista (só pra itens
                         vinculados a um ingrediente da ficha técnica).
                     </p>
                 </div>

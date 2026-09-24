@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ElementType } from 'react';
 import { AppLayout } from '../../src/components/app-layout';
 import { api } from '@/lib/api';
-import { getUser } from '@/lib/auth';
+import { canDeleteForever, getUser } from '@/lib/auth';
 import { getActiveStore } from '@/lib/active-store';
 import {
     Calendar,
@@ -15,6 +15,7 @@ import {
     ChevronRight,
     ChevronUp,
     FileText,
+    Flame,
     Loader2,
     Pencil,
     RotateCcw,
@@ -229,6 +230,8 @@ function CadastroTab() {
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState({ name: '', defaultDailyValue: '' });
+    const podeExcluirDeVez = canDeleteForever(getUser());
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     async function load() {
         const store = getActiveStore();
@@ -334,6 +337,30 @@ function CadastroTab() {
             await load();
         } catch {
             toast.error('Erro ao remover freelancer.');
+        }
+    }
+
+    // Exclusão de verdade — só a conta dona do sistema (isAdminMaster) vê
+    // esse botão (AdminMasterGuard no backend).
+    async function handleRemoveDefinitivo(freelancer: Freelancer) {
+        const confirmed = confirm(
+            `Excluir "${freelancer.name}" definitivamente? Isso apaga o cadastro e o histórico de dias/pagamentos dele de vez, sem volta.`,
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setDeletingId(freelancer.id);
+            await api.delete(`/freelancers/${freelancer.id}/definitivo`);
+            toast.success('Freelancer excluído definitivamente.');
+            await load();
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data?.message ||
+                'Erro ao excluir freelancer.',
+            );
+        } finally {
+            setDeletingId(null);
         }
     }
 
@@ -471,6 +498,23 @@ function CadastroTab() {
                                     >
                                         <Trash2 size={16} />
                                     </button>
+
+                                    {podeExcluirDeVez && (
+                                        <button
+                                            onClick={() =>
+                                                handleRemoveDefinitivo(
+                                                    freelancer,
+                                                )
+                                            }
+                                            disabled={
+                                                deletingId === freelancer.id
+                                            }
+                                            title="Excluir definitivamente (Admin Master)"
+                                            className="rounded-xl border border-red-700/40 bg-red-700/10 p-2 text-red-700 hover:bg-red-700/20 disabled:opacity-50 dark:text-red-500"
+                                        >
+                                            <Flame size={16} />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}

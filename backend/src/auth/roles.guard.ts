@@ -39,6 +39,14 @@ export class RolesGuard implements CanActivate {
             return true;
         }
 
+        // Admin Master (dono do sistema) passa por qualquer @Roles, mesmo
+        // quando o role dele (ex: Proprietário) não está na lista exigida
+        // — é o mesmo "acesso total independente do role" já documentado
+        // em AuthUser.isAdminMaster (lib/auth.ts no frontend).
+        if (user.isAdminMaster) {
+            return true;
+        }
+
         if (!requiredRoles.includes(user.role)) {
             throw new ForbiddenException('Você não tem permissão para acessar este recurso.');
         }

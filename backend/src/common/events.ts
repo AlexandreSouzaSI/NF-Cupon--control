@@ -71,3 +71,40 @@ export type ProductSalesImportedEvent = {
     storeId: string;
     productSalesImportId: string;
 };
+
+// Disparado uma vez por fornecedor convidado, sempre que uma Quotation é
+// enviada (Fase 3 do fluxo de Cotação). QuotationsService não sabe nada
+// sobre WhatsApp — só monta o link único (QuotationSupplier.token) e
+// dispara esse evento; quem estiver ouvindo decide o texto e manda (hoje:
+// só WhatsappService, se o fornecedor tiver telefone).
+export const QUOTATION_SUPPLIER_INVITED_EVENT = 'quotation.supplier.invited';
+
+export type QuotationSupplierInvitedEvent = {
+    userId: string; // quem disparou o envio (Quotation.createdById), pra auditoria
+    phone: string;
+    quotationSupplierId: string;
+    supplierName: string;
+    categoryName: string;
+    storeName: string;
+    link: string;
+    itemsCount: number;
+};
+
+// Disparado quando o comprador pede a confirmação do pedido pro
+// fornecedor vencedor (Fase 6 do fluxo de Cotação) — depois que ele já
+// escolheu quem ganhou (Fase 5). Mesmo espírito do evento acima:
+// QuotationsService só monta o link (QuotationSupplier.confirmToken) e
+// dispara, quem estiver ouvindo decide o texto e manda.
+export const QUOTATION_ORDER_CONFIRM_REQUESTED_EVENT =
+    'quotation.order-confirm.requested';
+
+export type QuotationOrderConfirmRequestedEvent = {
+    userId: string;
+    phone: string;
+    quotationSupplierId: string;
+    supplierName: string;
+    categoryName: string;
+    storeName: string;
+    link: string;
+    total: number;
+};

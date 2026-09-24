@@ -4,20 +4,22 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { getUser, type UserRole } from '@/lib/auth';
-import { Upload, Package, Scale, LayoutDashboard, ShoppingCart } from 'lucide-react';
+import { Upload, Package, LayoutDashboard, ShoppingCart, Factory, ChefHat } from 'lucide-react';
 
 import { ImportProductSalesTab } from '../../src/components/product-sales/ImportProductSalesTab';
 import { ProductsTab } from '../../src/components/product-sales/ProductsTab';
-import { IngredientsTab } from '../../src/components/product-sales/IngredientsTab';
 import { DashboardTab } from '../../src/components/product-sales/DashboardTab';
 import { ShoppingListTab } from '../../src/components/product-sales/ShoppingListTab';
 import { PeriodFilter } from '../../src/components/product-sales/PeriodFilter';
+import { ProductionTab } from '../../src/components/product-sales/ProductionTab';
+import { FichaTecnicaTab } from '../../src/components/product-sales/FichaTecnicaTab';
 
 type TabKey =
     | 'dashboard'
     | 'importar'
     | 'produtos'
-    | 'ingredientes'
+    | 'fichas-tecnicas'
+    | 'producao'
     | 'compras';
 
 const tabs: {
@@ -39,9 +41,15 @@ const tabs: {
             roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR', 'FINANCEIRO'],
         },
         {
-            key: 'ingredientes',
-            label: 'Ingredientes',
-            icon: Scale,
+            key: 'fichas-tecnicas',
+            label: 'Ficha Técnica',
+            icon: ChefHat,
+            roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR', 'FINANCEIRO'],
+        },
+        {
+            key: 'producao',
+            label: 'Produção',
+            icon: Factory,
             roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR', 'FINANCEIRO'],
         },
         {
@@ -96,8 +104,7 @@ function ProductsPageInner() {
 
     const mostrarFiltroPeriodo =
         activeTab === 'dashboard' ||
-        activeTab === 'produtos' ||
-        activeTab === 'ingredientes';
+        activeTab === 'produtos';
 
     useEffect(() => {
         router.replace(`/products?tab=${activeTab}`);
@@ -105,10 +112,10 @@ function ProductsPageInner() {
     }, [activeTab]);
 
     return (
-        <AppLayout title="Produtos">
+        <AppLayout title="Venda/Lista">
             <div className="space-y-5">
                 <div>
-                    <h2 className="text-2xl font-bold">Produtos</h2>
+                    <h2 className="text-2xl font-bold">Venda/Lista</h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
                         Importe a planilha de vendas do PDV e acompanhe
                         quantidade vendida e faturamento por produto.
@@ -152,9 +159,10 @@ function ProductsPageInner() {
                 {activeTab === 'produtos' && (
                     <ProductsTab refreshKey={refreshKey} importId={importId} />
                 )}
-                {activeTab === 'ingredientes' && (
-                    <IngredientsTab refreshKey={refreshKey} importId={importId} />
+                {activeTab === 'fichas-tecnicas' && (
+                    <FichaTecnicaTab refreshKey={refreshKey} />
                 )}
+                {activeTab === 'producao' && <ProductionTab refreshKey={refreshKey} />}
                 {activeTab === 'compras' && <ShoppingListTab />}
                 {activeTab === 'importar' && (
                     <ImportProductSalesTab

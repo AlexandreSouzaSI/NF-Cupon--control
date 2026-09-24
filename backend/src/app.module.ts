@@ -33,6 +33,8 @@ import { ProductSalesModule } from './product-sales/product-sales.module';
 import { EstoqueModule } from './estoque/estoque.module';
 import { FinancialDashboardModule } from './financial-dashboard/financial-dashboard.module';
 import { FiscalDashboardModule } from './fiscal-dashboard/fiscal-dashboard.module';
+import { QuotationsModule } from './quotations/quotations.module';
+import { ProductionModule } from './production/production.module';
 
 @Module({
   imports: [
@@ -69,7 +71,9 @@ import { FiscalDashboardModule } from './fiscal-dashboard/fiscal-dashboard.modul
     ProductSalesModule,
     EstoqueModule,
     FinancialDashboardModule,
-    FiscalDashboardModule
+    FiscalDashboardModule,
+    QuotationsModule,
+    ProductionModule
   ],
   controllers: [AppController],
   providers: [AppService],

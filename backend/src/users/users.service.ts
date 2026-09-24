@@ -394,4 +394,37 @@ export class UsersService {
             },
         });
     }
+
+    // Exclusão de verdade — restrita ao dono do sistema (AdminMasterGuard
+    // no controller). Nunca apaga a própria conta nem outra conta
+    // isAdminMaster, pra não travar o acesso ao sistema.
+    async removeDefinitivo(id: string, actingUser: any) {
+        const existing = await this.findById(id);
+
+        if (existing.id === actingUser?.id) {
+            throw new ConflictException(
+                'Você não pode excluir a própria conta.',
+            );
+        }
+
+        if (existing.isAdminMaster) {
+            throw new ConflictException(
+                'Não é possível excluir outra conta de Admin Master.',
+            );
+        }
+
+        try {
+            await this.prisma.userStore.deleteMany({ where: { userId: id } });
+            await this.prisma.user.delete({ where: { id } });
+        } catch (error: any) {
+            if (error?.code === 'P2003') {
+                throw new ConflictException(
+                    'Esse usuário tem registros vinculados (compras, tarefas, etc.) que impedem a exclusão definitiva.',
+                );
+            }
+            throw error;
+        }
+
+        return { ok: true };
+    }
 }

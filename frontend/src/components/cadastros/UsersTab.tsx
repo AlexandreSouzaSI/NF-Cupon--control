@@ -2,9 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
-import { Pencil, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
+import { Flame, Pencil, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
 import { toast } from 'sonner';
-import { canAssignRole, canGrantApprovalPermission, getUser } from '@/lib/auth';
+import {
+    canAssignRole,
+    canDeleteForever,
+    canGrantApprovalPermission,
+    getUser,
+} from '@/lib/auth';
 
 type Store = {
     id: string;
@@ -120,6 +125,8 @@ export function UsersTab() {
     // Proprietário) pode conceder essa permissão extra pra outro usuário —
     // ver ensureCanGrantApprovalPermission no backend (users.service.ts).
     const canEditApprovalPermission = canGrantApprovalPermission(loggedUser);
+    const podeExcluirDeVez = canDeleteForever(loggedUser);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     // Some da lista de opções quando: (a) é um perfil legado fora de foco
     // (hidden) e não é o perfil já selecionado, ou (b) o usuário logado não
@@ -308,6 +315,31 @@ export function UsersTab() {
             await loadData();
         } catch {
             toast.error('Erro ao desativar usuário.');
+        }
+    }
+
+    // Exclusão de verdade — só a conta dona do sistema (isAdminMaster) vê
+    // esse botão. O backend recusa excluir a própria conta ou outra conta
+    // Admin Master (AdminMasterGuard + regra em users.service.ts).
+    async function handleRemoveDefinitivo(user: User) {
+        const confirmed = confirm(
+            `Excluir "${user.name}" definitivamente? Isso apaga o cadastro de vez, sem volta (diferente de desativar).`,
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setDeletingId(user.id);
+            await api.delete(`/users/${user.id}/definitivo`);
+            toast.success('Usuário excluído definitivamente.');
+            await loadData();
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data?.message ||
+                'Erro ao excluir usuário.',
+            );
+        } finally {
+            setDeletingId(null);
         }
     }
 
@@ -611,6 +643,24 @@ export function UsersTab() {
                                         >
                                             <UserX size={16} />
                                         </button>
+
+                                        {podeExcluirDeVez &&
+                                            user.id !== loggedUser?.id && (
+                                                <button
+                                                    onClick={() =>
+                                                        handleRemoveDefinitivo(
+                                                            user,
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        deletingId === user.id
+                                                    }
+                                                    title="Excluir definitivamente (Admin Master)"
+                                                    className="rounded-xl border border-red-700/40 bg-red-700/10 p-2 text-red-700 hover:bg-red-700/20 disabled:opacity-50 dark:text-red-500"
+                                                >
+                                                    <Flame size={16} />
+                                                </button>
+                                            )}
                                     </div>
                                 </div>
                             </div>

@@ -13,6 +13,7 @@ import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { AdminMasterGuard } from '../auth/admin-master.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -51,5 +52,12 @@ export class UsersController {
     @Delete(':id')
     async remove(@Param('id') id: string, @CurrentUser() user: any) {
         return this.usersService.remove(id, user);
+    }
+
+    // Exclusão de verdade — restrita ao dono do sistema (isAdminMaster).
+    @Delete(':id/definitivo')
+    @UseGuards(AdminMasterGuard)
+    async removeDefinitivo(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.usersService.removeDefinitivo(id, user);
     }
 }

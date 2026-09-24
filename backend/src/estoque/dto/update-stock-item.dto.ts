@@ -8,16 +8,15 @@ export class UpdateStockItemDto {
 
     @IsOptional()
     @IsString()
+    descricao?: string;
+
+    @IsOptional()
+    @IsString()
     categoria?: string;
 
     @IsOptional()
-    @IsIn(['KG', 'UNIDADE'])
-    unidadeMedida?: 'KG' | 'UNIDADE';
-
-    // Passar string vazia solta o vínculo (fica sem Ingredient).
-    @IsOptional()
-    @IsString()
-    ingredientId?: string;
+    @IsIn(['KG', 'LITRO', 'UNIDADE'])
+    unidadeMedida?: 'KG' | 'LITRO' | 'UNIDADE';
 
     @IsOptional()
     @IsBoolean()
@@ -30,4 +29,12 @@ export class UpdateStockItemDto {
     @IsNumber()
     @Min(0)
     estoqueMinimo?: number;
+
+    // Estoque máximo — nível alvo pra sugestão de compra. Passar 0 zera
+    // (sugestão volta a mirar só o mínimo).
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0)
+    estoqueMaximo?: number;
 }

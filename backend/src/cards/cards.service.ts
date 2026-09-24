@@ -1,4 +1,5 @@
 import {
+    ConflictException,
     ForbiddenException,
     Injectable,
     NotFoundException,
@@ -94,5 +95,28 @@ export class CardsService {
                 active: false,
             },
         });
+    }
+
+    // Exclusão de verdade — restrita ao dono do sistema (AdminMasterGuard
+    // no controller).
+    async removeDefinitivo(id: string) {
+        const card = await this.prisma.card.findUnique({ where: { id } });
+
+        if (!card) {
+            throw new NotFoundException('Cartão não encontrado');
+        }
+
+        try {
+            await this.prisma.card.delete({ where: { id } });
+        } catch (error: any) {
+            if (error?.code === 'P2003') {
+                throw new ConflictException(
+                    'Esse cartão já tem compras vinculadas — não dá pra excluir de vez.',
+                );
+            }
+            throw error;
+        }
+
+        return { ok: true };
     }
 }

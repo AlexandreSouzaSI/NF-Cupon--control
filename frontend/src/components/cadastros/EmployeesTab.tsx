@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import {
+    Flame,
     Pencil,
     Plus,
     Trash2,
     Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { canDeleteForever, getUser } from '@/lib/auth';
 
 type Employee = {
     id: string;
@@ -91,6 +93,8 @@ export function EmployeesTab() {
     );
 
     const [form, setForm] = useState(emptyForm);
+    const podeExcluirDeVez = canDeleteForever(getUser());
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     async function loadEmployees() {
         try {
@@ -243,6 +247,30 @@ export function EmployeesTab() {
             await loadEmployees();
         } catch {
             toast.error('Erro ao desativar funcionário.');
+        }
+    }
+
+    // Exclusão de verdade — só a conta dona do sistema (isAdminMaster) vê
+    // esse botão. O backend recusa qualquer outra conta (AdminMasterGuard).
+    async function handleRemoveDefinitivo(employee: Employee) {
+        const confirmed = confirm(
+            `Excluir "${employee.name}" definitivamente? Isso apaga o cadastro e o histórico de pagamentos dele de vez, sem volta.`,
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setDeletingId(employee.id);
+            await api.delete(`/employees/${employee.id}/definitivo`);
+            toast.success('Funcionário excluído definitivamente.');
+            await loadEmployees();
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data?.message ||
+                'Erro ao excluir funcionário.',
+            );
+        } finally {
+            setDeletingId(null);
         }
     }
 
@@ -813,6 +841,24 @@ export function EmployeesTab() {
                                                 >
                                                     <Trash2 size={14} />
                                                 </button>
+
+                                                {podeExcluirDeVez && (
+                                                    <button
+                                                        onClick={() =>
+                                                            handleRemoveDefinitivo(
+                                                                employee,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            deletingId ===
+                                                            employee.id
+                                                        }
+                                                        title="Excluir definitivamente (Admin Master)"
+                                                        className="rounded-xl border border-red-700/40 bg-red-700/10 p-2 text-red-700 hover:bg-red-700/20 disabled:opacity-50 dark:text-red-500"
+                                                    >
+                                                        <Flame size={14} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

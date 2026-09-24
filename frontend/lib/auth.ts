@@ -124,6 +124,25 @@ export function canManagePaymentBatch(user: AuthUser | null) {
     return ['ADMINISTRATIVO', 'PROPRIETARIO'].includes(user.role);
 }
 
+// Exclusão definitiva (de verdade, não "desativar") em qualquer cadastro
+// do sistema — Fornecedores, Colaboradores, Lojas, Usuários, Cartões,
+// Freelancers, categorias — restrita só à conta dona do sistema. Espelha
+// AdminMasterGuard no backend.
+export function canDeleteForever(user: AuthUser | null) {
+    return Boolean(user?.isAdminMaster);
+}
+
+// Editar cadastro de Fornecedor (nome/CNPJ/telefone) — Administrativo e
+// Proprietário, além do Admin Master. Espelha o que o backend já aceita em
+// PUT /suppliers/:id (sem restrição de role lá, então o controle é só
+// aqui na UI).
+export function canEditSupplier(user: AuthUser | null) {
+    if (!user) return false;
+    if (user.isAdminMaster) return true;
+
+    return ['ADMINISTRATIVO', 'PROPRIETARIO'].includes(user.role);
+}
+
 export function getToken() {
     return Cookies.get('token');
 }

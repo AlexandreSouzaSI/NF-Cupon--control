@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { AlertTriangle, ShoppingCart } from 'lucide-react';
 
-type UnidadeMedida = 'KG' | 'UNIDADE';
+type UnidadeMedida = 'KG' | 'LITRO' | 'UNIDADE';
 
 type ItemListaCompra = {
     id: string;
@@ -20,7 +20,9 @@ type ItemListaCompra = {
 
 function formatQtd(valor: number, unidade: UnidadeMedida) {
     const numero = valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
-    return unidade === 'KG' ? `${numero} kg` : `${numero} un`;
+    if (unidade === 'KG') return `${numero} kg`;
+    if (unidade === 'LITRO') return `${numero} L`;
+    return `${numero} un`;
 }
 
 function formatMoeda(valor: number | null) {

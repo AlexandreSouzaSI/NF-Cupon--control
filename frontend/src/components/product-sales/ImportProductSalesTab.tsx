@@ -38,6 +38,7 @@ type ProductSalesImport = {
 type ResultadoImportacaoReceitas = {
     totalPratos: number;
     totalIngredientes: number;
+    naoEncontrados?: string[];
 };
 
 const PAGE_SIZE = 10;
@@ -74,6 +75,10 @@ export function ImportProductSalesTab({
     const [importandoReceitas, setImportandoReceitas] = useState(false);
     const [resultadoReceitas, setResultadoReceitas] =
         useState<ResultadoImportacaoReceitas | null>(null);
+    // Nomes da planilha (import) ou do backup restaurado (undo) que não
+    // bateram com nenhum StockItem já cadastrado — precisam ser criados
+    // em Cadastros > Estoque antes de reimportar/reconferir.
+    const [naoEncontradosReceitas, setNaoEncontradosReceitas] = useState<string[]>([]);
     const [desfazendoReceitas, setDesfazendoReceitas] = useState(false);
     const [undoDisponivel, setUndoDisponivel] = useState(false);
     const [baixandoModelo, setBaixandoModelo] = useState(false);
@@ -346,6 +351,7 @@ export function ImportProductSalesTab({
 
             const resultado = response.data as ResultadoImportacaoReceitas;
             setResultadoReceitas(resultado);
+            setNaoEncontradosReceitas(resultado.naoEncontrados || []);
             setUndoDisponivel(true);
 
             toast.success(
@@ -440,6 +446,7 @@ export function ImportProductSalesTab({
                 `${response.data?.removidos ?? 0} linha(s) de ficha técnica apagada(s).`,
             );
             setResultadoReceitas(null);
+            setNaoEncontradosReceitas([]);
             setUndoDisponivel(true);
             onImported?.();
         } catch (error: any) {
@@ -474,6 +481,7 @@ export function ImportProductSalesTab({
                 `Fichas técnicas restauradas (${response.data?.restaurados ?? 0} linha(s)).`,
             );
             setResultadoReceitas(null);
+            setNaoEncontradosReceitas(response.data?.naoEncontrados || []);
             setUndoDisponivel(false);
             onImported?.();
         } catch (error: any) {
@@ -677,6 +685,21 @@ export function ImportProductSalesTab({
                         {resultadoReceitas.totalPratos} prato(s) atualizado(s) ·{' '}
                         {resultadoReceitas.totalIngredientes} ingrediente(s) no
                         total.
+                    </div>
+                )}
+
+                {naoEncontradosReceitas.length > 0 && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                        <p className="font-semibold">
+                            {naoEncontradosReceitas.length} nome(s) não encontrados no
+                            Estoque — cadastre-os em Cadastros → Estoque → Itens antes de
+                            reimportar (essas linhas não entraram na ficha técnica):
+                        </p>
+                        <ul className="mt-1.5 list-inside list-disc space-y-0.5">
+                            {naoEncontradosReceitas.map((nome) => (
+                                <li key={nome}>{nome}</li>
+                            ))}
+                        </ul>
                     </div>
                 )}
             </div>

@@ -317,6 +317,7 @@ model User {
 
   bankStatementImports       BankStatementImport[]
   paymentBatchConfigsUpdated PaymentBatchConfig[]
+  quotationsCreated          Quotation[]           @relation("QuotationCreatedBy")
 
   taxRegimeConfigsCreated  TaxRegimeConfig[] @relation("TaxRegimeConfigCreatedBy")
   revenueEntriesCreated    RevenueEntry[]    @relation("RevenueEntryCreatedBy")
@@ -336,7 +337,8 @@ model User {
 
   productSalesImportsImported ProductSalesImport[] @relation("ProductSalesImportImportedBy")
 
-  stockMovementsCreated StockMovement[] @relation("StockMovementCreatedBy")
+  stockMovementsCreated      StockMovement[]      @relation("StockMovementCreatedBy")
+  productionMovementsCreated ProductionMovement[] @relation("ProductionMovementCreatedBy")
 
   pushSubscriptions PushSubscription[]
   whatsappMessages  WhatsappOutboundMessage[]
@@ -437,15 +439,21 @@ model Store {
   // Proprietário/Administrativo da própria loja não vê nem muda. Lojas
   // novas nascem com tudo ligado (default abaixo) — é uma lista negativa
   // na prática: você desliga só o que aquele cliente não contratou.
-  enabledModules StoreModule[] @default([COMPRAS, NOTAS_FISCAIS, SERVICOS, TRIBUTOS, PERDAS, CONTAS_A_PAGAR, TAREFAS, RELATORIOS, FUNCIONARIOS, FREELANCERS, PRODUTOS, ESTOQUE])
+  enabledModules StoreModule[] @default([COMPRAS, NOTAS_FISCAIS, SERVICOS, TRIBUTOS, PERDAS, CONTAS_A_PAGAR, TAREFAS, RELATORIOS, FUNCIONARIOS, FREELANCERS, PRODUTOS, ESTOQUE, COTACAO])
 
   productSalesImports       ProductSalesImport[]
-  ingredients               Ingredient[]
   productRecipeItems        ProductRecipeItem[]
   recipeImportBackup        ProductRecipeImportBackup?
   stockItems                StockItem[]
   stockMovements            StockMovement[]
   stockSupplierItemMappings StockSupplierItemMapping[]
+  productionItems           ProductionItem[]
+  productionMovements       ProductionMovement[]
+
+  quotationScheduleEntries QuotationScheduleEntry[]
+  quotations               Quotation[]
+  supplierStores           SupplierStore[]
+  quotationCategoryItems   QuotationCategoryItem[]
 }
 
 // Módulos que podem ser ligados/desligados por loja (painel restrito ao
@@ -466,6 +474,7 @@ enum StoreModule {
   FREELANCERS
   PRODUTOS
   ESTOQUE
+  COTACAO
 }
 
 model UserStore {
@@ -491,6 +500,260 @@ model Supplier {
 
   purchases Purchase[]
   bills     Bill[]
+
+  categories         SupplierCategoryLink[]
+  quotationSuppliers QuotationSupplier[]
+  quotationsWon      Quotation[]            @relation("QuotationSelectedSupplier")
+
+  // Lojas que esse fornecedor atende — opcional. Lista vazia (nenhuma
+  // linha aqui) significa "atende todas as lojas" (comportamento padrão
+  // de sempre, já que Supplier nunca foi por loja). Só passa a valer a
+  // pena restringir quando o fornecedor é específico de um bar (ex: um
+  // fornecedor de bebida que só entrega na Contagem) — usado pela
+  // Cotação pra não convidar fornecedor errado pra loja errada.
+  stores SupplierStore[]
+}
+
+model SupplierStore {
+  id String @id @default(uuid())
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, storeId])
+  @@index([storeId])
+}
+
+// Categoria de fornecedor pra Cotação (ex: "Cervejas", "Carnes Bovinas",
+// "Estoque seco") — cadastrável (Cadastros → Fornecedores), não é enum
+// fixo. Um fornecedor pode ter várias categorias (ex: um distribuidor que
+// vende cerveja E refrigerante). É o que decide pra quem cada lista de
+// cotação é mandada.
+model SupplierCategory {
+  id             String @id @default(uuid())
+  name           String
+  nameNormalized String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  suppliers       SupplierCategoryLink[]
+  scheduleEntries QuotationScheduleEntry[]
+  quotations      Quotation[]
+  listItems       QuotationCategoryItem[]
+}
+
+// Lista curada de itens de uma categoria de cotação — o que decide o
+// que entra na "lista sugerida" da tela de Cotação. Existe por loja
+// (mesmo item de Estoque de lojas diferentes é um StockItem diferente).
+// Substitui a tentativa inicial de casar por nome (StockItem.categoria
+// == SupplierCategory.name): o usuário monta a lista manualmente,
+// escolhendo os itens do Estoque (ou digitando um item avulso que nem
+// está no Estoque).
+model QuotationCategoryItem {
+  id String @id @default(uuid())
+
+  categoryId String
+  category   SupplierCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  // Vínculo com o Estoque — opcional. Quando preenchido, a lista usa a
+  // quantidade atual/mínima/máxima ao vivo do StockItem (a não ser que
+  // quantidadeSugeridaOverride esteja setado). Quando null, é um item
+  // avulso (não cadastrado no Estoque) e descricaoManual/
+  // unidadeMedidaManual/quantidadeSugeridaOverride passam a ser
+  // obrigatórios.
+  stockItemId String?
+  stockItem   StockItem? @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  descricaoManual     String?
+  unidadeMedidaManual IngredientUnidade?
+
+  // Ajuste manual da quantidade sugerida — sobrepõe o cálculo
+  // automático (máximo - atual) do StockItem vinculado, ou é a única
+  // fonte de quantidade quando o item é avulso.
+  quantidadeSugeridaOverride Decimal? @db.Decimal(12, 3)
+
+  ordem Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([categoryId, stockItemId])
+  @@index([categoryId])
+  @@index([storeId])
+}
+
+model SupplierCategoryLink {
+  id String @id @default(uuid())
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   SupplierCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, categoryId])
+  @@index([categoryId])
+}
+
+// Agenda fixa de cotação: em qual dia da semana cada categoria costuma
+// ser cotada (ex: Segunda = Estoque seco + Cervejas + Carnes Bovinas).
+// diaSemana segue o padrão do JS Date.getDay() — 0 = domingo ... 6 =
+// sábado. É só uma sugestão padrão: a tela de Cotação usa isso pra já
+// abrir com as categorias certas no dia certo, mas o usuário pode gerar
+// a cotação de qualquer categoria em qualquer dia se quiser.
+model QuotationScheduleEntry {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  diaSemana Int
+
+  categoryId String
+  category   SupplierCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([storeId, diaSemana, categoryId])
+  @@index([storeId])
+}
+
+enum QuotationStatus {
+  DRAFT // montada mas ainda não enviada pros fornecedores
+  SENT // link mandado, esperando os fornecedores responderem
+  SUPPLIER_SELECTED // usuário já escolheu o fornecedor vencedor, esperando ele confirmar
+  ORDER_CONFIRMED // fornecedor confirmou (clicou OK) — Purchase já foi gerada
+  CANCELED
+}
+
+// Uma rodada de cotação: uma categoria, uma lista de itens sugeridos, N
+// fornecedores convidados a mandar preço. Quando o usuário escolhe um
+// vencedor e ele confirma, vira uma Purchase automaticamente (ver
+// purchaseId).
+model Quotation {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   SupplierCategory @relation(fields: [categoryId], references: [id])
+
+  status QuotationStatus @default(DRAFT)
+
+  createdById String
+  createdBy   User   @relation("QuotationCreatedBy", fields: [createdById], references: [id])
+
+  sentAt DateTime?
+
+  selectedSupplierId String?
+  selectedSupplier   Supplier? @relation("QuotationSelectedSupplier", fields: [selectedSupplierId], references: [id])
+  selectedAt         DateTime?
+
+  orderConfirmedAt DateTime?
+
+  // Preenchido quando o fornecedor confirma o pedido — é aí que a
+  // Purchase (Fluxo 2: sem NF ainda, item a item na nota textual) é
+  // criada automaticamente, pronta pra aparecer no recebimento.
+  purchaseId String?   @unique
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     QuotationItem[]
+  suppliers QuotationSupplier[]
+
+  @@index([storeId])
+  @@index([categoryId])
+}
+
+// Um item da lista de cotação, com a quantidade em estoque/mínima/máxima
+// "fotografadas" no momento em que a cotação foi montada (se o Estoque
+// mudar depois, a cotação não muda retroativamente). stockItemId é
+// opcional — dá pra cotar algo que ainda não está cadastrado no Estoque,
+// só descrevendo o item na hora.
+model QuotationItem {
+  id String @id @default(uuid())
+
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  stockItemId String?
+  stockItem   StockItem? @relation(fields: [stockItemId], references: [id])
+
+  descricao     String
+  unidadeMedida IngredientUnidade @default(KG)
+
+  quantidadeAtual    Decimal? @db.Decimal(12, 3)
+  quantidadeMinima   Decimal? @db.Decimal(12, 3)
+  quantidadeMaxima   Decimal? @db.Decimal(12, 3)
+  quantidadeSugerida Decimal  @db.Decimal(12, 3)
+
+  createdAt DateTime @default(now())
+
+  prices QuotationSupplierPrice[]
+
+  @@index([quotationId])
+}
+
+// Um fornecedor convidado pra uma cotação — o link público que ele
+// recebe é autenticado só pelo token (sem login). confirmToken só é
+// gerado quando esse fornecedor especificamente é escolhido como
+// vencedor (segunda rodada: "aqui está o pedido fechado, confirma?").
+model QuotationSupplier {
+  id String @id @default(uuid())
+
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  token String @unique
+
+  sentAt      DateTime?
+  respondedAt DateTime?
+  declinedAt  DateTime?
+
+  confirmToken  String?   @unique
+  confirmSentAt DateTime?
+  confirmedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  prices           QuotationSupplierPrice[]
+  whatsappMessages WhatsappOutboundMessage[]
+
+  @@unique([quotationId, supplierId])
+  @@index([quotationId])
+  @@index([supplierId])
+}
+
+// Preço que um fornecedor deu pra um item específico da cotação.
+model QuotationSupplierPrice {
+  id String @id @default(uuid())
+
+  quotationSupplierId String
+  quotationSupplier   QuotationSupplier @relation(fields: [quotationSupplierId], references: [id], onDelete: Cascade)
+
+  quotationItemId String
+  quotationItem   QuotationItem @relation(fields: [quotationItemId], references: [id], onDelete: Cascade)
+
+  unitPrice Decimal @db.Decimal(12, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([quotationSupplierId, quotationItemId])
+  @@index([quotationItemId])
 }
 
 model Card {
@@ -594,6 +857,11 @@ model Purchase {
   purchaseAlerts   PurchaseAlert[]
   bills            Bill[]
   incomingGoodsNfs IncomingGoodsNf[]
+
+  // Preenchido quando essa compra nasceu automaticamente de uma Cotação
+  // confirmada pelo fornecedor (ver Quotation.purchaseId) — nesse caso
+  // origin vem WHATSAPP (enum PurchaseOrigin já tinha esse valor).
+  quotation Quotation?
 
   @@index([storeId])
   @@index([supplierId])
@@ -1118,90 +1386,27 @@ model ProductSalesEntry {
 // Camafeu, Costelinha Suína...).
 enum IngredientUnidade {
   KG
+  LITRO
   UNIDADE
 }
 
-// Um ingrediente/insumo (ex: "Contra Filé", "Batata") cadastrado pela
-// loja — existe pra poder somar o consumo do MESMO insumo em vários
-// pratos diferentes (ex: Contra Filé aparece na Chapa de Contra Filé e
-// também no Espeto de Contra Filé; o relatório de consumo soma os dois).
-// nomeChave normaliza (maiúsculo/sem espaço duplicado) só pra evitar
-// cadastrar "Contra Filé" e "CONTRA FILE" como coisas diferentes.
-model Ingredient {
-  id String @id @default(uuid())
-
-  storeId String
-  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-
-  nome      String
-  nomeChave String
-
-  unidadeMedida IngredientUnidade @default(KG)
-
-  // Peso (em gramas) de UMA peça/pacote inteiro desse ingrediente — ex:
-  // uma picanha inteira ~1200g, um pacote de batata frita porcionado
-  // 400g. Só faz sentido pra ingrediente KG; opcional (null = não sei
-  // converter esse ingrediente em "quantas peças/pacotes comprar", só
-  // mostra o KG mesmo). Usado pra além do KG total, sugerir também
-  // "quantas peças/pacotes" comprar (arredondando pra cima).
-  pesoUnidadeGramas Decimal? @db.Decimal(10, 2)
-
-  // Marca se esse ingrediente é uma proteína/carne (Picanha, Ancho, Filé
-  // Mignon, Costelinha Suína...). Usado pra filtrar a Lista de Compra:
-  // só entra proteína OU ingrediente contado por UNIDADE (Pastel,
-  // Coxinha, Camafeu, Costelinha...) — o resto (acompanhamento sem
-  // gramatura relevante, tipo arroz, salada) fica de fora da sugestão de
-  // compra. Não afeta a aba Ingredientes normal, só a Lista de Compra.
-  isProteina Boolean @default(false)
-
-  // Porção "padrão" de corte desse ingrediente (em gramas) — ex: 200
-  // pra Ancho/Picanha/Baby Beef/Filé Mignon, que a loja sempre porciona
-  // em pedaços de 200g. Usado só na visão "Tamanho" da Lista de Compra
-  // pra normalizar gramaturas diferentes da ficha técnica na MESMA
-  // porção: qualquer prato com gramas >= porção padrão vira N porções
-  // (arredondando pro inteiro mais próximo — ex: 400g e 350g de Filé
-  // Mignon viram "2x 200g"), tudo somado numa linha só. Gramas MENOR que
-  // a porção padrão (ex: Filé Mignon 100g do Kids) não mescla — fica
-  // como porção própria, diferente da porção adulta. Opcional (null =
-  // não normaliza, cada gramatura vira sua própria linha, como antes).
-  porcaoPadraoGramas Decimal? @db.Decimal(10, 2)
-
-  // Agrupamento da Lista de Compra por seção do pedido pro fornecedor,
-  // do jeito que o chefe de produção organiza (ex: "Proteínas e Cortes",
-  // "Feijoada", "Noite de petiscos"). String livre (não enum Prisma) pra
-  // não exigir migração toda vez que uma seção for renomeada/adicionada.
-  // null = ingrediente sem categoria definida, cai no grupo "Outros" no
-  // fim da lista. ordemLista é a posição dentro dessa categoria (menor
-  // primeiro); null/empate cai por ordem alfabética.
-  categoriaLista String?
-  ordemLista     Int?
-
-  createdAt DateTime @default(now())
-
-  recipeItems ProductRecipeItem[]
-  stockItem   StockItem?
-
-  @@unique([storeId, nomeChave])
-  @@index([storeId])
-}
-
-// Uma linha da "ficha técnica" de um prato vendido: quanto de UM
-// ingrediente aquele prato leva (ex: "Chapa de Contra Filé" leva 400g de
+// Uma linha da "ficha técnica" de um prato vendido: quanto de UM item de
+// estoque aquele prato leva (ex: "Chapa de Contra Filé" leva 400g de
 // Batata + 400g de Contra Filé = duas linhas). produtoChave referencia o
 // mesmo produto normalizado usado em ProductSalesEntry — não há FK direta
 // porque a receita é cadastrada independente de ter vindo alguma venda
 // daquele produto ainda.
 //
 // O campo "gramas" é lido de dois jeitos, dependendo do
-// Ingredient.unidadeMedida do ingrediente da linha (não muda o nome da
-// coluna pra não precisar migrar dado já digitado):
-//   - ingrediente KG (padrão): "gramas" é peso mesmo. Consumo no
-//     período = soma, pra cada prato vendido que usa esse ingrediente,
-//     quantidadeVendida * gramas / 1000 (kg).
-//   - ingrediente UNIDADE (Pastel, Coxinha, Costelinha...): "gramas" na
-//     real guarda quantas UNIDADES o prato leva (ex: 5 = 5 coxinhas).
-//     Consumo no período = quantidadeVendida * gramas, direto, sem
-//     dividir por 1000 (é contagem, não peso).
+// StockItem.unidadeMedida do item da linha (não muda o nome da coluna pra
+// não precisar migrar dado já digitado):
+//   - item KG/LITRO (padrão): "gramas" é peso/volume mesmo. Consumo no
+//     período = soma, pra cada prato vendido que usa esse item,
+//     quantidadeVendida * gramas / 1000 (kg/l).
+//   - item UNIDADE (Pastel, Coxinha, Costelinha...): "gramas" na real
+//     guarda quantas UNIDADES o prato leva (ex: 5 = 5 coxinhas). Consumo
+//     no período = quantidadeVendida * gramas, direto, sem dividir por
+//     1000 (é contagem, não peso).
 model ProductRecipeItem {
   id String @id @default(uuid())
 
@@ -1211,17 +1416,32 @@ model ProductRecipeItem {
   produtoChave String
   produto      String
 
-  ingredientId String
-  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  // Cada linha da ficha técnica aponta pra EXATAMENTE UM dos dois: um
+  // StockItem (consumo direto do Estoque bruto, fluxo original) OU um
+  // ProductionItem (pré-preparo da aba Produção — Picanha 200g porcionada,
+  // Molho da Casa etc.). Nunca os dois nem nenhum — validado na
+  // aplicação (saveRecipe/importarFichasTecnicasExcel), não dá pra
+  // expressar isso como CHECK constraint direto no Prisma. Quando existe
+  // um ProductionItem com o mesmo nome do insumo, a UI deve preferir esse
+  // vínculo em vez do StockItem direto (ver decisão em PROJECT_STATUS) —
+  // assim a baixa por venda cai no estoque de produção, não no estoque
+  // bruto.
+  stockItemId String?
+  stockItem   StockItem? @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  productionItemId String?
+  productionItem   ProductionItem? @relation(fields: [productionItemId], references: [id], onDelete: Cascade)
 
   gramas Decimal @db.Decimal(10, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([storeId, produtoChave, ingredientId])
+  @@unique([storeId, produtoChave, stockItemId])
+  @@unique([storeId, produtoChave, productionItemId])
   @@index([storeId, produtoChave])
-  @@index([ingredientId])
+  @@index([stockItemId])
+  @@index([productionItemId])
 }
 
 // Cópia de segurança das fichas técnicas de UMA loja, tirada bem antes de
@@ -1244,14 +1464,12 @@ model ProductRecipeImportBackup {
 }
 
 // Um item físico de estoque — matéria-prima ou produto de revenda —
-// cadastrado pela loja. É um catálogo À PARTE do Ingredient (que serve
-// pra ficha técnica/consumo de venda, não pra saldo físico): nem todo
-// insumo de receita precisa de controle de estoque, e nem todo item de
-// estoque (ex: descartável, produto de revenda) entra em alguma receita.
-// ingredientId liga esse item a um Ingredient já cadastrado — só esse
-// vínculo permite a baixa automática (ver StockMovement, origem
-// CONSUMO_VENDA) calcular o consumo pela venda e descontar daqui. Sem
-// vínculo, o item só entra/sai manualmente ou por NF.
+// cadastrado pela loja. Também é o insumo usado diretamente na ficha
+// técnica dos produtos vendidos (ver ProductRecipeItem.stockItemId) e/ou
+// na receita de um pré-preparo (ver ProductionRecipeItem.stockItemId) —
+// não existe mais um catálogo de "Ingrediente" separado: as informações
+// de gramatura/categoria da Lista de Compra vivem aqui, direto no item de
+// estoque.
 model StockItem {
   id String @id @default(uuid())
 
@@ -1260,7 +1478,15 @@ model StockItem {
 
   nome      String
   nomeChave String
+  // Categoria fixa de negócio — Hortifruti / Matéria Prima / Revenda /
+  // Ativo (ver ESTOQUE_CATEGORIAS em estoque.service.ts). Continua String
+  // (não enum) pra não quebrar dado antigo já cadastrado fora dessa lista,
+  // mas o frontend só deixa escolher uma dessas 4 opções.
   categoria String?
+  // Descrição livre — classificação mais fina que a Categoria (ex: "Folhas,
+  // Ervas e Brotos", "Proteínas - Frigorífico", "Bebidas - Whisky e Gin").
+  // Não entra em nenhuma regra de negócio, é só informativo/organizacional.
+  descricao String?
 
   unidadeMedida IngredientUnidade @default(KG)
 
@@ -1270,10 +1496,43 @@ model StockItem {
   // valor (ex: planilha modelo com quantidade mas sem valor).
   valorMedioUnitario Decimal? @db.Decimal(12, 4)
 
-  // Vínculo 1:1 opcional com a ficha técnica (Produtos → Ingredientes).
-  // Ver comentário do model acima.
-  ingredientId String?     @unique
-  ingredient   Ingredient? @relation(fields: [ingredientId], references: [id])
+  // Peso (em gramas) de UMA peça/pacote inteiro desse item — ex: uma
+  // picanha inteira ~1200g, um pacote de batata frita porcionado 400g.
+  // Só faz sentido pra item KG; opcional (null = não sei converter esse
+  // item em "quantas peças/pacotes comprar", só mostra o KG mesmo). Usado
+  // pra além do KG total, sugerir também "quantas peças/pacotes" comprar
+  // (arredondando pra cima).
+  pesoUnidadeGramas Decimal? @db.Decimal(10, 2)
+
+  // Marca se esse item é uma proteína/carne (Picanha, Ancho, Filé Mignon,
+  // Costelinha Suína...). Usado pra filtrar a Lista de Compra: só entra
+  // proteína OU item contado por UNIDADE (Pastel, Coxinha, Camafeu,
+  // Costelinha...) — o resto (acompanhamento sem gramatura relevante,
+  // tipo arroz, salada) fica de fora da sugestão de compra. Não afeta o
+  // Estoque normal, só a Lista de Compra de Produtos.
+  isProteina Boolean @default(false)
+
+  // Porção "padrão" de corte desse item (em gramas) — ex: 200 pra
+  // Ancho/Picanha/Baby Beef/Filé Mignon, que a loja sempre porciona em
+  // pedaços de 200g. Usado só na visão "Tamanho" da Lista de Compra pra
+  // normalizar gramaturas diferentes da ficha técnica na MESMA porção:
+  // qualquer prato com gramas >= porção padrão vira N porções
+  // (arredondando pro inteiro mais próximo — ex: 400g e 350g de Filé
+  // Mignon viram "2x 200g"), tudo somado numa linha só. Gramas MENOR que
+  // a porção padrão (ex: Filé Mignon 100g do Kids) não mescla — fica
+  // como porção própria, diferente da porção adulta. Opcional (null =
+  // não normaliza, cada gramatura vira sua própria linha, como antes).
+  porcaoPadraoGramas Decimal? @db.Decimal(10, 2)
+
+  // Agrupamento da Lista de Compra por seção do pedido pro fornecedor, do
+  // jeito que o chefe de produção organiza (ex: "Proteínas e Cortes",
+  // "Feijoada", "Noite de petiscos"). String livre (não enum Prisma) pra
+  // não exigir migração toda vez que uma seção for renomeada/adicionada.
+  // null = item sem categoria definida, cai no grupo "Outros" no fim da
+  // lista. ordemLista é a posição dentro dessa categoria (menor primeiro);
+  // null/empate cai por ordem alfabética.
+  categoriaLista String?
+  ordemLista     Int?
 
   // Estoque mínimo — abaixo disso o item entra na Lista de Compra do
   // Estoque (ver endpoint /estoque/lista-compra), com a quantidade
@@ -1281,13 +1540,23 @@ model StockItem {
   // entra em nenhuma sugestão de compra, mesmo zerado).
   estoqueMinimo Decimal? @db.Decimal(12, 3)
 
+  // Estoque máximo — usado só pela Cotação (ver Quotation/QuotationItem)
+  // pra calcular a quantidade sugerida de compra (máximo - atual, sem
+  // deixar negativo). Opcional: item sem máximo cadastrado não entra na
+  // sugestão automática de cotação, mesmo que tenha mínimo.
+  estoqueMaximo Decimal? @db.Decimal(12, 3)
+
   active Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  movements        StockMovement[]
-  supplierMappings StockSupplierItemMapping[]
+  movements              StockMovement[]
+  supplierMappings       StockSupplierItemMapping[]
+  quotationItems         QuotationItem[]
+  quotationCategoryItems QuotationCategoryItem[]
+  productionRecipeLinks  ProductionRecipeItem[]
+  productRecipeItems     ProductRecipeItem[]
 
   @@unique([storeId, nomeChave])
   @@index([storeId])
@@ -1374,6 +1643,117 @@ model StockMovement {
   @@unique([storeId, sourceRef])
   @@index([storeId])
   @@index([stockItemId])
+}
+
+// Unidade em que o estoque de PRODUÇÃO (pré-preparo) de um item é
+// contado — diferente de IngredientUnidade (KG/UNIDADE) porque aqui
+// também aparece ML (molhos, caldos, líquidos porcionados).
+enum ProductionUnidade {
+  KG
+  ML
+  UNIDADE
+}
+
+// Tipo de movimentação no ledger de um ProductionItem — mesmo espírito
+// de StockMovement, só que aqui só existem essas 3 origens possíveis (o
+// resto do fluxo de Estoque, como NF/compra, não se aplica: um item de
+// Produção só nasce sendo produzido).
+enum ProductionMovementType {
+  PRODUCAO // registrado manualmente: "hoje porcionei/produzi X" (credita o saldo)
+  CONSUMO_VENDA // baixa automática pela importação de vendas (aba Produtos), igual StockMovement
+  AJUSTE // correção manual de saldo (ex: perda, quebra, contagem)
+}
+
+// Pré-preparo/porcionamento — a aba Produção. Um ProductionItem tem
+// ESTOQUE PRÓPRIO (quantidadeAtual), separado do StockItem bruto: é o
+// "Picanha 200g" (porção cortada da Picanha 10kg do Estoque) ou o "Molho
+// da Casa" (feito a partir de alho + cebolinha + óleo do Estoque). A
+// ficha técnica de um prato pode apontar pra um ProductionItem em vez de
+// um Ingredient/StockItem direto — nesse caso a baixa por venda desconta
+// só daqui, nunca cascateia até o Estoque bruto (isso já aconteceu na
+// hora de PRODUZIR, não na hora de VENDER).
+//
+// baseQuantidade é o "tamanho de lote" da receita abaixo, na própria
+// unidadeMedida deste item: ex. Molho da Casa (unidadeMedida=ML,
+// baseQuantidade=100) tem sua receita expressa "por 100ml"; Picanha 200g
+// (unidadeMedida=UNIDADE, baseQuantidade=1) tem sua receita expressa
+// "por 1 porção". Ao registrar uma produção de X (na unidade do item), o
+// fator aplicado sobre cada componente da receita é X / baseQuantidade.
+model ProductionItem {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  nome      String
+  nomeChave String
+
+  unidadeMedida   ProductionUnidade @default(KG)
+  baseQuantidade  Decimal           @default(1) @db.Decimal(12, 3)
+  quantidadeAtual Decimal           @default(0) @db.Decimal(12, 3)
+
+  active Boolean @default(true)
+
+  recipeItems        ProductionRecipeItem[]
+  movements          ProductionMovement[]
+  productRecipeLinks ProductRecipeItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, nomeChave])
+  @@index([storeId])
+}
+
+// Um componente da receita de um ProductionItem — quanto de UM StockItem
+// (na unidade do próprio StockItem) é gasto a cada "baseQuantidade"
+// produzida. Ex: Molho da Casa (base=100ml) -> Alho: 0.020 (kg, = 20g).
+model ProductionRecipeItem {
+  id String @id @default(uuid())
+
+  productionItemId String
+  productionItem   ProductionItem @relation(fields: [productionItemId], references: [id], onDelete: Cascade)
+
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  quantidade Decimal @db.Decimal(12, 3)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productionItemId, stockItemId])
+  @@index([stockItemId])
+}
+
+// Ledger de entradas/saídas do estoque de UM ProductionItem — mesmo
+// espírito de StockMovement. sourceRef segue a mesma convenção
+// (idempotência de replay), ex: "venda:<productSalesImportId>:item:<id>".
+model ProductionMovement {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  productionItemId String
+  productionItem   ProductionItem @relation(fields: [productionItemId], references: [id], onDelete: Cascade)
+
+  tipo ProductionMovementType
+
+  quantidade Decimal @db.Decimal(12, 3)
+  sourceRef  String?
+  observacao String?
+
+  data DateTime @default(now())
+
+  createdById String?
+  createdBy   User?   @relation("ProductionMovementCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([storeId, sourceRef])
+  @@index([storeId])
+  @@index([productionItemId])
 }
 
 // Dados sensíveis (folha de pagamento) — acesso restrito a
@@ -1652,6 +2032,11 @@ enum WhatsappMessageKind {
   // WhatsApp" no card da ocorrência pra cutucar o responsável na hora,
   // sem esperar o cron de atraso.
   TASK_REMINDER
+  // Cotação: link pro fornecedor preencher os preços dos itens.
+  QUOTATION_REQUEST
+  // Cotação: link pro fornecedor confirmar (clicar OK) o pedido fechado
+  // depois de escolhido como vencedor.
+  QUOTATION_ORDER_CONFIRMATION
 }
 
 // Registro de uma mensagem de WhatsApp mandada pelo sistema, guardado pra
@@ -1670,6 +2055,9 @@ model WhatsappOutboundMessage {
 
   taskOccurrenceId String?
 
+  // Vínculo de cotação por fornecedor (Fase 3: link de cotação).
+  quotationSupplierId String?
+
   text              String
   providerMessageId String?
   sentAt            DateTime @default(now())
@@ -1681,12 +2069,14 @@ model WhatsappOutboundMessage {
   responseText    String?
   respondedAction String?
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taskOccurrence TaskOccurrence? @relation(fields: [taskOccurrenceId], references: [id], onDelete: Cascade)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskOccurrence    TaskOccurrence?    @relation(fields: [taskOccurrenceId], references: [id], onDelete: Cascade)
+  quotationSupplier QuotationSupplier? @relation(fields: [quotationSupplierId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([phone])
   @@index([taskOccurrenceId])
+  @@index([quotationSupplierId])
 }
 
 // Registro de perda de produto (quebra, vencimento, etc.) — foto tirada

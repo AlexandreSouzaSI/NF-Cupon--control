@@ -2,19 +2,39 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Loader2, Plus, Trash2, X } from 'lucide-react';
+import { Factory, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 type RecipeLine = {
     key: number;
-    ingrediente: string;
+    tipo: 'estoque' | 'producao';
+    stockItemId: string;
+    productionItemId: string;
     gramas: string;
+};
+
+type StockItemOption = {
+    id: string;
+    nome: string;
+    unidadeMedida: 'KG' | 'LITRO' | 'UNIDADE';
+};
+
+type ProductionItemOption = {
+    id: string;
+    nome: string;
+    unidadeMedida: 'KG' | 'ML' | 'UNIDADE';
 };
 
 let proximaChave = 1;
 
 function linhaVazia(): RecipeLine {
-    return { key: proximaChave++, ingrediente: '', gramas: '' };
+    return {
+        key: proximaChave++,
+        tipo: 'estoque',
+        stockItemId: '',
+        productionItemId: '',
+        gramas: '',
+    };
 }
 
 export function RecipeModal({
@@ -31,24 +51,18 @@ export function RecipeModal({
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [linhas, setLinhas] = useState<RecipeLine[]>([]);
-    const [sugestoes, setSugestoes] = useState<string[]>([]);
-    // Nome normalizado (maiúsculo/trim) -> unidade já configurada pro
-    // ingrediente (ver aba Ingredientes) — só pra trocar o placeholder
-    // do campo de quantidade (Gramas vs Unidades) e evitar confusão tipo
-    // digitar "5" achando que é 5 coxinhas quando o sistema ainda lê
-    // como peso.
-    const [unidadePorIngrediente, setUnidadePorIngrediente] = useState<
-        Record<string, 'KG' | 'UNIDADE'>
-    >({});
+    const [itensEstoque, setItensEstoque] = useState<StockItemOption[]>([]);
+    const [itensProducao, setItensProducao] = useState<ProductionItemOption[]>([]);
 
     useEffect(() => {
         async function carregar() {
             try {
                 setLoading(true);
 
-                const [recipeRes, ingredientsRes] = await Promise.all([
+                const [recipeRes, estoqueRes, producaoRes] = await Promise.all([
                     api.get('/product-sales/recipe', { params: { storeId, produto } }),
                     api.get('/product-sales/ingredients', { params: { storeId } }),
+                    api.get('/production/items', { params: { storeId } }),
                 ]);
 
                 const itens = Array.isArray(recipeRes.data) ? recipeRes.data : [];
@@ -57,24 +71,31 @@ export function RecipeModal({
                     itens.length > 0
                         ? itens.map((item: any) => ({
                             key: proximaChave++,
-                            ingrediente: item.ingrediente,
+                            tipo: item.tipo === 'producao' ? 'producao' : 'estoque',
+                            stockItemId: item.stockItemId || '',
+                            productionItemId: item.productionItemId || '',
                             gramas: String(item.gramas),
                         }))
                         : [linhaVazia()],
                 );
 
-                const ingredientesCadastrados = Array.isArray(ingredientsRes.data)
-                    ? ingredientsRes.data
+                const estoqueOpts: StockItemOption[] = Array.isArray(estoqueRes.data)
+                    ? estoqueRes.data.map((i: any) => ({
+                        id: i.id,
+                        nome: i.nome,
+                        unidadeMedida: i.unidadeMedida,
+                    }))
                     : [];
+                setItensEstoque(estoqueOpts);
 
-                setSugestoes(ingredientesCadastrados.map((i: any) => i.nome));
-
-                const mapaUnidade: Record<string, 'KG' | 'UNIDADE'> = {};
-                for (const ing of ingredientesCadastrados) {
-                    mapaUnidade[String(ing.nome).trim().toUpperCase()] =
-                        ing.unidadeMedida === 'UNIDADE' ? 'UNIDADE' : 'KG';
-                }
-                setUnidadePorIngrediente(mapaUnidade);
+                const producaoOpts: ProductionItemOption[] = Array.isArray(producaoRes.data)
+                    ? producaoRes.data.map((p: any) => ({
+                        id: p.id,
+                        nome: p.nome,
+                        unidadeMedida: p.unidadeMedida,
+                    }))
+                    : [];
+                setItensProducao(producaoOpts);
             } catch (error) {
                 console.error(error);
                 setLinhas([linhaVazia()]);
@@ -86,13 +107,43 @@ export function RecipeModal({
         carregar();
     }, [storeId, produto]);
 
-    function unidadeDaLinha(nomeIngrediente: string): 'KG' | 'UNIDADE' {
-        return unidadePorIngrediente[nomeIngrediente.trim().toUpperCase()] || 'KG';
+    function atualizarGramas(key: number, valor: string) {
+        setLinhas((atual) =>
+            atual.map((linha) => (linha.key === key ? { ...linha, gramas: valor } : linha)),
+        );
     }
 
-    function atualizarLinha(key: number, campo: 'ingrediente' | 'gramas', valor: string) {
+    function alternarParaEstoque(key: number) {
         setLinhas((atual) =>
-            atual.map((linha) => (linha.key === key ? { ...linha, [campo]: valor } : linha)),
+            atual.map((linha) =>
+                linha.key === key
+                    ? { ...linha, tipo: 'estoque', productionItemId: '', stockItemId: '' }
+                    : linha,
+            ),
+        );
+    }
+
+    function alternarParaProducao(key: number) {
+        setLinhas((atual) =>
+            atual.map((linha) =>
+                linha.key === key
+                    ? { ...linha, tipo: 'producao', stockItemId: '', productionItemId: '' }
+                    : linha,
+            ),
+        );
+    }
+
+    function selecionarEstoque(key: number, stockItemId: string) {
+        setLinhas((atual) =>
+            atual.map((linha) => (linha.key === key ? { ...linha, stockItemId } : linha)),
+        );
+    }
+
+    function selecionarProducao(key: number, productionItemId: string) {
+        setLinhas((atual) =>
+            atual.map((linha) =>
+                linha.key === key ? { ...linha, tipo: 'producao', productionItemId } : linha,
+            ),
         );
     }
 
@@ -106,11 +157,20 @@ export function RecipeModal({
 
     async function handleSalvar() {
         const itensValidos = linhas
-            .map((linha) => ({
-                ingrediente: linha.ingrediente.trim(),
-                gramas: Number(linha.gramas),
-            }))
-            .filter((item) => item.ingrediente && item.gramas > 0);
+            .map((linha) => {
+                const gramas = Number(linha.gramas);
+
+                if (linha.tipo === 'producao') {
+                    return linha.productionItemId && gramas > 0
+                        ? { productionItemId: linha.productionItemId, gramas }
+                        : null;
+                }
+
+                return linha.stockItemId && gramas > 0
+                    ? { stockItemId: linha.stockItemId, gramas }
+                    : null;
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null);
 
         try {
             setSaving(true);
@@ -160,60 +220,148 @@ export function RecipeModal({
                     <div className="space-y-3">
                         <p className="text-xs text-zinc-500">
                             Ex: Chapa de Contra Filé leva Batata 400g e Contra
-                            Filé 400g — cadastra os dois abaixo.
+                            Filé 400g — cadastra os dois abaixo. Informe de
+                            qual item do Estoque (ou pré-preparo de Produção)
+                            vem cada ingrediente do prato.
                         </p>
-
-                        <datalist id="ingredientes-sugeridos">
-                            {sugestoes.map((nome) => (
-                                <option key={nome} value={nome} />
-                            ))}
-                        </datalist>
 
                         <div className="space-y-2">
                             {linhas.map((linha) => {
-                                const unidade = unidadeDaLinha(linha.ingrediente);
+                                if (linha.tipo === 'producao') {
+                                    const item = itensProducao.find(
+                                        (p) => p.id === linha.productionItemId,
+                                    );
+
+                                    return (
+                                        <div key={linha.key} className="flex items-center gap-2">
+                                            <div className="flex flex-1 items-center gap-2 rounded-xl border border-orange-400/60 bg-orange-500/5 px-2 py-1 dark:border-orange-500/40">
+                                                <Factory
+                                                    size={14}
+                                                    className="shrink-0 text-orange-500"
+                                                />
+                                                <select
+                                                    value={linha.productionItemId}
+                                                    onChange={(e) =>
+                                                        selecionarProducao(linha.key, e.target.value)
+                                                    }
+                                                    className="flex-1 bg-transparent py-1 text-sm outline-none"
+                                                >
+                                                    <option value="">
+                                                        Selecione o item de produção...
+                                                    </option>
+                                                    {itensProducao.map((p) => (
+                                                        <option key={p.id} value={p.id}>
+                                                            {p.nome}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={() => alternarParaEstoque(linha.key)}
+                                                    title="Usar item do Estoque em vez de Produção"
+                                                    className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+                                                >
+                                                    Estoque
+                                                </button>
+                                            </div>
+
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={linha.gramas}
+                                                onChange={(e) =>
+                                                    atualizarGramas(linha.key, e.target.value)
+                                                }
+                                                placeholder={
+                                                    item?.unidadeMedida === 'UNIDADE'
+                                                        ? 'Unidades'
+                                                        : item?.unidadeMedida === 'ML'
+                                                            ? 'ML'
+                                                            : 'Gramas'
+                                                }
+                                                className="w-24 rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                            />
+
+                                            <button
+                                                onClick={() => removerLinha(linha.key)}
+                                                title="Remover"
+                                                className="rounded-lg p-2 text-zinc-400 hover:bg-red-500/10 hover:text-red-500"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    );
+                                }
+
+                                const itemEstoque = itensEstoque.find(
+                                    (i) => i.id === linha.stockItemId,
+                                );
+                                const unidade = itemEstoque?.unidadeMedida || 'KG';
 
                                 return (
-                                <div key={linha.key} className="flex items-center gap-2">
-                                    <input
-                                        type="text"
-                                        list="ingredientes-sugeridos"
-                                        value={linha.ingrediente}
-                                        onChange={(e) =>
-                                            atualizarLinha(linha.key, 'ingrediente', e.target.value)
-                                        }
-                                        placeholder="Ingrediente (ex: Contra Filé)"
-                                        className="flex-1 rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
-                                    />
+                                    <div key={linha.key} className="flex items-center gap-2">
+                                        <div className="flex flex-1 items-center gap-2 rounded-xl border border-zinc-200 bg-transparent px-2 py-1 dark:border-zinc-700">
+                                            <select
+                                                value={linha.stockItemId}
+                                                onChange={(e) =>
+                                                    selecionarEstoque(linha.key, e.target.value)
+                                                }
+                                                className="flex-1 bg-transparent py-1 text-sm outline-none"
+                                            >
+                                                <option value="">
+                                                    De qual item do Estoque vem isso?
+                                                </option>
+                                                {itensEstoque.map((i) => (
+                                                    <option key={i.id} value={i.id}>
+                                                        {i.nome}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={() => alternarParaProducao(linha.key)}
+                                                title="Usar item de Produção (pré-preparo) em vez do Estoque bruto"
+                                                className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                            >
+                                                Produção
+                                            </button>
+                                        </div>
 
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        step="0.01"
-                                        value={linha.gramas}
-                                        onChange={(e) =>
-                                            atualizarLinha(linha.key, 'gramas', e.target.value)
-                                        }
-                                        placeholder={unidade === 'UNIDADE' ? 'Unidades' : 'Gramas'}
-                                        title={
-                                            unidade === 'UNIDADE'
-                                                ? 'Esse ingrediente está configurado "por unidade" — informe quantas unidades (ex: 2 coxinhas), não gramas.'
-                                                : 'Gramas (peso)'
-                                        }
-                                        className={`w-24 rounded-xl border bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 ${unidade === 'UNIDADE'
-                                            ? 'border-amber-400/60 dark:border-amber-500/40'
-                                            : 'border-zinc-200 dark:border-zinc-700'
-                                            }`}
-                                    />
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={linha.gramas}
+                                            onChange={(e) =>
+                                                atualizarGramas(linha.key, e.target.value)
+                                            }
+                                            placeholder={
+                                                unidade === 'UNIDADE'
+                                                    ? 'Unidades'
+                                                    : unidade === 'LITRO'
+                                                      ? 'ML'
+                                                      : 'Gramas'
+                                            }
+                                            title={
+                                                unidade === 'UNIDADE'
+                                                    ? 'Esse item está configurado "por unidade" — informe quantas unidades (ex: 2 coxinhas), não gramas.'
+                                                    : unidade === 'LITRO'
+                                                      ? 'Mililitros (volume)'
+                                                      : 'Gramas (peso)'
+                                            }
+                                            className={`w-24 rounded-xl border bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 ${unidade === 'UNIDADE'
+                                                ? 'border-amber-400/60 dark:border-amber-500/40'
+                                                : 'border-zinc-200 dark:border-zinc-700'
+                                                }`}
+                                        />
 
-                                    <button
-                                        onClick={() => removerLinha(linha.key)}
-                                        title="Remover"
-                                        className="rounded-lg p-2 text-zinc-400 hover:bg-red-500/10 hover:text-red-500"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
+                                        <button
+                                            onClick={() => removerLinha(linha.key)}
+                                            title="Remover"
+                                            className="rounded-lg p-2 text-zinc-400 hover:bg-red-500/10 hover:text-red-500"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
                                 );
                             })}
                         </div>

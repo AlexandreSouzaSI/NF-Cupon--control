@@ -39,7 +39,6 @@ const tabs: {
         label: 'Fornecedores',
         icon: Truck,
         roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
-        hidden: true,
     },
     {
         key: 'cartoes',

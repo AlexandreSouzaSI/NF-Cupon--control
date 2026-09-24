@@ -8,20 +8,19 @@ export class CreateStockItemDto {
     @IsString()
     nome!: string;
 
+    // Classificação livre e mais fina que a Categoria — ex: "Proteínas -
+    // Frigorífico", "Bebidas - Whisky e Gin".
+    @IsOptional()
+    @IsString()
+    descricao?: string;
+
     @IsOptional()
     @IsString()
     categoria?: string;
 
     @IsOptional()
-    @IsIn(['KG', 'UNIDADE'])
-    unidadeMedida?: 'KG' | 'UNIDADE';
-
-    // Vínculo opcional com um Ingredient já cadastrado (Produtos →
-    // Ingredientes) — só isso liga a baixa automática da venda a este
-    // item. Ver comentário do model StockItem no schema.
-    @IsOptional()
-    @IsString()
-    ingredientId?: string;
+    @IsIn(['KG', 'LITRO', 'UNIDADE'])
+    unidadeMedida?: 'KG' | 'LITRO' | 'UNIDADE';
 
     // Estoque mínimo — abaixo disso entra na Lista de Compra do Estoque.
     @IsOptional()
@@ -29,4 +28,12 @@ export class CreateStockItemDto {
     @IsNumber()
     @Min(0)
     estoqueMinimo?: number;
+
+    // Estoque máximo — nível alvo pra sugestão de compra (compra até
+    // aqui, não só até o mínimo). Usado também pela Cotação.
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0)
+    estoqueMaximo?: number;
 }

@@ -31,8 +31,8 @@ export class LinkPurchaseItemDto {
     novaCategoria?: string;
 
     @IsOptional()
-    @IsIn(['KG', 'UNIDADE'])
-    novaUnidadeMedida?: 'KG' | 'UNIDADE';
+    @IsIn(['KG', 'LITRO', 'UNIDADE'])
+    novaUnidadeMedida?: 'KG' | 'LITRO' | 'UNIDADE';
 
     @Type(() => Number)
     @IsNumber()

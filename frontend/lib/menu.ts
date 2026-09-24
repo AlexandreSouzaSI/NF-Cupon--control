@@ -43,7 +43,8 @@ export type StoreModuleKey =
     | 'FUNCIONARIOS'
     | 'FREELANCERS'
     | 'PRODUTOS'
-    | 'ESTOQUE';
+    | 'ESTOQUE'
+    | 'COTACAO';
 
 // Cor de referência visual de cada item — soft (fundo bem clarinho +
 // texto na cor), pra dar uma pista rápida do "tipo" da tela sem gritar.
@@ -135,6 +136,66 @@ export const menu: MenuGroup[] = [
         ],
     },
     {
+        group: 'Estoque',
+        items: [
+            {
+                label: 'Dashboard de Estoque',
+                href: '/estoque/dashboard',
+                icon: LayoutDashboard,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'ESTOQUISTA',
+                ],
+                color: 'blue',
+                module: 'ESTOQUE',
+            },
+            {
+                label: 'Estoque',
+                href: '/estoque',
+                icon: Warehouse,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'ESTOQUISTA',
+                ],
+                color: 'blue',
+                module: 'ESTOQUE',
+            },
+            {
+                label: 'Cotação',
+                href: '/cotacao',
+                icon: ClipboardList,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                ],
+                color: 'teal',
+                module: 'COTACAO',
+            },
+            {
+                label: 'Venda/Lista',
+                href: '/products',
+                icon: Package,
+                roles: [
+                    'ADMINISTRATIVO',
+                    'PROPRIETARIO',
+                    'GERENTE',
+                    'COMPRADOR',
+                    'FINANCEIRO',
+                ],
+                color: 'orange',
+                module: 'PRODUTOS',
+            },
+        ],
+    },
+    {
         group: 'Compras',
         items: [
             {
@@ -187,20 +248,6 @@ export const menu: MenuGroup[] = [
                 badgeKey: 'approvals',
                 color: 'amber',
                 module: 'COMPRAS',
-            },
-            {
-                label: 'Estoque',
-                href: '/estoque',
-                icon: Warehouse,
-                roles: [
-                    'ADMINISTRATIVO',
-                    'PROPRIETARIO',
-                    'GERENTE',
-                    'COMPRADOR',
-                    'ESTOQUISTA',
-                ],
-                color: 'blue',
-                module: 'ESTOQUE',
             },
         ],
     },
@@ -342,20 +389,6 @@ export const menu: MenuGroup[] = [
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'],
                 color: 'indigo',
                 module: 'RELATORIOS',
-            },
-            {
-                label: 'Produtos',
-                href: '/products',
-                icon: Package,
-                roles: [
-                    'ADMINISTRATIVO',
-                    'PROPRIETARIO',
-                    'GERENTE',
-                    'COMPRADOR',
-                    'FINANCEIRO',
-                ],
-                color: 'orange',
-                module: 'PRODUTOS',
             },
         ],
     },

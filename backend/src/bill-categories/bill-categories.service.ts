@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // Mesmo tratamento usado pra nome de fornecedor: tira acento, espaço
@@ -81,5 +81,31 @@ export class BillCategoriesService {
         });
 
         return lastBill?.category || null;
+    }
+
+    // Exclusão de verdade — restrita ao dono do sistema (AdminMasterGuard
+    // no controller). Antes disso essa categoria não tinha delete nenhum,
+    // só desativação implícita indireta (nunca era usada na prática).
+    async removeDefinitivo(id: string) {
+        const category = await this.prisma.billCategory.findUnique({
+            where: { id },
+        });
+
+        if (!category) {
+            throw new NotFoundException('Categoria não encontrada.');
+        }
+
+        try {
+            await this.prisma.billCategory.delete({ where: { id } });
+        } catch (error: any) {
+            if (error?.code === 'P2003') {
+                throw new ConflictException(
+                    'Essa categoria já tem contas a pagar vinculadas — não dá pra excluir de vez.',
+                );
+            }
+            throw error;
+        }
+
+        return { ok: true };
     }
 }

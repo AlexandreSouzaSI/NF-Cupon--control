@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { getUser, hasGlobalStoreAccess } from '@/lib/auth';
+import { canDeleteForever, getUser, hasGlobalStoreAccess } from '@/lib/auth';
 import {
     Building2,
     CheckCircle2,
     FileSearch,
+    Flame,
     History,
     KeyRound,
     Loader2,
@@ -82,6 +83,8 @@ export function StoresTab() {
     // por loja. Editar dados/excluir continua só pra isAdmin (regra
     // explícita: só Proprietário/Administrativo cadastram e editam loja).
     const canManageCertificate = isAdmin || user?.role === 'GERENTE';
+    const podeExcluirDeVez = canDeleteForever(user);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const [stores, setStores] = useState<Store[]>([]);
     const [loading, setLoading] = useState(true);
@@ -451,6 +454,36 @@ export function StoresTab() {
         }
     }
 
+    // Exclusão de verdade — só a conta dona do sistema (isAdminMaster) vê
+    // esse botão. MUITO destrutivo: apaga em cascata todo o histórico de
+    // estoque/compras/NFs/contas dessa loja. Por isso pede confirmação
+    // extra (digitar o nome da loja), diferente do "Desativar" normal.
+    async function handleRemoveDefinitivo(store: Store) {
+        const digitado = prompt(
+            `Isso apaga a loja "${store.name}" e TODO o histórico vinculado (estoque, compras, NFs, contas) de vez, sem volta.\n\nPra confirmar, digite o nome exato da loja:`,
+        );
+
+        if (digitado === null) return;
+
+        if (digitado.trim() !== store.name) {
+            toast.error('Nome digitado não confere — exclusão cancelada.');
+            return;
+        }
+
+        try {
+            setDeletingId(store.id);
+            await api.delete(`/stores/${store.id}/definitivo`);
+            toast.success('Loja excluída definitivamente.');
+            await loadStores();
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data?.message || 'Erro ao excluir loja.',
+            );
+        } finally {
+            setDeletingId(null);
+        }
+    }
+
     return (
         <div
             className={`grid grid-cols-1 gap-5 ${isAdmin ? 'xl:grid-cols-[420px_1fr]' : ''
@@ -807,6 +840,23 @@ export function StoresTab() {
                                             >
                                                 <Trash2 size={16} />
                                             </button>
+
+                                            {podeExcluirDeVez && (
+                                                <button
+                                                    onClick={() =>
+                                                        handleRemoveDefinitivo(
+                                                            store,
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        deletingId === store.id
+                                                    }
+                                                    title="Excluir definitivamente (Admin Master) — apaga tudo, sem volta"
+                                                    className="rounded-xl border border-red-700/40 bg-red-700/10 p-2 text-red-700 hover:bg-red-700/20 disabled:opacity-50 dark:text-red-500"
+                                                >
+                                                    <Flame size={16} />
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>

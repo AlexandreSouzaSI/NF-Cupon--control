@@ -21,7 +21,7 @@ type Tipo = 'TERCA_QUINTA' | 'SEXTA_SEGUNDA' | 'SEMANA';
 
 type Periodo = { periodoInicio: string; periodoFim: string | null };
 
-type UnidadeMedida = 'KG' | 'UNIDADE';
+type UnidadeMedida = 'KG' | 'LITRO' | 'UNIDADE';
 
 type IngredienteSugestao = {
     ingredienteId: string;
@@ -139,6 +139,10 @@ function formatarKg(valor: number | null | undefined) {
     return `${(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`;
 }
 
+function formatarLitros(valor: number | null | undefined) {
+    return `${(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L`;
+}
+
 function formatarUnidades(valor: number | null | undefined) {
     return `${(valor ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} un`;
 }
@@ -159,6 +163,7 @@ function formatarQuantidade(
     unidadesEquivalentes?: number | null,
 ) {
     if (unidadeMedida === 'UNIDADE') return formatarUnidades(valor);
+    if (unidadeMedida === 'LITRO') return formatarLitros(valor);
     if (unidadesEquivalentes != null) {
         return `${formatarKg(valor)} (≈ ${unidadesEquivalentes} pç)`;
     }

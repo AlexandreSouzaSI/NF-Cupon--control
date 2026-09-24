@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     Injectable,
     NotFoundException,
@@ -159,6 +160,38 @@ export class FreelancersService {
             where: { id },
             data: { active: false },
         });
+    }
+
+    // Exclusão de verdade — restrita ao dono do sistema (AdminMasterGuard
+    // no controller). Apaga junto dias trabalhados e confirmações de
+    // pagamento (histórico dele deixa de existir de vez).
+    async removeDefinitivo(id: string) {
+        const freelancer = await this.prisma.freelancer.findUnique({
+            where: { id },
+        });
+
+        if (!freelancer) {
+            throw new NotFoundException('Freelancer não encontrado.');
+        }
+
+        try {
+            await this.prisma.freelancerWorkDay.deleteMany({
+                where: { freelancerId: id },
+            });
+            await this.prisma.freelancerPayment.deleteMany({
+                where: { freelancerId: id },
+            });
+            await this.prisma.freelancer.delete({ where: { id } });
+        } catch (error: any) {
+            if (error?.code === 'P2003') {
+                throw new ConflictException(
+                    'Esse freelancer tem vínculos que impedem a exclusão definitiva.',
+                );
+            }
+            throw error;
+        }
+
+        return { ok: true };
     }
 
     // Substitui, de uma vez, os dias marcados daquele freelancer pra

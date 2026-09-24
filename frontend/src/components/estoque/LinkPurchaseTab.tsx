@@ -16,14 +16,14 @@ type CompraPendente = {
     couponUrl: string | null;
 };
 
-type StockItemOption = { id: string; nome: string; unidadeMedida: 'KG' | 'UNIDADE' };
+type StockItemOption = { id: string; nome: string; unidadeMedida: 'KG' | 'LITRO' | 'UNIDADE' };
 
 type LinhaForm = {
     modo: 'existente' | 'novo';
     stockItemId: string;
     novoNome: string;
     novaCategoria: string;
-    novaUnidadeMedida: 'KG' | 'UNIDADE';
+    novaUnidadeMedida: 'KG' | 'LITRO' | 'UNIDADE';
     quantidade: string;
     valorTotal: string;
 };
@@ -315,12 +315,13 @@ export function LinkPurchaseTab({ onChanged }: { onChanged: () => void }) {
                                                                         value={linha.novaUnidadeMedida}
                                                                         onChange={(e) =>
                                                                             updateLinha(index, {
-                                                                                novaUnidadeMedida: e.target.value as 'KG' | 'UNIDADE',
+                                                                                novaUnidadeMedida: e.target.value as 'KG' | 'LITRO' | 'UNIDADE',
                                                                             })
                                                                         }
                                                                         className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
                                                                     >
                                                                         <option value="KG">KG</option>
+                                                                        <option value="LITRO">Litro</option>
                                                                         <option value="UNIDADE">Unidade</option>
                                                                     </select>
                                                                 </>

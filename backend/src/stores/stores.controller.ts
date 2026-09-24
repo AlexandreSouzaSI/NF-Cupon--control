@@ -64,6 +64,13 @@ export class StoresController {
         return this.storesService.remove(id);
     }
 
+    // Exclusão de verdade — restrita ao dono do sistema (isAdminMaster).
+    @Delete(':id/definitivo')
+    @UseGuards(AdminMasterGuard)
+    async removeDefinitivo(@Param('id') id: string) {
+        return this.storesService.removeDefinitivo(id);
+    }
+
     @Post(':id/users')
     @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
     async linkUser(

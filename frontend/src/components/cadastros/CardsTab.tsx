@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
-import { CreditCard, Plus, Trash2 } from 'lucide-react';
+import { CreditCard, Flame, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { canDeleteForever, getUser } from '@/lib/auth';
 
 type Store = {
     id: string;
@@ -29,6 +30,8 @@ export function CardsTab() {
     const [lastDigits, setLastDigits] = useState('');
     const [holderName, setHolderName] = useState('');
     const [storeId, setStoreId] = useState('');
+    const podeExcluirDeVez = canDeleteForever(getUser());
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     async function loadData() {
         try {
@@ -117,6 +120,29 @@ export function CardsTab() {
             await loadData();
         } catch {
             toast.error('Erro ao desativar cartão.');
+        }
+    }
+
+    // Exclusão de verdade — só a conta dona do sistema (isAdminMaster) vê
+    // esse botão (AdminMasterGuard no backend).
+    async function handleRemoveCardDefinitivo(card: Card) {
+        const confirmed = confirm(
+            `Excluir o cartão "${card.name}" definitivamente? Isso apaga o cadastro de vez, sem volta.`,
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setDeletingId(card.id);
+            await api.delete(`/cards/${card.id}/definitivo`);
+            toast.success('Cartão excluído definitivamente.');
+            await loadData();
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data?.message || 'Erro ao excluir cartão.',
+            );
+        } finally {
+            setDeletingId(null);
         }
     }
 
@@ -258,13 +284,30 @@ export function CardsTab() {
                                     </div>
                                 </div>
 
-                                <button
-                                    onClick={() => handleRemoveCard(card)}
-                                    title="Desativar cartão"
-                                    className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-red-400 hover:bg-red-500/20"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => handleRemoveCard(card)}
+                                        title="Desativar cartão"
+                                        className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-red-400 hover:bg-red-500/20"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+
+                                    {podeExcluirDeVez && (
+                                        <button
+                                            onClick={() =>
+                                                handleRemoveCardDefinitivo(
+                                                    card,
+                                                )
+                                            }
+                                            disabled={deletingId === card.id}
+                                            title="Excluir definitivamente (Admin Master)"
+                                            className="rounded-xl border border-red-700/40 bg-red-700/10 p-2 text-red-700 hover:bg-red-700/20 disabled:opacity-50 dark:text-red-500"
+                                        >
+                                            <Flame size={16} />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>
