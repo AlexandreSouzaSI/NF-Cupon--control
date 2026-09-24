@@ -103,6 +103,45 @@ function formatItemsSummary(
         .join(', ');
 }
 
+// Mesma ideia do formatItemsSummary acima, mas uma linha por item (nome,
+// quantidade+unidade e valor TOTAL do item, não unitário) — usado pra
+// pré-preencher a "Descrição dos produtos" do bloco de Compra sem NF, que
+// é um textarea multi-linha.
+function formatItemsMultiline(
+    items: Purchase['items'],
+): string {
+    if (!items || items.length === 0) return '';
+
+    return items
+        .map((item) => {
+            const qty = Number(item.quantity);
+            const qtyLabel = Number.isFinite(qty)
+                ? qty.toLocaleString('pt-BR', {
+                    maximumFractionDigits: 3,
+                })
+                : item.quantity;
+            const unit = item.unit || '';
+
+            const total =
+                item.total != null
+                    ? Number(item.total)
+                    : item.unitPrice != null &&
+                      Number.isFinite(qty)
+                        ? Number(item.unitPrice) * qty
+                        : null;
+            const totalLabel =
+                total != null
+                    ? ` R$ ${total.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    })}`
+                    : '';
+
+            return `${item.name} ${qtyLabel}${unit}${totalLabel}`;
+        })
+        .join('\n');
+}
+
 type BillType =
     | 'BOLETO'
     | 'PIX'
@@ -422,6 +461,19 @@ function NewBillPageInner() {
                     loadedPurchase.items,
                 );
 
+                // Se a compra ainda não tem uma nota "sem NF" salva, já
+                // deixa a Descrição dos produtos (bloco de Compra sem NF)
+                // pré-preenchida com os itens do pedido, um por linha.
+                if (!loadedPurchase.noInvoiceProductsNote?.trim()) {
+                    const itemsMultiline = formatItemsMultiline(
+                        loadedPurchase.items,
+                    );
+
+                    if (itemsMultiline) {
+                        setNoInvoiceNote(itemsMultiline);
+                    }
+                }
+
                 setForm({
                     description: itemsSummary
                         ? `${loadedPurchase.description} — ${itemsSummary}`
@@ -608,17 +660,9 @@ function NewBillPageInner() {
             return;
         }
 
-        if (
-            form.paymentMethod ===
-            'BANK_SLIP' &&
-            !form.barcode.trim() &&
-            !form.fileUrl
-        ) {
-            toast.error(
-                'Informe o código de barras ou anexe o boleto.',
-            );
-            return;
-        }
+        // Boleto (código de barras / anexo) não é mais obrigatório pra
+        // salvar a conta — com ou sem NF. Quem quiser informar, informa
+        // agora; senão dá pra completar depois, sem travar o fluxo.
 
         if (
             form.paymentMethod === 'PIX' &&
