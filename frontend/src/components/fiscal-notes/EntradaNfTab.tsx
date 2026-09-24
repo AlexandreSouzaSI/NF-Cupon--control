@@ -9,6 +9,7 @@ import {
     AcceptNfBillPayload,
 } from '../ui/AcceptNfBillForm';
 import { NfViewerModal } from '../ui/NfViewerModal';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 import {
     CheckCircle2,
     Download,
@@ -761,31 +762,23 @@ export function EntradaNfTab() {
                                             </span>
                                         ) : linkingId === nf.id ? (
                                             <>
-                                                <select
-                                                    value={
-                                                        selectedPurchaseId[nf.id] || ''
-                                                    }
-                                                    onChange={(e) =>
-                                                        setSelectedPurchaseId({
-                                                            ...selectedPurchaseId,
-                                                            [nf.id]: e.target.value,
-                                                        })
-                                                    }
-                                                    className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
-                                                >
-                                                    <option value="">
-                                                        Selecione a compra...
-                                                    </option>
-                                                    {purchases.map((purchase) => (
-                                                        <option
-                                                            key={purchase.id}
-                                                            value={purchase.id}
-                                                        >
-                                                            {purchase.description} —{' '}
-                                                            {formatCurrency(purchase.value)}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                <div className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3">
+                                                    <AutocompleteInput
+                                                        options={purchases.map((purchase) => ({
+                                                            id: purchase.id,
+                                                            nome: `${purchase.description} — ${formatCurrency(purchase.value)}`,
+                                                        }))}
+                                                        value={selectedPurchaseId[nf.id] || ''}
+                                                        onChange={(id) =>
+                                                            setSelectedPurchaseId({
+                                                                ...selectedPurchaseId,
+                                                                [nf.id]: id,
+                                                            })
+                                                        }
+                                                        placeholder="Selecione a compra..."
+                                                        className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                                    />
+                                                </div>
 
                                                 <div className="flex gap-2">
                                                     <button

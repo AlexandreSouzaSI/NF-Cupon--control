@@ -56,6 +56,25 @@ export class BillsService {
         }
     }
 
+    // Quem não tem canViewPayrollBills nem vê a conta na lista (não só o
+    // valor escondido) quando a categoria é Funcionários ou Freelancer —
+    // categoria é texto livre (BillCategory), então casa por substring
+    // normalizada (sem acento/caixa) pra pegar variações tipo "Freelancers".
+    private payrollCategoryFilter(user: any) {
+        if (user.canViewPayrollBills !== false) return undefined;
+
+        return {
+            NOT: {
+                category: {
+                    OR: [
+                        { nameNormalized: { contains: 'funcionario' } },
+                        { nameNormalized: { contains: 'freelance' } },
+                    ],
+                },
+            },
+        };
+    }
+
     private canManageBills(user: any) {
         return [
             UserRole.ADMINISTRATIVO,
@@ -74,6 +93,7 @@ export class BillsService {
                 purchaseId: true,
                 status: true,
                 notes: true,
+                category: { select: { nameNormalized: true } },
             },
         });
 
@@ -84,6 +104,17 @@ export class BillsService {
         }
 
         this.ensureStoreAccess(bill.storeId, user);
+
+        if (
+            user.canViewPayrollBills === false &&
+            bill.category &&
+            (bill.category.nameNormalized.includes('funcionario') ||
+                bill.category.nameNormalized.includes('freelance'))
+        ) {
+            throw new NotFoundException(
+                'Conta a pagar não encontrada.',
+            );
+        }
 
         return bill;
     }
@@ -275,6 +306,7 @@ export class BillsService {
                     )
                     : undefined,
             },
+            ...this.payrollCategoryFilter(user),
         };
 
         const orderBy = [

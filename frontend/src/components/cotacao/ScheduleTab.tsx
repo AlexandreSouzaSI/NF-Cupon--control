@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { CalendarDays, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type SupplierCategory = {
     id: string;
@@ -187,26 +188,29 @@ export function ScheduleTab() {
 
                                 {available.length > 0 && (
                                     <div className="flex gap-1.5">
-                                        <select
-                                            value={selecting[diaSemana] || ''}
-                                            onChange={(e) =>
-                                                setSelecting((current) => ({
-                                                    ...current,
-                                                    [diaSemana]: e.target.value,
-                                                }))
-                                            }
-                                            className="h-9 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-2 text-xs outline-none focus:border-indigo-500"
-                                        >
-                                            <option value="">Adicionar...</option>
-                                            {available.map((category) => (
-                                                <option
-                                                    key={category.id}
-                                                    value={category.id}
-                                                >
-                                                    {category.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <div className="h-9 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-2">
+                                            <AutocompleteInput
+                                                options={available.map(
+                                                    (category) => ({
+                                                        id: category.id,
+                                                        nome: category.name,
+                                                    }),
+                                                )}
+                                                value={
+                                                    selecting[diaSemana] || ''
+                                                }
+                                                onChange={(id) =>
+                                                    setSelecting(
+                                                        (current) => ({
+                                                            ...current,
+                                                            [diaSemana]: id,
+                                                        }),
+                                                    )
+                                                }
+                                                placeholder="Adicionar..."
+                                                className="h-full w-full bg-transparent text-xs outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                            />
+                                        </div>
 
                                         <button
                                             type="button"

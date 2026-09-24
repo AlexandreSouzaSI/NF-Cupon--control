@@ -8,8 +8,10 @@ import {
     canAssignRole,
     canDeleteForever,
     canGrantApprovalPermission,
+    canGrantModuleAccess,
     getUser,
 } from '@/lib/auth';
+import { ALL_STORE_MODULES, moduleLabels, type StoreModuleKey } from '@/lib/menu';
 
 type Store = {
     id: string;
@@ -25,6 +27,8 @@ type User = {
     active: boolean;
     canApprovePurchases?: boolean;
     notifyQuotationConfirmed?: boolean;
+    moduleAccess?: StoreModuleKey[];
+    canViewPayrollBills?: boolean;
     userStores: {
         store: Store;
     }[];
@@ -119,6 +123,8 @@ export function UsersTab() {
         storeIds: [] as string[],
         canApprovePurchases: false,
         notifyQuotationConfirmed: false,
+        moduleAccess: [] as StoreModuleKey[],
+        canViewPayrollBills: true,
     });
 
     const loggedUser = getUser();
@@ -127,6 +133,12 @@ export function UsersTab() {
     // Proprietário) pode conceder essa permissão extra pra outro usuário —
     // ver ensureCanGrantApprovalPermission no backend (users.service.ts).
     const canEditApprovalPermission = canGrantApprovalPermission(loggedUser);
+
+    // Só o Proprietário (ou Admin Master) decide quais módulos cada
+    // colaborador acessa e se ele vê valor de conta Funcionários/
+    // Freelancer — ver ensureCanGrantModuleAccess no backend
+    // (users.service.ts).
+    const canEditModuleAccess = canGrantModuleAccess(loggedUser);
     const podeExcluirDeVez = canDeleteForever(loggedUser);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -197,6 +209,8 @@ export function UsersTab() {
             storeIds: [],
             canApprovePurchases: false,
             notifyQuotationConfirmed: false,
+            moduleAccess: [],
+            canViewPayrollBills: true,
         });
     }
 
@@ -213,6 +227,8 @@ export function UsersTab() {
             storeIds: user.userStores.map((item) => item.store.id),
             canApprovePurchases: user.canApprovePurchases || false,
             notifyQuotationConfirmed: user.notifyQuotationConfirmed || false,
+            moduleAccess: user.moduleAccess || [],
+            canViewPayrollBills: user.canViewPayrollBills ?? true,
         });
 
         // O form fica acima da lista (ou antes dela, empilhado no
@@ -235,6 +251,17 @@ export function UsersTab() {
             storeIds: exists
                 ? form.storeIds.filter((id) => id !== storeId)
                 : [...form.storeIds, storeId],
+        });
+    }
+
+    function toggleModuleAccess(module: StoreModuleKey) {
+        const exists = form.moduleAccess.includes(module);
+
+        setForm({
+            ...form,
+            moduleAccess: exists
+                ? form.moduleAccess.filter((item) => item !== module)
+                : [...form.moduleAccess, module],
         });
     }
 
@@ -279,6 +306,14 @@ export function UsersTab() {
             // que já existia no usuário.
             if (canEditApprovalPermission) {
                 payload.canApprovePurchases = form.canApprovePurchases;
+            }
+
+            // Mesmo espírito do canApprovePurchases acima: só manda se
+            // quem está logado pode editar, senão não sobrescreve o que
+            // já estava salvo pra essa pessoa.
+            if (canEditModuleAccess) {
+                payload.moduleAccess = form.moduleAccess;
+                payload.canViewPayrollBills = form.canViewPayrollBills;
             }
 
             if (editingUser) {
@@ -540,6 +575,61 @@ export function UsersTab() {
                         </div>
                     </div>
 
+                    {canEditModuleAccess && (
+                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
+                            <p className="mb-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                Módulos liberados pra essa pessoa
+                            </p>
+                            <p className="mb-3 text-xs text-zinc-500">
+                                Sem nada marcado, vale o que o perfil já
+                                libera normalmente (comportamento de
+                                sempre). Marque só pra restringir essa
+                                pessoa a alguns módulos específicos, além
+                                do que o perfil e a loja já permitem.
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                {ALL_STORE_MODULES.map((module) => (
+                                    <label
+                                        key={module}
+                                        className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={form.moduleAccess.includes(module)}
+                                            onChange={() => toggleModuleAccess(module)}
+                                        />
+                                        <span>{moduleLabels[module]}</span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            <div className="mt-3 border-t border-zinc-200 dark:border-zinc-800 pt-3">
+                                <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.canViewPayrollBills}
+                                        onChange={(e) =>
+                                            setForm({
+                                                ...form,
+                                                canViewPayrollBills: e.target.checked,
+                                            })
+                                        }
+                                    />
+                                    Ver contas a pagar de Funcionários/Freelancer
+                                </label>
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    Dentro de Contas a Pagar, contas com
+                                    categoria "Funcionários" ou "Freelancer"
+                                    só aparecem pra quem tem isso marcado —
+                                    quem não tem, nem vê a conta na lista.
+                                    Só importa pra quem já acessa Contas a
+                                    Pagar (perfil ou módulo liberado acima).
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
                         <input
                             type="checkbox"
@@ -639,6 +729,19 @@ export function UsersTab() {
                                             {user.notifyQuotationConfirmed && (
                                                 <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-500">
                                                     Avisa pedido confirmado
+                                                </span>
+                                            )}
+
+                                            {user.moduleAccess &&
+                                                user.moduleAccess.length > 0 && (
+                                                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
+                                                        Módulos restritos
+                                                    </span>
+                                                )}
+
+                                            {user.canViewPayrollBills === false && (
+                                                <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-400">
+                                                    Sem ver Func./Freelancer
                                                 </span>
                                             )}
                                         </div>

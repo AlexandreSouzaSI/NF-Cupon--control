@@ -46,6 +46,29 @@ export type StoreModuleKey =
     | 'ESTOQUE'
     | 'COTACAO';
 
+// Nome amigável de cada módulo — espelha MODULE_LABELS no backend
+// (common/store-module-labels.ts). Usado no painel /admin/modules e nas
+// caixinhas de moduleAccess por colaborador (Cadastros → Usuários).
+export const moduleLabels: Record<StoreModuleKey, string> = {
+    COMPRAS: 'Compras',
+    NOTAS_FISCAIS: 'Notas Fiscais',
+    SERVICOS: 'Serviços',
+    TRIBUTOS: 'Tributos',
+    PERDAS: 'Perdas',
+    CONTAS_A_PAGAR: 'Contas a Pagar',
+    TAREFAS: 'Tarefas',
+    RELATORIOS: 'Relatórios',
+    FUNCIONARIOS: 'Funcionários',
+    FREELANCERS: 'Freelancers',
+    PRODUTOS: 'Produtos',
+    ESTOQUE: 'Estoque',
+    COTACAO: 'Cotação',
+};
+
+export const ALL_STORE_MODULES: StoreModuleKey[] = Object.keys(
+    moduleLabels,
+) as StoreModuleKey[];
+
 // Cor de referência visual de cada item — soft (fundo bem clarinho +
 // texto na cor), pra dar uma pista rápida do "tipo" da tela sem gritar.
 // Ex: Perdas = vermelho (é sempre algo ruim), Tarefas = violeta, etc.
@@ -479,14 +502,24 @@ export const menu: MenuGroup[] = [
 // aparece sempre. Item com "module" só aparece se a loja ativa tiver esse
 // módulo na lista — lista undefined/null (ainda carregando ou loja sem
 // info) libera tudo, pra não sumir a tela com a página piscando.
+// userModuleAccess é a restrição extra por pessoa (User.moduleAccess no
+// backend, só o Proprietário edita — ver Cadastros → Colaboradores). Lista
+// vazia/ausente = sem restrição extra (comportamento de sempre, só perfil +
+// loja). Quando vem preenchida, o módulo só libera se estiver nas duas
+// listas: habilitado na loja E liberado pra essa pessoa.
 export function isModuleEnabled(
     item: Pick<MenuItem, 'module'>,
     enabledModules?: StoreModuleKey[] | null,
+    userModuleAccess?: StoreModuleKey[] | string[] | null,
 ): boolean {
     if (!item.module) return true;
-    if (!enabledModules) return true;
+    if (enabledModules && !enabledModules.includes(item.module)) return false;
 
-    return enabledModules.includes(item.module);
+    if (userModuleAccess && userModuleAccess.length > 0) {
+        return userModuleAccess.includes(item.module);
+    }
+
+    return true;
 }
 
 export function canAccessHref(
@@ -494,6 +527,7 @@ export function canAccessHref(
     href: string,
     isDemo?: boolean,
     enabledModules?: StoreModuleKey[] | null,
+    userModuleAccess?: StoreModuleKey[] | string[] | null,
 ): boolean {
     if (isDemo) return true;
 
@@ -508,6 +542,6 @@ export function canAccessHref(
 
     return (
         matchedItem.roles.includes(role) &&
-        isModuleEnabled(matchedItem, enabledModules)
+        isModuleEnabled(matchedItem, enabledModules, userModuleAccess)
     );
 }

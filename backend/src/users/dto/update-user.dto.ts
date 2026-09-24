@@ -8,7 +8,7 @@ import {
     MinLength,
 } from 'class-validator';
 
-import { UserRole } from '@prisma/client';
+import { StoreModule, UserRole } from '@prisma/client';
 
 export class UpdateUserDto {
     @IsOptional()
@@ -53,4 +53,19 @@ export class UpdateUserDto {
     @IsOptional()
     @IsBoolean()
     notifyQuotationConfirmed?: boolean;
+
+    // Lista de módulos liberados pra essa pessoa especificamente — só o
+    // Proprietário (ou Admin Master) pode enviar esse campo, ver
+    // ensureCanGrantModuleAccess em users.service.ts. Vazio = sem
+    // restrição extra (usa só perfil + loja, como hoje).
+    @IsOptional()
+    @IsArray()
+    @IsEnum(StoreModule, { each: true })
+    moduleAccess?: StoreModule[];
+
+    // Permissão de ver valor de conta categoria Funcionários/Freelancer
+    // em Contas a Pagar — mesma restrição de quem pode enviar esse campo.
+    @IsOptional()
+    @IsBoolean()
+    canViewPayrollBills?: boolean;
 }

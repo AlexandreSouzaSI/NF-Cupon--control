@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { ClipboardList, Plus, Send, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type SupplierCategory = {
     id: string;
@@ -60,7 +61,6 @@ export function SuggestedListTab() {
     // Itens do Estoque dessa loja — carregado uma vez, usado pra montar
     // o seletor de "adicionar item" (busca por nome do lado do cliente).
     const [stockItems, setStockItems] = useState<StockItemOption[]>([]);
-    const [stockSearch, setStockSearch] = useState('');
     const [selectedStockItemId, setSelectedStockItemId] = useState('');
     const [adding, setAdding] = useState(false);
 
@@ -188,14 +188,21 @@ export function SuggestedListTab() {
         [items],
     );
 
-    const filteredStockOptions = useMemo(() => {
-        const term = stockSearch.trim().toUpperCase();
-
-        return stockItems
-            .filter((item) => !stockItemsInList.has(item.id))
-            .filter((item) => !term || item.nome.toUpperCase().includes(term))
-            .slice(0, 30);
-    }, [stockItems, stockSearch, stockItemsInList]);
+    // Opções de item do Estoque pro autocomplete — já exclui os que já
+    // estão na lista sugerida, e mostra a categoria junto do nome (igual
+    // o select antigo mostrava).
+    const stockOptions = useMemo(
+        () =>
+            stockItems
+                .filter((item) => !stockItemsInList.has(item.id))
+                .map((item) => ({
+                    id: item.id,
+                    nome: item.categoria
+                        ? `${item.nome} (${item.categoria})`
+                        : item.nome,
+                })),
+        [stockItems, stockItemsInList],
+    );
 
     async function handleAddFromStock() {
         if (!store || !selectedCategoryId || !selectedStockItemId) {
@@ -213,7 +220,6 @@ export function SuggestedListTab() {
             });
 
             setSelectedStockItemId('');
-            setStockSearch('');
             await loadSuggested(selectedCategoryId);
         } catch (error: any) {
             toast.error(
@@ -359,18 +365,18 @@ export function SuggestedListTab() {
                 <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                     Ou escolha qualquer categoria
                 </label>
-                <select
-                    value={selectedCategoryId}
-                    onChange={(e) => selectCategory(e.target.value)}
-                    className="h-11 w-full max-w-sm rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
-                >
-                    <option value="">Selecione...</option>
-                    {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                            {category.name}
-                        </option>
-                    ))}
-                </select>
+                <div className="h-11 w-full max-w-sm rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3">
+                    <AutocompleteInput
+                        options={categories.map((category) => ({
+                            id: category.id,
+                            nome: category.name,
+                        }))}
+                        value={selectedCategoryId}
+                        onChange={selectCategory}
+                        placeholder="Digite pra buscar a categoria..."
+                        className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                    />
+                </div>
             </div>
 
             {selectedCategoryId && items !== null && items.length > 0 && (
@@ -483,36 +489,15 @@ export function SuggestedListTab() {
                     {!manualMode ? (
                         <div className="space-y-2">
                             <div className="flex flex-col gap-2 sm:flex-row">
-                                <input
-                                    value={stockSearch}
-                                    onChange={(e) => {
-                                        setStockSearch(e.target.value);
-                                        setSelectedStockItemId('');
-                                    }}
-                                    placeholder="Buscar item do Estoque..."
-                                    className="h-10 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
-                                />
-                                <select
-                                    value={selectedStockItemId}
-                                    onChange={(e) =>
-                                        setSelectedStockItemId(e.target.value)
-                                    }
-                                    className="h-10 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
-                                >
-                                    <option value="">
-                                        {filteredStockOptions.length === 0
-                                            ? 'Nenhum item encontrado'
-                                            : 'Selecione o item...'}
-                                    </option>
-                                    {filteredStockOptions.map((item) => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.nome}
-                                            {item.categoria
-                                                ? ` (${item.categoria})`
-                                                : ''}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="h-10 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3">
+                                    <AutocompleteInput
+                                        options={stockOptions}
+                                        value={selectedStockItemId}
+                                        onChange={setSelectedStockItemId}
+                                        placeholder="Digite pra buscar item do Estoque..."
+                                        className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                    />
+                                </div>
                                 <button
                                     type="button"
                                     disabled={adding || !selectedStockItemId}

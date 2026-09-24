@@ -19,6 +19,7 @@ import {
     Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type EmployeePaymentType =
     | 'ADIANTAMENTO'
@@ -571,20 +572,18 @@ export function EmployeePaymentsTab() {
                         <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
                             Funcionário
                         </label>
-                        <select
-                            value={manualEmployeeId}
-                            onChange={(e) =>
-                                setManualEmployeeId(e.target.value)
-                            }
-                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
-                        >
-                            <option value="">Selecione</option>
-                            {employees.map((employee) => (
-                                <option key={employee.id} value={employee.id}>
-                                    {employee.name}
-                                </option>
-                            ))}
-                        </select>
+                        <div className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3">
+                            <AutocompleteInput
+                                options={employees.map((employee) => ({
+                                    id: employee.id,
+                                    nome: employee.name,
+                                }))}
+                                value={manualEmployeeId}
+                                onChange={setManualEmployeeId}
+                                placeholder="Selecione o funcionário..."
+                                className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                            />
+                        </div>
                     </div>
 
                     <div>

@@ -31,6 +31,7 @@ import {
 import { toast } from 'sonner';
 
 import { AppLayout } from '../../src/components/app-layout';
+import { AutocompleteInput } from '../../src/components/ui/AutocompleteInput';
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { canManagePaymentBatch, getUser } from '@/lib/auth';
@@ -1136,26 +1137,18 @@ function BillsPageInner() {
                                     </option>
                                 </select>
 
-                                <select
-                                    value={supplierFilter}
-                                    onChange={(event) =>
-                                        setSupplierFilter(event.target.value)
-                                    }
-                                    className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 outline-none focus:border-emerald-500"
-                                >
-                                    <option value="">
-                                        Todos os fornecedores
-                                    </option>
-
-                                    {suppliers.map((supplier) => (
-                                        <option
-                                            key={supplier.id}
-                                            value={supplier.id}
-                                        >
-                                            {supplier.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3">
+                                    <AutocompleteInput
+                                        options={suppliers.map((supplier) => ({
+                                            id: supplier.id,
+                                            nome: supplier.name,
+                                        }))}
+                                        value={supplierFilter}
+                                        onChange={setSupplierFilter}
+                                        placeholder="Todos os fornecedores"
+                                        className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                    />
+                                </div>
                             </div>
 
                             <button

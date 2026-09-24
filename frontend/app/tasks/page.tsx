@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
+import { AutocompleteInput } from '../../src/components/ui/AutocompleteInput';
 import { api, API_URL } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { getActiveStore } from '@/lib/active-store';
@@ -1222,21 +1223,23 @@ function GerenciarTab() {
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                                 Responsável
                             </label>
-                            <select
+                            <div
                                 data-tour="task-form-assignee"
-                                value={form.assignedToId}
-                                onChange={(e) =>
-                                    setForm({ ...form, assignedToId: e.target.value })
-                                }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4"
                             >
-                                <option value="">Selecione...</option>
-                                {storeUsers.map((u) => (
-                                    <option key={u.id} value={u.id}>
-                                        {u.name}
-                                    </option>
-                                ))}
-                            </select>
+                                <AutocompleteInput
+                                    options={storeUsers.map((u) => ({
+                                        id: u.id,
+                                        nome: u.name,
+                                    }))}
+                                    value={form.assignedToId}
+                                    onChange={(id) =>
+                                        setForm({ ...form, assignedToId: id })
+                                    }
+                                    placeholder="Selecione..."
+                                    className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                />
+                            </div>
                         </div>
 
                         <div>

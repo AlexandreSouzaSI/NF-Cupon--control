@@ -67,6 +67,32 @@ export function AppLayout({ children, title }: AppLayoutProps) {
 
     const [theme, setThemeState] = useState<Theme>('dark');
 
+    // Títulos dos grupos do menu lateral (Principal, Estoque, Compras...)
+    // agora são clicáveis e recolhem/expandem os itens. Só guarda os
+    // grupos que a pessoa já mexeu manualmente — os que ela nunca tocou
+    // usam o padrão calculado na hora (grupo da página atual começa
+    // aberto, o resto começa fechado).
+    const [manualGroupState, setManualGroupState] = useState<
+        Record<string, boolean>
+    >({});
+
+    function isGroupOpen(group: { group: string; items: { href: string }[] }) {
+        if (group.group in manualGroupState) {
+            return manualGroupState[group.group];
+        }
+
+        return group.items.some(
+            (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+        );
+    }
+
+    function toggleGroup(groupName: string, currentlyOpen: boolean) {
+        setManualGroupState((prev) => ({
+            ...prev,
+            [groupName]: !currentlyOpen,
+        }));
+    }
+
     // Contagem regressiva do teste grátis (conta criada em /demo). Null =
     // não é conta de teste, então o banner nem aparece.
     const [demoSecondsLeft, setDemoSecondsLeft] = useState<number | null>(null);
@@ -209,6 +235,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             pathname,
             user.isDemo,
             activeStore?.enabledModules,
+            user.moduleAccess,
         );
 
         if (!allowed) {
@@ -328,6 +355,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             pathname,
             user.isDemo,
             activeStore?.enabledModules,
+            user.moduleAccess,
         )
     ) {
         return (
@@ -349,7 +377,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                 (item) =>
                     (user.isDemo || item.roles.includes(user.role)) &&
                     !item.hidden &&
-                    isModuleEnabled(item, activeStore?.enabledModules),
+                    isModuleEnabled(item, activeStore?.enabledModules, user.moduleAccess),
             ),
         }))
         .filter((group) => group.items.length > 0);
@@ -492,47 +520,61 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                         </p>
                     </div>
 
-                    <nav className="space-y-5">
-                        {visibleMenuGroups.map((group) => (
-                            <div key={group.group}>
-                                <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                                    {group.group}
-                                </p>
+                    <nav className="space-y-2">
+                        {visibleMenuGroups.map((group) => {
+                            const open = isGroupOpen(group);
 
-                                <div className="space-y-1">
-                                    {group.items.map((item) => {
-                                        const Icon = item.icon;
-                                        const colors = menuColorStyles[item.color];
-                                        const badgeValue = item.badgeKey
-                                            ? badgeCounts[item.badgeKey as keyof typeof badgeCounts]
-                                            : 0;
+                            return (
+                                <div key={group.group}>
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleGroup(group.group, open)}
+                                        className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                    >
+                                        {group.group}
+                                        <ChevronDown
+                                            size={14}
+                                            className={`transition-transform ${open ? '' : '-rotate-90'}`}
+                                        />
+                                    </button>
 
-                                        return (
-                                            <button
-                                                key={item.href}
-                                                onClick={() => router.push(item.href)}
-                                                className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
-                                            >
-                                                <span
-                                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors.bg} ${colors.text}`}
-                                                >
-                                                    <Icon size={18} />
-                                                </span>
-                                                <span className="flex-1">
-                                                    {item.label}
-                                                </span>
+                                    {open && (
+                                        <div className="space-y-1">
+                                            {group.items.map((item) => {
+                                                const Icon = item.icon;
+                                                const colors = menuColorStyles[item.color];
+                                                const badgeValue = item.badgeKey
+                                                    ? badgeCounts[item.badgeKey as keyof typeof badgeCounts]
+                                                    : 0;
 
-                                                {item.badgeKey && badgeValue > 0 && (
-                                                    <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-zinc-900 dark:text-white">
-                                                        {badgeValue}
-                                                    </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
+                                                return (
+                                                    <button
+                                                        key={item.href}
+                                                        onClick={() => router.push(item.href)}
+                                                        className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                                    >
+                                                        <span
+                                                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors.bg} ${colors.text}`}
+                                                        >
+                                                            <Icon size={18} />
+                                                        </span>
+                                                        <span className="flex-1">
+                                                            {item.label}
+                                                        </span>
+
+                                                        {item.badgeKey && badgeValue > 0 && (
+                                                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-zinc-900 dark:text-white">
+                                                                {badgeValue}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {user.isAdminMaster && (
                             <div>
@@ -592,50 +634,64 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                 </div>
                             )}
 
-                            <nav className="space-y-5">
-                                {visibleMenuGroups.map((group) => (
-                                    <div key={group.group}>
-                                        <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                                            {group.group}
-                                        </p>
+                            <nav className="space-y-2">
+                                {visibleMenuGroups.map((group) => {
+                                    const open = isGroupOpen(group);
 
-                                        <div className="space-y-1">
-                                            {group.items.map((item) => {
-                                                const Icon = item.icon;
-                                                const colors = menuColorStyles[item.color];
-                                                const badgeValue = item.badgeKey
-                                                    ? badgeCounts[item.badgeKey as keyof typeof badgeCounts]
-                                                    : 0;
+                                    return (
+                                        <div key={group.group}>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleGroup(group.group, open)}
+                                                className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                            >
+                                                {group.group}
+                                                <ChevronDown
+                                                    size={14}
+                                                    className={`transition-transform ${open ? '' : '-rotate-90'}`}
+                                                />
+                                            </button>
 
-                                                return (
-                                                    <button
-                                                        key={item.href}
-                                                        onClick={() => {
-                                                            setMenuOpen(false);
-                                                            router.push(item.href);
-                                                        }}
-                                                        className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
-                                                    >
-                                                        <span
-                                                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors.bg} ${colors.text}`}
-                                                        >
-                                                            <Icon size={18} />
-                                                        </span>
-                                                        <span className="flex-1">
-                                                            {item.label}
-                                                        </span>
+                                            {open && (
+                                                <div className="space-y-1">
+                                                    {group.items.map((item) => {
+                                                        const Icon = item.icon;
+                                                        const colors = menuColorStyles[item.color];
+                                                        const badgeValue = item.badgeKey
+                                                            ? badgeCounts[item.badgeKey as keyof typeof badgeCounts]
+                                                            : 0;
 
-                                                        {item.badgeKey && badgeValue > 0 && (
-                                                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-zinc-900 dark:text-white">
-                                                                {badgeValue}
-                                                            </span>
-                                                        )}
-                                                    </button>
-                                                );
-                                            })}
+                                                        return (
+                                                            <button
+                                                                key={item.href}
+                                                                onClick={() => {
+                                                                    setMenuOpen(false);
+                                                                    router.push(item.href);
+                                                                }}
+                                                                className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                                            >
+                                                                <span
+                                                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colors.bg} ${colors.text}`}
+                                                                >
+                                                                    <Icon size={18} />
+                                                                </span>
+                                                                <span className="flex-1">
+                                                                    {item.label}
+                                                                </span>
+
+                                                                {item.badgeKey && badgeValue > 0 && (
+                                                                    <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-zinc-900 dark:text-white">
+                                                                        {badgeValue}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
 
                                 {user.isAdminMaster && (
                                     <div>

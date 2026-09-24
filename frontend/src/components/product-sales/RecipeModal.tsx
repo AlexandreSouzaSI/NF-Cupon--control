@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { Factory, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { AutocompleteInput } from './AutocompleteInput';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type RecipeLine = {
     key: number;

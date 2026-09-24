@@ -15,6 +15,7 @@ import {
     X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type SupplierCategory = {
     id: string;
@@ -65,7 +66,6 @@ function ListaCard({
     const [nameDraft, setNameDraft] = useState(category.name);
     const [savingName, setSavingName] = useState(false);
 
-    const [stockSearch, setStockSearch] = useState('');
     const [selectedStockItemId, setSelectedStockItemId] = useState('');
     const [adding, setAdding] = useState(false);
 
@@ -150,13 +150,18 @@ function ListaCard({
         [items],
     );
 
-    const filteredStockOptions = useMemo(() => {
-        const term = stockSearch.trim().toUpperCase();
-        return stockItems
-            .filter((item) => !stockItemsInList.has(item.id))
-            .filter((item) => !term || item.nome.toUpperCase().includes(term))
-            .slice(0, 30);
-    }, [stockItems, stockSearch, stockItemsInList]);
+    const stockOptions = useMemo(
+        () =>
+            stockItems
+                .filter((item) => !stockItemsInList.has(item.id))
+                .map((item) => ({
+                    id: item.id,
+                    nome: item.categoria
+                        ? `${item.nome} (${item.categoria})`
+                        : item.nome,
+                })),
+        [stockItems, stockItemsInList],
+    );
 
     async function handleAddFromStock() {
         if (!selectedStockItemId) {
@@ -172,7 +177,6 @@ function ListaCard({
                 stockItemId: selectedStockItemId,
             });
             setSelectedStockItemId('');
-            setStockSearch('');
             await loadItems();
         } catch (error: any) {
             toast.error(
@@ -343,41 +347,15 @@ function ListaCard({
                         {!manualMode ? (
                             <div className="space-y-2">
                                 <div className="flex flex-col gap-2 sm:flex-row">
-                                    <input
-                                        value={stockSearch}
-                                        onChange={(e) => {
-                                            setStockSearch(e.target.value);
-                                            setSelectedStockItemId('');
-                                        }}
-                                        placeholder="Buscar item do Estoque..."
-                                        className="h-9 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
-                                    />
-                                    <select
-                                        value={selectedStockItemId}
-                                        onChange={(e) =>
-                                            setSelectedStockItemId(
-                                                e.target.value,
-                                            )
-                                        }
-                                        className="h-9 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
-                                    >
-                                        <option value="">
-                                            {filteredStockOptions.length === 0
-                                                ? 'Nenhum item encontrado'
-                                                : 'Selecione o item...'}
-                                        </option>
-                                        {filteredStockOptions.map((item) => (
-                                            <option
-                                                key={item.id}
-                                                value={item.id}
-                                            >
-                                                {item.nome}
-                                                {item.categoria
-                                                    ? ` (${item.categoria})`
-                                                    : ''}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="h-9 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3">
+                                        <AutocompleteInput
+                                            options={stockOptions}
+                                            value={selectedStockItemId}
+                                            onChange={setSelectedStockItemId}
+                                            placeholder="Digite pra buscar item do Estoque..."
+                                            className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                        />
+                                    </div>
                                     <button
                                         type="button"
                                         disabled={

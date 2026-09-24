@@ -79,6 +79,20 @@ export class UsersService {
         );
     }
 
+    // Mesma ideia da checagem acima, só que pra moduleAccess (quais
+    // módulos essa pessoa pode acessar) e canViewPayrollBills (ver valor
+    // de conta Funcionários/Freelancer) — só o Proprietário ou o Admin
+    // Master decidem isso, ninguém mais (nem Administrativo/Gerente, que
+    // normalmente cadastram colaborador).
+    private ensureCanGrantModuleAccess(actingUser: any) {
+        if (actingUser.isAdminMaster) return;
+        if (actingUser.role === UserRole.PROPRIETARIO) return;
+
+        throw new ForbiddenException(
+            'Só o Proprietário ou o Admin Master podem alterar os módulos liberados de um colaborador.',
+        );
+    }
+
     // Duas checagens independentes:
     // 1) Perfil-alvo — quem pode cadastrar/editar/desativar alguém com
     //    aquele perfil (matriz ROLE_ASSIGNERS, roda pra todo mundo,
@@ -134,6 +148,13 @@ export class UsersService {
             if (dto.canApprovePurchases !== undefined) {
                 this.ensureCanGrantApprovalPermission(actingUser);
             }
+
+            if (
+                dto.moduleAccess !== undefined ||
+                dto.canViewPayrollBills !== undefined
+            ) {
+                this.ensureCanGrantModuleAccess(actingUser);
+            }
         }
 
         const phone = dto.phone?.trim() ? normalizePhone(dto.phone) : null;
@@ -162,6 +183,8 @@ export class UsersService {
                 active: true,
                 canApprovePurchases: dto.canApprovePurchases ?? false,
                 notifyQuotationConfirmed: dto.notifyQuotationConfirmed ?? false,
+                moduleAccess: dto.moduleAccess ?? [],
+                canViewPayrollBills: dto.canViewPayrollBills ?? true,
                 userStores: {
                     create:
                         dto.storeIds?.map((storeId) => ({
@@ -338,6 +361,8 @@ export class UsersService {
                     active: dto.active,
                     canApprovePurchases: dto.canApprovePurchases,
                     notifyQuotationConfirmed: dto.notifyQuotationConfirmed,
+                    moduleAccess: dto.moduleAccess,
+                    canViewPayrollBills: dto.canViewPayrollBills,
                 },
             });
 

@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 
 import { AppLayout } from '../../../src/components/app-layout';
+import { AutocompleteInput } from '../../../src/components/ui/AutocompleteInput';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import {
@@ -1021,31 +1022,22 @@ export default function NewPurchasePage() {
                                         Cartão
                                     </label>
 
-                                    <select
-                                        value={cardId}
-                                        onChange={(event) =>
-                                            setCardId(
-                                                event.target.value,
-                                            )
-                                        }
-                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
-                                    >
-                                        <option value="">
-                                            Selecione o cartão
-                                        </option>
-
-                                        {filteredCards.map((card) => (
-                                            <option
-                                                key={card.id}
-                                                value={card.id}
-                                            >
-                                                {card.name}
-                                                {card.lastDigits
-                                                    ? ` • final ${card.lastDigits}`
-                                                    : ''}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4">
+                                        <AutocompleteInput
+                                            options={filteredCards.map((card) => ({
+                                                id: card.id,
+                                                nome: `${card.name}${
+                                                    card.lastDigits
+                                                        ? ` • final ${card.lastDigits}`
+                                                        : ''
+                                                }`,
+                                            }))}
+                                            value={cardId}
+                                            onChange={setCardId}
+                                            placeholder="Selecione o cartão"
+                                            className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                        />
+                                    </div>
 
                                     {filteredCards.length === 0 && (
                                         <button

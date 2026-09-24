@@ -44,6 +44,15 @@ export type AuthUser = {
     // dá por padrão (Comprador/Proprietário/Admin Master) — ver
     // canApprovePurchase() abaixo e purchases.service.ts no backend.
     canApprovePurchases?: boolean;
+    // Restrição extra de módulo por pessoa (além do perfil + loja) — vazio
+    // ou ausente = sem restrição extra. Só o Proprietário edita isso pra
+    // outra pessoa (ver Cadastros → Colaboradores). Espelha
+    // User.moduleAccess no backend.
+    moduleAccess?: string[];
+    // Ver valor de conta categoria Funcionários/Freelancer em Contas a
+    // Pagar — default true (não some pra ninguém até o Proprietário tirar
+    // explicitamente). Espelha User.canViewPayrollBills no backend.
+    canViewPayrollBills?: boolean;
     // Conta de teste grátis (autocadastro em /demo). demoExpiresAt vem como
     // string ISO (serializado no cookie) — bloqueado depois desse horário,
     // ver app-layout.tsx (banner) e lib/api.ts (401 força logout).
@@ -95,6 +104,16 @@ export function canApprovePurchase(user: AuthUser | null) {
 // canApprovePurchases de outro usuário — espelha
 // ensureCanGrantApprovalPermission() do backend (users.service.ts).
 export function canGrantApprovalPermission(user: AuthUser | null) {
+    if (!user) return false;
+
+    return Boolean(user.isAdminMaster) || user.role === 'PROPRIETARIO';
+}
+
+// Só Admin Master ou Proprietário podem editar moduleAccess/
+// canViewPayrollBills de outro colaborador — espelha
+// ensureCanGrantModuleAccess() do backend (users.service.ts). Mesma regra
+// de canGrantApprovalPermission acima, campo diferente.
+export function canGrantModuleAccess(user: AuthUser | null) {
     if (!user) return false;
 
     return Boolean(user.isAdminMaster) || user.role === 'PROPRIETARIO';

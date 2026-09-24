@@ -9,6 +9,7 @@ import {
     AcceptNfBillPayload,
 } from '../ui/AcceptNfBillForm';
 import { NfViewerModal } from '../ui/NfViewerModal';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 import {
     CheckCircle2,
     Download,
@@ -807,41 +808,29 @@ export function ServiceNfTab() {
                                             </span>
                                         ) : linkingId === incoming.id ? (
                                             <>
-                                                <select
-                                                    value={
-                                                        selectedService[
-                                                        incoming.id
-                                                        ] || ''
-                                                    }
-                                                    onChange={(e) =>
-                                                        setSelectedService({
-                                                            ...selectedService,
-                                                            [incoming.id]:
-                                                                e.target.value,
-                                                        })
-                                                    }
-                                                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
-                                                >
-                                                    <option value="">
-                                                        Selecione o serviço
-                                                    </option>
-
-                                                    {servicesWithoutNf.map(
-                                                        (service) => (
-                                                            <option
-                                                                key={service.id}
-                                                                value={service.id}
-                                                            >
-                                                                {service.name} —{' '}
-                                                                {service.providerName}{' '}
-                                                                —{' '}
-                                                                {formatCurrency(
-                                                                    service.value,
-                                                                )}
-                                                            </option>
-                                                        ),
-                                                    )}
-                                                </select>
+                                                <div className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3">
+                                                    <AutocompleteInput
+                                                        options={servicesWithoutNf.map(
+                                                            (service) => ({
+                                                                id: service.id,
+                                                                nome: `${service.name} — ${service.providerName} — ${formatCurrency(service.value)}`,
+                                                            }),
+                                                        )}
+                                                        value={
+                                                            selectedService[
+                                                                incoming.id
+                                                            ] || ''
+                                                        }
+                                                        onChange={(id) =>
+                                                            setSelectedService({
+                                                                ...selectedService,
+                                                                [incoming.id]: id,
+                                                            })
+                                                        }
+                                                        placeholder="Selecione o serviço"
+                                                        className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                                    />
+                                                </div>
 
                                                 <div className="flex gap-2">
                                                     <button

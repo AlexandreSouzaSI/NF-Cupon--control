@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { toast } from 'sonner';
 import { Check, FileStack, Loader2, X } from 'lucide-react';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type NfPendente = {
     id: string;
@@ -291,18 +292,15 @@ export function LinkNfTab({
                                                                 </div>
 
                                                                 {linha.modo === 'existente' ? (
-                                                                    <select
-                                                                        value={linha.stockItemId}
-                                                                        onChange={(e) => updateLinha(item.itemIndex, { stockItemId: e.target.value })}
-                                                                        className="min-w-[180px] rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
-                                                                    >
-                                                                        <option value="">Selecione...</option>
-                                                                        {stockItems.map((si) => (
-                                                                            <option key={si.id} value={si.id}>
-                                                                                {si.nome}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
+                                                                    <div className="min-w-[180px] rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 dark:border-zinc-700">
+                                                                        <AutocompleteInput
+                                                                            options={stockItems.map((si) => ({ id: si.id, nome: si.nome }))}
+                                                                            value={linha.stockItemId}
+                                                                            onChange={(id) => updateLinha(item.itemIndex, { stockItemId: id })}
+                                                                            placeholder="Selecione..."
+                                                                            className="h-full w-full bg-transparent text-xs outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                                                        />
+                                                                    </div>
                                                                 ) : (
                                                                     <>
                                                                         <input

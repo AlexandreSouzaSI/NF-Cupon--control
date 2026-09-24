@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner';
 
 import { AppLayout } from '../../../src/components/app-layout';
+import { AutocompleteInput } from '../../../src/components/ui/AutocompleteInput';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 
@@ -348,67 +349,54 @@ export default function BillsReconcilePage() {
                                                 </span>
                                             ) : (
                                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                                    <select
+                                                    <div
                                                         data-tour={
                                                             index === 0
                                                                 ? 'reconcile-select-bill'
                                                                 : undefined
                                                         }
-                                                        value={
-                                                            selectedBillId[
-                                                            transaction.fitId
-                                                            ] || ''
-                                                        }
-                                                        onChange={(event) =>
-                                                            setSelectedBillId(
-                                                                (current) => ({
-                                                                    ...current,
-                                                                    [transaction.fitId]:
-                                                                        event
-                                                                            .target
-                                                                            .value,
-                                                                }),
-                                                            )
-                                                        }
-                                                        className="h-11 min-w-[260px] rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                                                        className="h-11 min-w-[260px] rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3"
                                                     >
-                                                        <option value="">
-                                                            Selecionar conta
-                                                            correspondente
-                                                        </option>
-
-                                                        {availableBills.map(
-                                                            (bill) => (
-                                                                <option
-                                                                    key={
-                                                                        bill.id
-                                                                    }
-                                                                    value={
-                                                                        bill.id
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        bill.description
-                                                                    }
-                                                                    {bill.supplier
-                                                                        ?.name
-                                                                        ? ` • ${bill.supplier.name}`
-                                                                        : ''}{' '}
-                                                                    •{' '}
-                                                                    {formatCurrency(
+                                                        <AutocompleteInput
+                                                            options={availableBills.map(
+                                                                (bill) => ({
+                                                                    id: bill.id,
+                                                                    nome: `${bill.description}${
+                                                                        bill.supplier
+                                                                            ?.name
+                                                                            ? ` • ${bill.supplier.name}`
+                                                                            : ''
+                                                                    } • ${formatCurrency(
                                                                         bill.value,
-                                                                    )}{' '}
-                                                                    • vence{' '}
-                                                                    {formatDate(
+                                                                    )} • vence ${formatDate(
                                                                         bill.dueDate.slice(
                                                                             0,
                                                                             10,
                                                                         ),
-                                                                    )}
-                                                                </option>
-                                                            ),
-                                                        )}
-                                                    </select>
+                                                                    )}`,
+                                                                }),
+                                                            )}
+                                                            value={
+                                                                selectedBillId[
+                                                                    transaction
+                                                                        .fitId
+                                                                ] || ''
+                                                            }
+                                                            onChange={(id) =>
+                                                                setSelectedBillId(
+                                                                    (
+                                                                        current,
+                                                                    ) => ({
+                                                                        ...current,
+                                                                        [transaction.fitId]:
+                                                                            id,
+                                                                    }),
+                                                                )
+                                                            }
+                                                            placeholder="Selecionar conta correspondente"
+                                                            className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                                        />
+                                                    </div>
 
                                                     <div className="flex gap-2">
                                                         <button

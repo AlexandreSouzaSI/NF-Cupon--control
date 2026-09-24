@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { ElementType } from 'react';
 import { AppLayout } from '../../src/components/app-layout';
+import { AutocompleteInput } from '../../src/components/ui/AutocompleteInput';
 import { api } from '@/lib/api';
 import { canDeleteForever, getUser } from '@/lib/auth';
 import { getActiveStore } from '@/lib/active-store';
@@ -652,22 +653,18 @@ function DiasTrabalhadosTab() {
                     <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                         Freelancer
                     </label>
-                    <select
-                        value={selectedId || ''}
-                        onChange={(e) => setSelectedId(e.target.value)}
-                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500 sm:max-w-xs"
-                    >
-                        {freelancers.length === 0 && (
-                            <option value="">
-                                Nenhum freelancer cadastrado
-                            </option>
-                        )}
-                        {freelancers.map((f) => (
-                            <option key={f.id} value={f.id}>
-                                {f.name}
-                            </option>
-                        ))}
-                    </select>
+                    <div className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 sm:max-w-xs">
+                        <AutocompleteInput
+                            options={freelancers.map((f) => ({
+                                id: f.id,
+                                nome: f.name,
+                            }))}
+                            value={selectedId || ''}
+                            onChange={setSelectedId}
+                            placeholder="Nenhum freelancer cadastrado"
+                            className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1285,17 +1282,18 @@ function RelatorioTab() {
                 </div>
             ) : (
                 <div className="space-y-5">
-                    <select
-                        value={selectedFreelancerId || ''}
-                        onChange={(e) => setSelectedFreelancerId(e.target.value)}
-                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500 sm:max-w-xs"
-                    >
-                        {freelancers.map((f) => (
-                            <option key={f.id} value={f.id}>
-                                {f.name}
-                            </option>
-                        ))}
-                    </select>
+                    <div className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 sm:max-w-xs">
+                        <AutocompleteInput
+                            options={freelancers.map((f) => ({
+                                id: f.id,
+                                nome: f.name,
+                            }))}
+                            value={selectedFreelancerId || ''}
+                            onChange={setSelectedFreelancerId}
+                            placeholder="Selecione o freelancer..."
+                            className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                        />
+                    </div>
 
                     {freelancerPayments.length === 0 ? (
                         <p className="text-sm text-zinc-600 dark:text-zinc-400">

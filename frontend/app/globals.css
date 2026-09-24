@@ -15,6 +15,8 @@
   --primary-foreground: #ffffff;
 
   --muted: #71717a;
+
+  color-scheme: light;
 }
 
 .dark {
@@ -30,6 +32,13 @@
   --primary-foreground: #ffffff;
 
   --muted: #71717a;
+
+  /* Sem isso o navegador continua desenhando <select>/<option> (e outros
+     controles nativos, como scrollbar) com o esquema claro do SO, mesmo
+     com classes dark: aplicadas — daí o combo ficar branco no branco
+     quando abre a lista, com o texto (herdado de --foreground, que aqui
+     é quase branco) ilegível sobre o fundo também claro do popup nativo. */
+  color-scheme: dark;
 }
 
 * {

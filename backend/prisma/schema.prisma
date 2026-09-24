@@ -275,6 +275,25 @@ model User {
   // ensureCanGrantApprovalPermission em users.service.ts.
   canApprovePurchases Boolean @default(false)
 
+  // Restrição extra de módulo por pessoa, além do que o perfil (role) já
+  // libera e do que a loja tem habilitado (Store.enabledModules). Lista
+  // vazia = sem restrição extra (usa só perfil + loja, comportamento de
+  // sempre) — é o padrão, pra ninguém perder acesso quando esse campo
+  // entrar no ar. Só fica restrito quando o Proprietário desmarca algum
+  // módulo especificamente pra essa pessoa (Cadastros → Colaboradores).
+  // Só o Proprietário (ou Admin Master) pode editar essa lista — ver
+  // ensureCanGrantModuleAccess em users.service.ts.
+  moduleAccess StoreModule[] @default([])
+
+  // Dentro de Contas a Pagar, permissão específica pra ver o VALOR de
+  // contas cuja categoria seja "Funcionários" ou "Freelancer" (folha de
+  // pagamento lançada manualmente por lá) — quem não tem essa flag nem
+  // vê essas contas na lista, não só o valor escondido. Default true pra
+  // não tirar acesso de ninguém quando o campo entrar no ar; só o
+  // Proprietário (ou Admin Master) pode desmarcar pra alguém — mesma
+  // regra de moduleAccess acima.
+  canViewPayrollBills Boolean @default(true)
+
   // Conta criada pelo autocadastro público de teste (/demo/signup, loja
   // isDemo=true). demoExpiresAt é o prazo (1h a partir do cadastro) —
   // depois disso login e qualquer request autenticada passam a ser

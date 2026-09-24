@@ -61,6 +61,8 @@ export class AuthService {
                 role: user.role,
                 isAdminMaster: user.isAdminMaster,
                 canApprovePurchases: user.canApprovePurchases,
+                moduleAccess: user.moduleAccess,
+                canViewPayrollBills: user.canViewPayrollBills,
                 isDemo: user.isDemo,
                 demoExpiresAt: user.demoExpiresAt,
                 stores,

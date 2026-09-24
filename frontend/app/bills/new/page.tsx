@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner';
 
 import { AppLayout } from '../../../src/components/app-layout';
+import { AutocompleteInput } from '../../../src/components/ui/AutocompleteInput';
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { parseBoletoCode } from '@/lib/boleto';
@@ -1525,44 +1526,27 @@ function NewBillPageInner() {
                                 Fornecedor
                             </label>
 
-                            <select
-                                value={
-                                    form.supplierId
-                                }
-                                onChange={(event) =>
-                                    setForm(
-                                        (current) => ({
-                                            ...current,
-                                            supplierId:
-                                                event
-                                                    .target
-                                                    .value,
+                            <div className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4">
+                                <AutocompleteInput
+                                    options={suppliers.map(
+                                        (supplier) => ({
+                                            id: supplier.id,
+                                            nome: supplier.name,
                                         }),
-                                    )
-                                }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-cyan-500"
-                            >
-                                <option value="">
-                                    Não informado
-                                </option>
-
-                                {suppliers.map(
-                                    (supplier) => (
-                                        <option
-                                            key={
-                                                supplier.id
-                                            }
-                                            value={
-                                                supplier.id
-                                            }
-                                        >
-                                            {
-                                                supplier.name
-                                            }
-                                        </option>
-                                    ),
-                                )}
-                            </select>
+                                    )}
+                                    value={form.supplierId}
+                                    onChange={(id) =>
+                                        setForm(
+                                            (current) => ({
+                                                ...current,
+                                                supplierId: id,
+                                            }),
+                                        )
+                                    }
+                                    placeholder="Não informado"
+                                    className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                                />
+                            </div>
                         </div>
 
                         <div className="md:col-span-2">

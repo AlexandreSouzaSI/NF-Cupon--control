@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { toast } from 'sonner';
 import { ArrowDownCircle, ArrowUpCircle, Loader2 } from 'lucide-react';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type StockItemOption = { id: string; nome: string; unidadeMedida: 'KG' | 'LITRO' | 'UNIDADE' };
 
@@ -118,18 +119,15 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
                 <div className="flex flex-wrap items-end gap-2">
                     <div className="min-w-[200px] flex-1">
                         <label className="text-xs text-zinc-500">Item</label>
-                        <select
-                            value={stockItemId}
-                            onChange={(e) => setStockItemId(e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
-                        >
-                            <option value="">Selecione...</option>
-                            {items.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.nome}
-                                </option>
-                            ))}
-                        </select>
+                        <div className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 dark:border-zinc-700">
+                            <AutocompleteInput
+                                options={items.map((item) => ({ id: item.id, nome: item.nome }))}
+                                value={stockItemId}
+                                onChange={setStockItemId}
+                                placeholder="Selecione..."
+                                className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                            />
+                        </div>
                     </div>
 
                     <div>

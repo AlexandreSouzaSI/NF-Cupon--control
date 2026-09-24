@@ -16,7 +16,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { AutocompleteInput } from './AutocompleteInput';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type ProductionUnidade = 'KG' | 'ML' | 'UNIDADE';
 

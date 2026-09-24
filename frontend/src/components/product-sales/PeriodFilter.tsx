@@ -6,6 +6,7 @@ import { getActiveStore } from '@/lib/active-store';
 import { CalendarRange } from 'lucide-react';
 
 import { formatarNomePadraoImportacao } from './periodo-format';
+import { AutocompleteInput } from '../ui/AutocompleteInput';
 
 type ProductSalesImport = {
     id: string;
@@ -65,26 +66,24 @@ export function PeriodFilter({
     return (
         <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
             <CalendarRange size={16} className="shrink-0 text-zinc-400" />
-            <select
-                value={value ?? 'todos'}
-                onChange={(e) =>
-                    onChange(e.target.value === 'todos' ? null : e.target.value)
-                }
-                className="w-full min-w-[220px] bg-transparent text-sm outline-none"
-            >
-                <option value="todos">Tudo (todas as importações)</option>
-                {imports.map((item) => (
-                    <option key={item.id} value={item.id}>
-                        {formatarNomePadraoImportacao(
+            <AutocompleteInput
+                options={[
+                    { id: 'todos', nome: 'Tudo (todas as importações)' },
+                    ...imports.map((item) => ({
+                        id: item.id,
+                        nome: `${formatarNomePadraoImportacao(
                             undefined,
                             item.periodoInicio,
                             item.periodoFim,
                             item.nomeLocal || item.arquivoOriginal,
-                        )}{' '}
-                        · {item._count.entries} produto(s)
-                    </option>
-                ))}
-            </select>
+                        )} · ${item._count.entries} produto(s)`,
+                    })),
+                ]}
+                value={value ?? 'todos'}
+                onChange={(id) => onChange(id === 'todos' ? null : id)}
+                placeholder="Selecione o período..."
+                className="w-full min-w-[220px] bg-transparent text-sm outline-none"
+            />
         </div>
     );
 }
