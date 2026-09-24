@@ -1003,6 +1003,22 @@ export class QuotationsService {
         const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
         const link = `${frontendUrl}/cotacao-confirmar/${confirmToken}`;
 
+        const store = quotation.store;
+        const enderecoPartes = [
+            store.logradouro && store.numero
+                ? `${store.logradouro}, ${store.numero}`
+                : store.logradouro,
+            store.complemento || undefined,
+            store.bairro || undefined,
+            store.municipio && store.uf
+                ? `${store.municipio}/${store.uf}`
+                : store.municipio || undefined,
+            store.cep ? `CEP ${store.cep}` : undefined,
+        ].filter((parte): parte is string => Boolean(parte));
+        const storeEndereco = enderecoPartes.length > 0
+            ? enderecoPartes.join(', ')
+            : store.address || null;
+
         const event: QuotationOrderConfirmRequestedEvent = {
             userId: user.id,
             phone: winner.supplier.phone,
@@ -1012,6 +1028,9 @@ export class QuotationsService {
             storeName: quotation.store.name,
             link,
             total,
+            storeCnpj: store.cnpj || null,
+            storeInscricaoEstadual: store.inscricaoEstadual || null,
+            storeEndereco,
         };
 
         this.eventEmitter.emit(QUOTATION_ORDER_CONFIRM_REQUESTED_EVENT, event);

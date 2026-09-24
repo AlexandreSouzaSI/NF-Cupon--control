@@ -107,4 +107,10 @@ export type QuotationOrderConfirmRequestedEvent = {
     storeName: string;
     link: string;
     total: number;
+    // Dados fiscais da loja — vão na própria mensagem de "você ganhou",
+    // pra o fornecedor já ter em mãos o que precisa pra faturar (CNPJ,
+    // endereço, IE), sem precisar pedir depois.
+    storeCnpj: string | null;
+    storeInscricaoEstadual: string | null;
+    storeEndereco: string | null;
 };

@@ -44,6 +44,9 @@ export default function CotacaoPublicaPage() {
     const [prices, setPrices] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
     const [declining, setDeclining] = useState(false);
+    // Depois que envia com sucesso, a tela troca pra "Obrigado" e para de
+    // aceitar clique — evita o fornecedor mandar duas vezes sem querer.
+    const [enviadoAgora, setEnviadoAgora] = useState(false);
 
     async function load() {
         if (!token) return;
@@ -110,7 +113,7 @@ export default function CotacaoPublicaPage() {
             });
 
             toast.success('Preços enviados! Obrigado.');
-            await load();
+            setEnviadoAgora(true);
         } catch (error: any) {
             toast.error(
                 error?.response?.data?.message || 'Erro ao enviar os preços',
@@ -155,6 +158,22 @@ export default function CotacaoPublicaPage() {
                 <p className="max-w-sm text-sm text-zinc-500">
                     Confira se copiou o link certo, ou peça pra quem te mandou
                     reenviar a cotação.
+                </p>
+            </div>
+        );
+    }
+
+    if (enviadoAgora) {
+        return (
+            <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-950 p-6 text-center">
+                <CheckCircle2 className="text-teal-500" size={40} />
+                <p className="text-lg font-semibold text-zinc-200">
+                    Obrigado! Preços enviados.
+                </p>
+                <p className="max-w-sm text-sm text-zinc-500">
+                    Recebemos sua cotação pra {data.categoryName} na {data.storeName}
+                    . Se for o fornecedor escolhido, você recebe um novo aviso
+                    pra confirmar o pedido.
                 </p>
             </div>
         );

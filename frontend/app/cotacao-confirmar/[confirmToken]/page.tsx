@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { CheckCircle2, Loader2, PackageSearch } from 'lucide-react';
+import { CheckCircle2, Download, Loader2, PackageSearch } from 'lucide-react';
 import { toast } from 'sonner';
 
 type UnidadeMedida = 'KG' | 'UNIDADE';
@@ -115,7 +115,7 @@ export default function CotacaoConfirmarPage() {
     const jaConfirmado = data.jaConfirmado;
 
     return (
-        <div className="min-h-screen bg-zinc-950 px-4 py-8 text-zinc-100">
+        <div className="min-h-screen bg-zinc-950 px-4 py-8 text-zinc-100 print:bg-white print:px-0 print:py-0 print:text-black">
             <div className="mx-auto max-w-lg space-y-5">
                 <div>
                     <p className="text-xs uppercase tracking-wide text-teal-500">
@@ -128,11 +128,19 @@ export default function CotacaoConfirmarPage() {
                 </div>
 
                 {jaConfirmado ? (
-                    <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-4">
-                        <p className="flex items-center gap-2 text-sm font-semibold text-green-400">
+                    <div className="space-y-3 rounded-2xl border border-green-500/30 bg-green-500/10 p-4 print:border-zinc-300 print:bg-white">
+                        <p className="flex items-center gap-2 text-sm font-semibold text-green-400 print:text-black">
                             <CheckCircle2 size={16} />
                             Pedido já confirmado. Obrigado!
                         </p>
+                        <button
+                            type="button"
+                            onClick={() => window.print()}
+                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-zinc-700 px-4 text-sm font-semibold text-zinc-200 hover:bg-zinc-900 print:hidden"
+                        >
+                            <Download size={16} />
+                            Salvar em PDF
+                        </button>
                     </div>
                 ) : !data.podeConfirmar ? (
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
@@ -191,7 +199,7 @@ export default function CotacaoConfirmarPage() {
                         type="button"
                         disabled={confirming}
                         onClick={handleConfirm}
-                        className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-500 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50"
+                        className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-500 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50 print:hidden"
                     >
                         <CheckCircle2 size={16} />
                         {confirming ? 'Confirmando...' : 'Confirmar pedido'}

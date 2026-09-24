@@ -268,9 +268,28 @@ export class WhatsappService {
             currency: 'BRL',
         });
 
-        const greeting = [
+        const dadosFaturamento = [
+            `Razão Social: ${params.storeName}`,
+            params.storeCnpj ? `CNPJ: ${params.storeCnpj}` : undefined,
+            params.storeInscricaoEstadual
+                ? `IE: ${params.storeInscricaoEstadual}`
+                : undefined,
+            params.storeEndereco ? `Endereço: ${params.storeEndereco}` : undefined,
+        ].filter((linha): linha is string => Boolean(linha));
+
+        const greetingLines = [
             `Olá! Você ganhou a cotação de *${params.categoryName}* pra ${params.storeName}. Valor total do pedido: ${totalLabel}. Confirme no link abaixo. Obrigado!`,
-        ].join('\n');
+        ];
+
+        if (dadosFaturamento.length > 0) {
+            greetingLines.push(
+                '',
+                `Dados pra nota fiscal — *${params.storeName}*`,
+                ...dadosFaturamento,
+            );
+        }
+
+        const greeting = greetingLines.join('\n');
         const text = `${greeting}\n\n${params.link}`;
 
         let providerMessageId: string | undefined;
