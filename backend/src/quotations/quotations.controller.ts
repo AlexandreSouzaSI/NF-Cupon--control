@@ -24,6 +24,7 @@ import { CreateCategoryItemDto } from './dto/create-category-item.dto';
 import { UpdateCategoryItemDto } from './dto/update-category-item.dto';
 import { SendQuotationDto } from './dto/send-quotation.dto';
 import { SelectSupplierDto } from './dto/select-supplier.dto';
+import { EditItemPriceDto } from './dto/edit-item-price.dto';
 
 // Mesmo espírito de acesso do módulo Compras/Estoque — quem monta a
 // agenda e dispara cotação é Administrativo/Proprietário/Gerente/Comprador.
@@ -162,6 +163,42 @@ export class QuotationsController {
         @CurrentUser() user: any,
     ) {
         return this.quotationsService.selectSupplier(id, body, user);
+    }
+
+    // Clique na célula preço×fornecedor da tela de comparação — alterna
+    // se esse fornecedor ganhou esse item específico.
+    @Post(':id/items/:itemId/suppliers/:supplierId/toggle-selection')
+    async toggleItemSelection(
+        @Param('id') id: string,
+        @Param('itemId') itemId: string,
+        @Param('supplierId') supplierId: string,
+        @CurrentUser() user: any,
+    ) {
+        return this.quotationsService.toggleItemSelection(
+            id,
+            itemId,
+            supplierId,
+            user,
+        );
+    }
+
+    // Lápis de edição — comprador sobrescreve o preço de um item×fornecedor
+    // (ex: desconto negociado numa ligação).
+    @Patch(':id/items/:itemId/suppliers/:supplierId/price')
+    async editItemPrice(
+        @Param('id') id: string,
+        @Param('itemId') itemId: string,
+        @Param('supplierId') supplierId: string,
+        @Body() body: EditItemPriceDto,
+        @CurrentUser() user: any,
+    ) {
+        return this.quotationsService.editItemPrice(
+            id,
+            itemId,
+            supplierId,
+            body,
+            user,
+        );
     }
 
     // --- Confirmação do pedido pelo fornecedor vencedor (Fase 6) ---

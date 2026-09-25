@@ -8,7 +8,9 @@ import {
     CheckCircle2,
     ChevronRight,
     Crown,
+    Pencil,
     Scale,
+    X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -38,6 +40,14 @@ type QuotationDetailItem = {
     descricao: string;
     unidadeMedida: UnidadeMedida;
     quantidadeSugerida: number;
+    lastPaidPrice: number | null;
+};
+
+type QuotationCellPrice = {
+    unitPrice: number;
+    editedUnitPrice: number | null;
+    effectivePrice: number;
+    selected: boolean;
 };
 
 type QuotationDetailSupplier = {
@@ -46,9 +56,11 @@ type QuotationDetailSupplier = {
     supplierName: string;
     respondedAt: string | null;
     declinedAt: string | null;
+    confirmedAt: string | null;
     itemsRespondidos: number;
     total: number;
-    prices: Record<string, number>;
+    selectedTotal: number;
+    prices: Record<string, QuotationCellPrice>;
 };
 
 type QuotationDetail = {
@@ -99,8 +111,16 @@ export function QuotationsTab() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [detail, setDetail] = useState<QuotationDetail | null>(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
-    const [selectingId, setSelectingId] = useState<string | null>(null);
     const [requestingConfirmation, setRequestingConfirmation] = useState(false);
+
+    // Célula preço×fornecedor sendo editada no momento (lápis clicado) —
+    // só uma por vez, com o valor digitado em edição.
+    const [editingCell, setEditingCell] = useState<{
+        itemId: string;
+        supplierId: string;
+    } | null>(null);
+    const [editingValue, setEditingValue] = useState('');
+    const [savingCell, setSavingCell] = useState<string | null>(null);
 
     async function loadList() {
         if (!store) return;
@@ -150,25 +170,69 @@ export function QuotationsTab() {
         loadList();
     }
 
-    async function handleSelectSupplier(supplierId: string) {
+    async function handleToggleSelection(itemId: string, supplierId: string) {
         if (!selectedId) return;
 
+        const cellKey = `${itemId}:${supplierId}`;
+
         try {
-            setSelectingId(supplierId);
+            setSavingCell(cellKey);
 
-            await api.post(`/quotations/${selectedId}/select-supplier`, {
-                supplierId,
-            });
+            await api.post(
+                `/quotations/${selectedId}/items/${itemId}/suppliers/${supplierId}/toggle-selection`,
+            );
 
-            toast.success('Fornecedor escolhido!');
             await loadDetail(selectedId);
         } catch (error: any) {
             toast.error(
                 error?.response?.data?.message ||
-                'Erro ao escolher fornecedor',
+                'Erro ao selecionar item do fornecedor',
             );
         } finally {
-            setSelectingId(null);
+            setSavingCell(null);
+        }
+    }
+
+    function startEditingCell(itemId: string, supplierId: string, atual: number) {
+        setEditingCell({ itemId, supplierId });
+        setEditingValue(String(atual));
+    }
+
+    function cancelEditingCell() {
+        setEditingCell(null);
+        setEditingValue('');
+    }
+
+    async function saveEditingCell() {
+        if (!selectedId || !editingCell) return;
+
+        const unitPrice = Number(editingValue.replace(',', '.'));
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+            toast.error('Preço inválido');
+            return;
+        }
+
+        const { itemId, supplierId } = editingCell;
+        const cellKey = `${itemId}:${supplierId}`;
+
+        try {
+            setSavingCell(cellKey);
+
+            await api.patch(
+                `/quotations/${selectedId}/items/${itemId}/suppliers/${supplierId}/price`,
+                { unitPrice },
+            );
+
+            toast.success('Preço atualizado');
+            setEditingCell(null);
+            setEditingValue('');
+            await loadDetail(selectedId);
+        } catch (error: any) {
+            toast.error(
+                error?.response?.data?.message || 'Erro ao editar preço',
+            );
+        } finally {
+            setSavingCell(null);
         }
     }
 
@@ -201,15 +265,6 @@ export function QuotationsTab() {
     }
 
     if (selectedId) {
-        const menorTotal = detail
-            ? Math.min(
-                ...detail.suppliers
-                    .filter((s) => s.itemsRespondidos > 0)
-                    .map((s) => s.total),
-                Infinity,
-            )
-            : Infinity;
-
         return (
             <div className="space-y-4">
                 <button
@@ -244,21 +299,31 @@ export function QuotationsTab() {
                             </span>
                         </div>
 
+                        {(detail.status === 'SENT' ||
+                            detail.status === 'SUPPLIER_SELECTED') && (
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                Clique no preço do fornecedor pra escolher de
+                                quem comprar cada item — dá pra escolher itens
+                                de fornecedores diferentes na mesma cotação.
+                                Use o lápis pra ajustar o preço na mão (ex:
+                                desconto negociado por telefone).
+                            </p>
+                        )}
+
                         {detail.status === 'SUPPLIER_SELECTED' && (
                             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-500/30 bg-teal-500/5 p-4">
                                 <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                                    Vencedor:{' '}
-                                    <span className="font-semibold">
-                                        {
-                                            detail.suppliers.find(
-                                                (s) =>
-                                                    s.supplierId ===
-                                                    detail.selectedSupplierId,
-                                            )?.supplierName
-                                        }
-                                    </span>
-                                    . Peça a confirmação do pedido por
-                                    WhatsApp pra Purchase nascer sozinha
+                                    {
+                                        detail.suppliers.filter((s) =>
+                                            Object.values(s.prices).some(
+                                                (p) => p.selected,
+                                            ),
+                                        ).length
+                                    }{' '}
+                                    fornecedor(es) com item(ns) escolhido(s).
+                                    Peça a confirmação do pedido por WhatsApp
+                                    — cada fornecedor recebe só os itens que
+                                    ele ganhou, e a compra nasce sozinha
                                     quando ele confirmar.
                                 </p>
                                 <button
@@ -276,8 +341,8 @@ export function QuotationsTab() {
 
                         {detail.status === 'ORDER_CONFIRMED' && (
                             <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-4 text-sm text-green-700 dark:text-green-400">
-                                Pedido confirmado pelo fornecedor — a compra
-                                já foi criada e está aguardando recebimento
+                                Pedido confirmado — a(s) compra(s) já
+                                foram criadas e estão aguardando recebimento
                                 em Compras.
                             </div>
                         )}
@@ -293,28 +358,42 @@ export function QuotationsTab() {
                                         <tr>
                                             <th className="px-4 py-2.5">Item</th>
                                             <th className="px-4 py-2.5">Qtd</th>
-                                            {detail.suppliers.map((s) => (
-                                                <th
-                                                    key={s.id}
-                                                    className="px-4 py-2.5 whitespace-nowrap"
-                                                >
-                                                    <div className="flex items-center gap-1">
-                                                        {s.supplierName}
-                                                        {detail.selectedSupplierId ===
-                                                            s.supplierId && (
+                                            <th className="px-4 py-2.5 whitespace-nowrap">
+                                                Últ. preço
+                                            </th>
+                                            {detail.suppliers.map((s) => {
+                                                const ganhouAlgo = Object.values(
+                                                    s.prices,
+                                                ).some((p) => p.selected);
+
+                                                return (
+                                                    <th
+                                                        key={s.id}
+                                                        className="px-4 py-2.5 whitespace-nowrap"
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            {s.supplierName}
+                                                            {ganhouAlgo && (
                                                                 <Crown
                                                                     size={13}
                                                                     className="text-amber-500"
                                                                 />
                                                             )}
-                                                    </div>
-                                                    {s.declinedAt && (
-                                                        <span className="text-[10px] font-normal text-red-500">
-                                                            recusou
-                                                        </span>
-                                                    )}
-                                                </th>
-                                            ))}
+                                                            {s.confirmedAt && (
+                                                                <CheckCircle2
+                                                                    size={13}
+                                                                    className="text-green-500"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        {s.declinedAt && (
+                                                            <span className="text-[10px] font-normal text-red-500">
+                                                                recusou
+                                                            </span>
+                                                        )}
+                                                    </th>
+                                                );
+                                            })}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -336,19 +415,155 @@ export function QuotationsTab() {
                                                           ? 'L'
                                                           : 'un'}
                                                 </td>
+                                                <td className="px-4 py-2.5 text-xs text-zinc-400">
+                                                    {item.lastPaidPrice != null
+                                                        ? formatMoney(
+                                                            item.lastPaidPrice,
+                                                        )
+                                                        : '—'}
+                                                </td>
                                                 {detail.suppliers.map((s) => {
                                                     const preco =
                                                         s.prices[item.id];
+                                                    const podeEditar =
+                                                        detail.status ===
+                                                            'SENT' ||
+                                                        detail.status ===
+                                                            'SUPPLIER_SELECTED';
+                                                    const cellKey = `${item.id}:${s.supplierId}`;
+                                                    const isEditing =
+                                                        editingCell?.itemId ===
+                                                            item.id &&
+                                                        editingCell?.supplierId ===
+                                                            s.supplierId;
+
+                                                    if (!preco) {
+                                                        return (
+                                                            <td
+                                                                key={s.id}
+                                                                className="px-4 py-2.5 text-xs text-zinc-400"
+                                                            >
+                                                                {s.declinedAt
+                                                                    ? '—'
+                                                                    : 'sem preço'}
+                                                            </td>
+                                                        );
+                                                    }
+
+                                                    if (isEditing) {
+                                                        return (
+                                                            <td
+                                                                key={s.id}
+                                                                className="px-4 py-2.5"
+                                                            >
+                                                                <div className="flex items-center gap-1">
+                                                                    <input
+                                                                        autoFocus
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        value={
+                                                                            editingValue
+                                                                        }
+                                                                        onChange={(e) =>
+                                                                            setEditingValue(
+                                                                                e.target.value,
+                                                                            )
+                                                                        }
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === 'Enter')
+                                                                                saveEditingCell();
+                                                                            if (e.key === 'Escape')
+                                                                                cancelEditingCell();
+                                                                        }}
+                                                                        className="w-20 rounded-md border border-teal-500 bg-white px-1.5 py-1 text-xs dark:bg-zinc-950"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={
+                                                                            savingCell ===
+                                                                            cellKey
+                                                                        }
+                                                                        onClick={saveEditingCell}
+                                                                        className="text-teal-600 hover:text-teal-700 disabled:opacity-50"
+                                                                        title="Salvar"
+                                                                    >
+                                                                        <CheckCircle2 size={15} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={cancelEditingCell}
+                                                                        className="text-zinc-400 hover:text-red-500"
+                                                                        title="Cancelar"
+                                                                    >
+                                                                        <X size={15} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    }
+
                                                     return (
                                                         <td
                                                             key={s.id}
-                                                            className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400"
+                                                            className="px-4 py-2.5"
                                                         >
-                                                            {preco != null
-                                                                ? formatMoney(
-                                                                    preco,
-                                                                )
-                                                                : '—'}
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={
+                                                                        !podeEditar ||
+                                                                        savingCell ===
+                                                                            cellKey
+                                                                    }
+                                                                    onClick={() =>
+                                                                        handleToggleSelection(
+                                                                            item.id,
+                                                                            s.supplierId,
+                                                                        )
+                                                                    }
+                                                                    className={`rounded-lg border px-2.5 py-1 text-left text-sm transition-colors disabled:cursor-default ${
+                                                                        preco.selected
+                                                                            ? 'border-teal-500 bg-teal-500/15 font-semibold text-teal-700 dark:text-teal-300'
+                                                                            : 'border-transparent text-zinc-600 hover:border-zinc-300 dark:text-zinc-400 dark:hover:border-zinc-700'
+                                                                    }`}
+                                                                    title={
+                                                                        podeEditar
+                                                                            ? 'Clique pra escolher esse item desse fornecedor'
+                                                                            : undefined
+                                                                    }
+                                                                >
+                                                                    {formatMoney(
+                                                                        preco.effectivePrice,
+                                                                    )}
+                                                                </button>
+                                                                {preco.editedUnitPrice !=
+                                                                    null && (
+                                                                    <span
+                                                                        className="text-[10px] text-zinc-400 line-through"
+                                                                        title="Preço original do fornecedor"
+                                                                    >
+                                                                        {formatMoney(
+                                                                            preco.unitPrice,
+                                                                        )}
+                                                                    </span>
+                                                                )}
+                                                                {podeEditar && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            startEditingCell(
+                                                                                item.id,
+                                                                                s.supplierId,
+                                                                                preco.effectivePrice,
+                                                                            )
+                                                                        }
+                                                                        className="text-zinc-400 hover:text-teal-600 dark:hover:text-teal-400"
+                                                                        title="Editar preço na mão"
+                                                                    >
+                                                                        <Pencil size={12} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                     );
                                                 })}
@@ -359,85 +574,26 @@ export function QuotationsTab() {
                                         <tr className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
                                             <td
                                                 className="px-4 py-2.5 font-semibold"
-                                                colSpan={2}
+                                                colSpan={3}
                                             >
-                                                Total
+                                                Total escolhido
                                             </td>
-                                            {detail.suppliers.map((s) => {
-                                                const isMenor =
-                                                    s.itemsRespondidos > 0 &&
-                                                    s.total === menorTotal;
-
-                                                return (
-                                                    <td
-                                                        key={s.id}
-                                                        className={`px-4 py-2.5 font-semibold ${isMenor
+                                            {detail.suppliers.map((s) => (
+                                                <td
+                                                    key={s.id}
+                                                    className={`px-4 py-2.5 font-semibold ${
+                                                        s.selectedTotal > 0
                                                             ? 'text-teal-600 dark:text-teal-400'
-                                                            : ''
-                                                            }`}
-                                                    >
-                                                        {s.itemsRespondidos > 0
-                                                            ? formatMoney(
-                                                                s.total,
-                                                            )
-                                                            : '—'}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                        <tr>
-                                            <td
-                                                className="px-4 py-2.5"
-                                                colSpan={2}
-                                            />
-                                            {detail.suppliers.map((s) => {
-                                                const isWinner =
-                                                    detail.selectedSupplierId ===
-                                                    s.supplierId;
-                                                const podeEscolher =
-                                                    (detail.status === 'SENT' ||
-                                                        detail.status ===
-                                                        'SUPPLIER_SELECTED') &&
-                                                    Boolean(s.respondedAt);
-
-                                                return (
-                                                    <td
-                                                        key={s.id}
-                                                        className="px-4 py-2.5"
-                                                    >
-                                                        {isWinner ? (
-                                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600 dark:text-teal-400">
-                                                                <CheckCircle2
-                                                                    size={13}
-                                                                />
-                                                                Escolhido
-                                                            </span>
-                                                        ) : podeEscolher ? (
-                                                            <button
-                                                                type="button"
-                                                                disabled={
-                                                                    selectingId ===
-                                                                    s.supplierId
-                                                                }
-                                                                onClick={() =>
-                                                                    handleSelectSupplier(
-                                                                        s.supplierId,
-                                                                    )
-                                                                }
-                                                                className="rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-600 disabled:opacity-50"
-                                                            >
-                                                                Escolher
-                                                            </button>
-                                                        ) : (
-                                                            <span className="text-xs text-zinc-400">
-                                                                {s.respondedAt
-                                                                    ? '—'
-                                                                    : 'sem preço'}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                );
-                                            })}
+                                                            : 'text-zinc-400'
+                                                    }`}
+                                                >
+                                                    {s.selectedTotal > 0
+                                                        ? formatMoney(
+                                                            s.selectedTotal,
+                                                        )
+                                                        : '—'}
+                                                </td>
+                                            ))}
                                         </tr>
                                     </tfoot>
                                 </table>

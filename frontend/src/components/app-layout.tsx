@@ -523,18 +523,29 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                     <nav className="space-y-2">
                         {visibleMenuGroups.map((group) => {
                             const open = isGroupOpen(group);
+                            const GroupIcon = group.icon;
+                            const groupColors = menuColorStyles[group.color];
 
                             return (
                                 <div key={group.group}>
                                     <button
                                         type="button"
                                         onClick={() => toggleGroup(group.group, open)}
-                                        className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                        className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
                                     >
-                                        {group.group}
+                                        <span className="flex items-center gap-2">
+                                            <span
+                                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${groupColors.bg} ${groupColors.text}`}
+                                            >
+                                                <GroupIcon size={13} />
+                                            </span>
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                                                {group.group}
+                                            </span>
+                                        </span>
                                         <ChevronDown
                                             size={14}
-                                            className={`transition-transform ${open ? '' : '-rotate-90'}`}
+                                            className={`text-zinc-500 transition-transform ${open ? '' : '-rotate-90'}`}
                                         />
                                     </button>
 
@@ -637,18 +648,29 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                             <nav className="space-y-2">
                                 {visibleMenuGroups.map((group) => {
                                     const open = isGroupOpen(group);
+                                    const GroupIcon = group.icon;
+                                    const groupColors = menuColorStyles[group.color];
 
                                     return (
                                         <div key={group.group}>
                                             <button
                                                 type="button"
                                                 onClick={() => toggleGroup(group.group, open)}
-                                                className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                                className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
                                             >
-                                                {group.group}
+                                                <span className="flex items-center gap-2">
+                                                    <span
+                                                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${groupColors.bg} ${groupColors.text}`}
+                                                    >
+                                                        <GroupIcon size={13} />
+                                                    </span>
+                                                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                                                        {group.group}
+                                                    </span>
+                                                </span>
                                                 <ChevronDown
                                                     size={14}
-                                                    className={`transition-transform ${open ? '' : '-rotate-90'}`}
+                                                    className={`text-zinc-500 transition-transform ${open ? '' : '-rotate-90'}`}
                                                 />
                                             </button>
 

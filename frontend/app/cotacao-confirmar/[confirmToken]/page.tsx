@@ -16,6 +16,9 @@ type ConfirmItem = {
     unitPrice: number | null;
 };
 
+// A lista abaixo já vem filtrada pelo backend — só os itens que ESSE
+// fornecedor ganhou (ver Quotation "por célula"), não a cotação inteira.
+
 type OrderConfirmation = {
     supplierName: string;
     storeName: string;

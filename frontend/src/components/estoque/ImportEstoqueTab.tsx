@@ -20,9 +20,18 @@ export function ImportEstoqueTab({ onImported }: { onImported: () => void }) {
     const inputRef = useRef<HTMLInputElement>(null);
 
     async function baixarModelo() {
+        const store = getActiveStore();
+        if (!store) {
+            toast.error('Selecione uma loja ativa no topo do sistema.');
+            return;
+        }
+
         try {
             setBaixando(true);
-            const response = await api.get('/estoque/modelo', { responseType: 'blob' });
+            const response = await api.get('/estoque/modelo', {
+                params: { storeId: store.id },
+                responseType: 'blob',
+            });
 
             const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');

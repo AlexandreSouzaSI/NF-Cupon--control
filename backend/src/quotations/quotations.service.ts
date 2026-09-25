@@ -37,6 +37,7 @@ import { UpdateCategoryItemDto } from './dto/update-category-item.dto';
 import { SendQuotationDto } from './dto/send-quotation.dto';
 import { SubmitQuotationPricesDto } from './dto/submit-quotation-prices.dto';
 import { SelectSupplierDto } from './dto/select-supplier.dto';
+import { EditItemPriceDto } from './dto/edit-item-price.dto';
 
 // Mesma lista de perfis que recebem notificação de evento de Compras
 // (ver PURCHASE_NOTIFY_ROLES em purchases.service.ts) — Administrativo/
@@ -660,8 +661,7 @@ export class QuotationsService {
             aberta: quotation.status === QuotationStatus.SENT,
             declinedAt: quotationSupplier.declinedAt,
             respondedAt: quotationSupplier.respondedAt,
-            isWinner:
-                quotation.selectedSupplierId === quotationSupplier.supplierId,
+            isWinner: quotationSupplier.prices.some((p) => p.selected),
             items: quotation.items.map((item) => ({
                 id: item.id,
                 descricao: item.descricao,
@@ -795,10 +795,84 @@ export class QuotationsService {
         }));
     }
 
+    // Preço "de verdade" de uma linha QuotationSupplierPrice: o editado
+    // manualmente pelo comprador (desconto de ligação) tem prioridade
+    // sobre o que o fornecedor mandou originalmente.
+    private effectivePrice(price: {
+        unitPrice: Prisma.Decimal | number;
+        editedUnitPrice: Prisma.Decimal | number | null;
+    }): number {
+        return price.editedUnitPrice != null
+            ? Number(price.editedUnitPrice)
+            : Number(price.unitPrice);
+    }
+
+    // Último preço pago por item (por StockItem) — olha cotações
+    // ANTERIORES já confirmadas (ORDER_CONFIRMED) da mesma loja, no item
+    // que efetivamente foi escolhido (selected=true), e pega o mais
+    // recente. Só cobre itens vinculados ao Estoque (stockItemId) e só
+    // compras que passaram pelo fluxo de Cotação.
+    private async getLastPaidPrices(
+        storeId: string,
+        currentQuotationId: string,
+        stockItemIds: string[],
+    ): Promise<Map<string, number>> {
+        const ids = [...new Set(stockItemIds)];
+        if (ids.length === 0) return new Map();
+
+        const rows = await this.prisma.quotationSupplierPrice.findMany({
+            where: {
+                selected: true,
+                quotationItem: { stockItemId: { in: ids } },
+                quotationSupplier: {
+                    quotation: {
+                        storeId,
+                        status: QuotationStatus.ORDER_CONFIRMED,
+                        id: { not: currentQuotationId },
+                    },
+                },
+            },
+            include: {
+                quotationItem: true,
+                quotationSupplier: { include: { quotation: true } },
+            },
+        });
+
+        const latestByStockItemId = new Map<
+            string,
+            { price: number; at: Date }
+        >();
+
+        for (const row of rows) {
+            const stockItemId = row.quotationItem.stockItemId;
+            if (!stockItemId) continue;
+
+            const at =
+                row.quotationSupplier.quotation.orderConfirmedAt ||
+                row.quotationSupplier.quotation.updatedAt;
+
+            const current = latestByStockItemId.get(stockItemId);
+            if (!current || at > current.at) {
+                latestByStockItemId.set(stockItemId, {
+                    price: this.effectivePrice(row),
+                    at,
+                });
+            }
+        }
+
+        return new Map(
+            [...latestByStockItemId.entries()].map(([k, v]) => [k, v.price]),
+        );
+    }
+
     // Detalhe completo pra tela de comparação — uma linha por item, uma
     // coluna por fornecedor convidado, com o preço que cada um mandou
-    // (ou null se ainda não respondeu) e o total calculado só com os
-    // itens que esse fornecedor preencheu.
+    // (ou null se ainda não respondeu), se aquela célula está escolhida
+    // (selected), o preço efetivo (com edição manual, se houver) e o
+    // último preço pago desse item em cotações anteriores. O total por
+    // fornecedor (selectedTotal) soma só os itens escolhidos dele —
+    // "total" continua existindo como soma de tudo que ele mandou, só de
+    // referência.
     async getQuotationDetail(user: any, id: string) {
         const quotation = await this.prisma.quotation.findUnique({
             where: { id },
@@ -818,23 +892,36 @@ export class QuotationsService {
 
         this.ensureStoreAccess(quotation.storeId, user);
 
+        const stockItemIds = quotation.items
+            .map((item) => item.stockItemId)
+            .filter((v): v is string => Boolean(v));
+
+        const lastPrices = await this.getLastPaidPrices(
+            quotation.storeId,
+            quotation.id,
+            stockItemIds,
+        );
+
         const suppliers = quotation.suppliers.map((qs) => {
             const pricesByItemId = new Map(
-                qs.prices.map((price) => [
-                    price.quotationItemId,
-                    Number(price.unitPrice),
-                ]),
+                qs.prices.map((price) => [price.quotationItemId, price]),
             );
 
             let total = 0;
+            let selectedTotal = 0;
             let itemsRespondidos = 0;
 
             for (const item of quotation.items) {
-                const unitPrice = pricesByItemId.get(item.id);
-                if (unitPrice == null) continue;
+                const price = pricesByItemId.get(item.id);
+                if (!price) continue;
 
                 itemsRespondidos += 1;
-                total += unitPrice * Number(item.quantidadeSugerida);
+                const unit = this.effectivePrice(price);
+                total += unit * Number(item.quantidadeSugerida);
+
+                if (price.selected) {
+                    selectedTotal += unit * Number(item.quantidadeSugerida);
+                }
             }
 
             return {
@@ -843,9 +930,24 @@ export class QuotationsService {
                 supplierName: qs.supplier.name,
                 respondedAt: qs.respondedAt,
                 declinedAt: qs.declinedAt,
+                confirmedAt: qs.confirmedAt,
                 itemsRespondidos,
                 total,
-                prices: Object.fromEntries(pricesByItemId),
+                selectedTotal,
+                prices: Object.fromEntries(
+                    [...pricesByItemId.entries()].map(([itemId, price]) => [
+                        itemId,
+                        {
+                            unitPrice: Number(price.unitPrice),
+                            editedUnitPrice:
+                                price.editedUnitPrice != null
+                                    ? Number(price.editedUnitPrice)
+                                    : null,
+                            effectivePrice: this.effectivePrice(price),
+                            selected: price.selected,
+                        },
+                    ]),
+                ),
             };
         });
 
@@ -861,9 +963,178 @@ export class QuotationsService {
                 descricao: item.descricao,
                 unidadeMedida: item.unidadeMedida,
                 quantidadeSugerida: Number(item.quantidadeSugerida),
+                lastPaidPrice: item.stockItemId
+                    ? (lastPrices.get(item.stockItemId) ?? null)
+                    : null,
             })),
             suppliers,
         };
+    }
+
+    // Clique na célula preço×fornecedor — alterna se esse fornecedor foi
+    // o escolhido pra esse item específico. Só um fornecedor pode ficar
+    // com selected=true por item (desmarca os outros automaticamente).
+    // Precisa que o fornecedor já tenha mandado preço pra esse item.
+    async toggleItemSelection(
+        quotationId: string,
+        itemId: string,
+        supplierId: string,
+        user: any,
+    ) {
+        const quotation = await this.prisma.quotation.findUnique({
+            where: { id: quotationId },
+            include: { items: true, suppliers: { include: { prices: true } } },
+        });
+
+        if (!quotation) {
+            throw new NotFoundException('Cotação não encontrada.');
+        }
+
+        this.ensureStoreAccess(quotation.storeId, user);
+
+        if (
+            quotation.status !== QuotationStatus.SENT &&
+            quotation.status !== QuotationStatus.SUPPLIER_SELECTED
+        ) {
+            throw new BadRequestException(
+                'Essa cotação já foi fechada e não dá mais pra mudar a seleção de itens.',
+            );
+        }
+
+        const item = quotation.items.find((i) => i.id === itemId);
+        if (!item) {
+            throw new NotFoundException('Item não encontrado nessa cotação.');
+        }
+
+        const targetSupplier = quotation.suppliers.find(
+            (s) => s.supplierId === supplierId,
+        );
+        if (!targetSupplier) {
+            throw new NotFoundException(
+                'Esse fornecedor não foi convidado pra essa cotação.',
+            );
+        }
+
+        const targetPrice = targetSupplier.prices.find(
+            (p) => p.quotationItemId === itemId,
+        );
+        if (!targetPrice) {
+            throw new BadRequestException(
+                'Esse fornecedor ainda não mandou preço pra esse item.',
+            );
+        }
+
+        const willSelect = !targetPrice.selected;
+
+        await this.prisma.$transaction(async (tx) => {
+            if (willSelect) {
+                // Desmarca esse item em qualquer outro fornecedor da
+                // mesma cotação — só um vencedor por item.
+                const otherPriceIds = quotation.suppliers
+                    .flatMap((s) => s.prices)
+                    .filter((p) => p.quotationItemId === itemId && p.selected)
+                    .map((p) => p.id);
+
+                if (otherPriceIds.length > 0) {
+                    await tx.quotationSupplierPrice.updateMany({
+                        where: { id: { in: otherPriceIds } },
+                        data: { selected: false },
+                    });
+                }
+            }
+
+            await tx.quotationSupplierPrice.update({
+                where: { id: targetPrice.id },
+                data: { selected: willSelect },
+            });
+
+            // Mantém o status coerente: assim que pelo menos um item é
+            // escolhido, a cotação sai de "aguardando fornecedores" pra
+            // "fornecedor(es) escolhido(s)"; se todos forem desmarcados
+            // de novo, volta pra SENT (só antes de qualquer confirmação).
+            const hasAnySelected =
+                willSelect ||
+                quotation.suppliers
+                    .flatMap((s) => s.prices)
+                    .some((p) => p.id !== targetPrice.id && p.selected);
+
+            if (hasAnySelected && quotation.status === QuotationStatus.SENT) {
+                await tx.quotation.update({
+                    where: { id: quotationId },
+                    data: { status: QuotationStatus.SUPPLIER_SELECTED },
+                });
+            } else if (
+                !hasAnySelected &&
+                quotation.status === QuotationStatus.SUPPLIER_SELECTED
+            ) {
+                await tx.quotation.update({
+                    where: { id: quotationId },
+                    data: { status: QuotationStatus.SENT },
+                });
+            }
+        });
+
+        return { ok: true, selected: willSelect };
+    }
+
+    // Comprador conseguiu desconto numa ligação — sobrescreve o preço
+    // desse item×fornecedor sem mexer no unitPrice original (que fica só
+    // de referência/histórico).
+    async editItemPrice(
+        quotationId: string,
+        itemId: string,
+        supplierId: string,
+        dto: EditItemPriceDto,
+        user: any,
+    ) {
+        const quotation = await this.prisma.quotation.findUnique({
+            where: { id: quotationId },
+            include: { suppliers: { include: { prices: true } } },
+        });
+
+        if (!quotation) {
+            throw new NotFoundException('Cotação não encontrada.');
+        }
+
+        this.ensureStoreAccess(quotation.storeId, user);
+
+        if (
+            quotation.status !== QuotationStatus.SENT &&
+            quotation.status !== QuotationStatus.SUPPLIER_SELECTED
+        ) {
+            throw new BadRequestException(
+                'Essa cotação já foi fechada e não dá mais pra editar preço.',
+            );
+        }
+
+        const targetSupplier = quotation.suppliers.find(
+            (s) => s.supplierId === supplierId,
+        );
+        if (!targetSupplier) {
+            throw new NotFoundException(
+                'Esse fornecedor não foi convidado pra essa cotação.',
+            );
+        }
+
+        const targetPrice = targetSupplier.prices.find(
+            (p) => p.quotationItemId === itemId,
+        );
+        if (!targetPrice) {
+            throw new BadRequestException(
+                'Esse fornecedor ainda não mandou preço pra esse item — não dá pra editar um preço que não existe.',
+            );
+        }
+
+        await this.prisma.quotationSupplierPrice.update({
+            where: { id: targetPrice.id },
+            data: {
+                editedUnitPrice: new Prisma.Decimal(dto.unitPrice),
+                editedAt: new Date(),
+                editedById: user.id,
+            },
+        });
+
+        return { ok: true };
     }
 
     // Compra escolhe o vencedor — dá pra trocar de ideia enquanto o
@@ -978,9 +1249,41 @@ export class QuotationsService {
         return total;
     }
 
-    // Comprador já escolheu o vencedor (Fase 5) e agora pede pra ele
-    // confirmar o pedido de verdade — gera (ou reaproveita) o
-    // confirmToken e dispara o WhatsApp com o link + valor total.
+    // Mesma ideia, mas só com os itens que ESSE fornecedor ganhou
+    // (selected=true) e usando o preço efetivo (editado manualmente, se
+    // houver) — é o que vale de verdade pra confirmação de pedido e pra
+    // Purchase gerada.
+    private calcularTotalSelecionado(
+        items: { id: string; quantidadeSugerida: Prisma.Decimal | number }[],
+        prices: {
+            quotationItemId: string;
+            selected: boolean;
+            unitPrice: Prisma.Decimal | number;
+            editedUnitPrice: Prisma.Decimal | number | null;
+        }[],
+    ) {
+        const pricesByItemId = new Map(
+            prices
+                .filter((p) => p.selected)
+                .map((p) => [p.quotationItemId, p]),
+        );
+
+        let total = 0;
+
+        for (const item of items) {
+            const price = pricesByItemId.get(item.id);
+            if (!price) continue;
+
+            total += this.effectivePrice(price) * Number(item.quantidadeSugerida);
+        }
+
+        return total;
+    }
+
+    // Comprador já escolheu os itens vencedores por fornecedor (Fase 5,
+    // agora por célula) e agora pede a confirmação de verdade — dispara
+    // um link/WhatsApp SEPARADO pra cada fornecedor que ganhou pelo
+    // menos um item, cada um só com o que ele ganhou.
     async requestOrderConfirmation(id: string, user: any) {
         const quotation = await this.prisma.quotation.findUnique({
             where: { id },
@@ -1000,64 +1303,74 @@ export class QuotationsService {
 
         if (quotation.status !== QuotationStatus.SUPPLIER_SELECTED) {
             throw new BadRequestException(
-                'Escolha um fornecedor vencedor antes de pedir confirmação do pedido.',
+                'Escolha pelo menos um item de algum fornecedor antes de pedir confirmação do pedido.',
             );
         }
 
-        const winner = quotation.suppliers.find(
-            (s) => s.supplierId === quotation.selectedSupplierId,
+        const winners = quotation.suppliers.filter((s) =>
+            s.prices.some((p) => p.selected),
         );
 
-        if (!winner) {
-            throw new NotFoundException(
-                'Fornecedor vencedor não encontrado nessa cotação.',
-            );
-        }
-
-        if (!winner.supplier.phone) {
+        if (winners.length === 0) {
             throw new BadRequestException(
-                'O fornecedor vencedor não tem telefone cadastrado. Cadastre o telefone em Cadastros → Fornecedores antes de pedir confirmação.',
+                'Nenhum item foi escolhido ainda — clique nos preços que você quer confirmar antes de pedir a confirmação.',
             );
         }
 
-        const confirmToken = winner.confirmToken || randomBytes(24).toString('hex');
-
-        await this.prisma.quotationSupplier.update({
-            where: { id: winner.id },
-            data: { confirmToken, confirmSentAt: new Date() },
-        });
-
-        const total = this.calcularTotalFornecedor(
-            quotation.items,
-            winner.prices,
-        );
+        const semTelefone = winners.filter((w) => !w.supplier.phone);
+        if (semTelefone.length > 0) {
+            throw new BadRequestException(
+                `${semTelefone.map((w) => w.supplier.name).join(', ')} ${semTelefone.length === 1 ? 'não tem' : 'não têm'} telefone cadastrado. Cadastre o telefone em Cadastros → Fornecedores antes de pedir confirmação.`,
+            );
+        }
 
         const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
-        const link = `${frontendUrl}/cotacao-confirmar/${confirmToken}`;
-
         const store = quotation.store;
         const storeEndereco = this.formatStoreEndereco(store);
 
-        const event: QuotationOrderConfirmRequestedEvent = {
-            userId: user.id,
-            phone: winner.supplier.phone,
-            quotationSupplierId: winner.id,
-            supplierName: winner.supplier.name,
-            categoryName: quotation.category.name,
-            storeName: quotation.store.name,
-            link,
-            total,
-            storeCnpj: store.cnpj || null,
-            storeInscricaoEstadual: store.inscricaoEstadual || null,
-            storeEndereco,
-        };
+        let totalGeral = 0;
 
-        this.eventEmitter.emit(QUOTATION_ORDER_CONFIRM_REQUESTED_EVENT, event);
+        for (const winner of winners) {
+            const confirmToken =
+                winner.confirmToken || randomBytes(24).toString('hex');
 
-        return { ok: true, total };
+            await this.prisma.quotationSupplier.update({
+                where: { id: winner.id },
+                data: { confirmToken, confirmSentAt: new Date() },
+            });
+
+            const total = this.calcularTotalSelecionado(
+                quotation.items,
+                winner.prices,
+            );
+            totalGeral += total;
+
+            const link = `${frontendUrl}/cotacao-confirmar/${confirmToken}`;
+
+            const event: QuotationOrderConfirmRequestedEvent = {
+                userId: user.id,
+                phone: winner.supplier.phone as string,
+                quotationSupplierId: winner.id,
+                supplierName: winner.supplier.name,
+                categoryName: quotation.category.name,
+                storeName: quotation.store.name,
+                link,
+                total,
+                storeCnpj: store.cnpj || null,
+                storeInscricaoEstadual: store.inscricaoEstadual || null,
+                storeEndereco,
+            };
+
+            this.eventEmitter.emit(QUOTATION_ORDER_CONFIRM_REQUESTED_EVENT, event);
+        }
+
+        return { ok: true, total: totalGeral, fornecedores: winners.length };
     }
 
     // --- Página pública de confirmação (sem login, token próprio) ---
+    // confirmToken é por QuotationSupplier — cada fornecedor vencedor
+    // (pode ter mais de um numa cotação multi-fornecedor) tem o seu
+    // próprio link, e só vê/confirma os itens que ele ganhou.
 
     async getPublicOrderConfirmation(confirmToken: string) {
         const quotationSupplier = await this.prisma.quotationSupplier.findUnique(
@@ -1080,14 +1393,17 @@ export class QuotationsService {
         const { quotation } = quotationSupplier;
 
         const pricesByItemId = new Map(
-            quotationSupplier.prices.map((p) => [
-                p.quotationItemId,
-                Number(p.unitPrice),
-            ]),
+            quotationSupplier.prices.map((p) => [p.quotationItemId, p]),
         );
 
-        const isWinner =
-            quotation.selectedSupplierId === quotationSupplier.supplierId;
+        // Só os itens que esse fornecedor especificamente ganhou — não a
+        // lista inteira da cotação (que pode ter itens de outros
+        // fornecedores).
+        const itensGanhos = quotation.items.filter(
+            (item) => pricesByItemId.get(item.id)?.selected,
+        );
+
+        const isWinner = itensGanhos.length > 0;
 
         const store = quotation.store;
 
@@ -1108,23 +1424,28 @@ export class QuotationsService {
                 isWinner &&
                 quotation.status === QuotationStatus.SUPPLIER_SELECTED &&
                 !quotationSupplier.confirmedAt,
-            total: this.calcularTotalFornecedor(
+            total: this.calcularTotalSelecionado(
                 quotation.items,
                 quotationSupplier.prices,
             ),
-            items: quotation.items.map((item) => ({
-                id: item.id,
-                descricao: item.descricao,
-                unidadeMedida: item.unidadeMedida,
-                quantidadeSugerida: Number(item.quantidadeSugerida),
-                unitPrice: pricesByItemId.get(item.id) ?? null,
-            })),
+            items: itensGanhos.map((item) => {
+                const price = pricesByItemId.get(item.id)!;
+                return {
+                    id: item.id,
+                    descricao: item.descricao,
+                    unidadeMedida: item.unidadeMedida,
+                    quantidadeSugerida: Number(item.quantidadeSugerida),
+                    unitPrice: this.effectivePrice(price),
+                };
+            }),
         };
     }
 
     // Fornecedor clica em "Confirmar pedido" — cria a Purchase (Fluxo 2:
-    // sem NF ainda, item a item, pronta pra aparecer no recebimento) e
-    // fecha a cotação. Idempotente: clicar duas vezes não duplica nada.
+    // sem NF ainda, item a item, pronta pra aparecer no recebimento) SÓ
+    // com os itens que ele ganhou. Idempotente: clicar duas vezes não
+    // duplica nada. Quando todo mundo que ganhou algum item já confirmou,
+    // a cotação inteira vira ORDER_CONFIRMED.
     async confirmPublicOrder(confirmToken: string) {
         const quotationSupplier = await this.prisma.quotationSupplier.findUnique(
             {
@@ -1133,7 +1454,12 @@ export class QuotationsService {
                     supplier: true,
                     prices: true,
                     quotation: {
-                        include: { items: true, store: true, category: true },
+                        include: {
+                            items: true,
+                            store: true,
+                            category: true,
+                            suppliers: { include: { prices: true } },
+                        },
                     },
                 },
             },
@@ -1145,9 +1471,15 @@ export class QuotationsService {
 
         const { quotation } = quotationSupplier;
 
-        if (quotation.selectedSupplierId !== quotationSupplier.supplierId) {
+        const itensGanhos = quotation.items.filter((item) =>
+            quotationSupplier.prices.some(
+                (p) => p.quotationItemId === item.id && p.selected,
+            ),
+        );
+
+        if (itensGanhos.length === 0) {
             throw new BadRequestException(
-                'Esse fornecedor não é o vencedor dessa cotação.',
+                'Esse fornecedor não ganhou nenhum item dessa cotação.',
             );
         }
 
@@ -1155,7 +1487,7 @@ export class QuotationsService {
             return {
                 ok: true,
                 alreadyConfirmed: true,
-                purchaseId: quotation.purchaseId,
+                purchaseId: quotationSupplier.purchaseId,
             };
         }
 
@@ -1166,29 +1498,25 @@ export class QuotationsService {
         }
 
         const pricesByItemId = new Map(
-            quotationSupplier.prices.map((p) => [
-                p.quotationItemId,
-                Number(p.unitPrice),
-            ]),
+            quotationSupplier.prices.map((p) => [p.quotationItemId, p]),
         );
 
         let total = 0;
 
-        const purchaseItemsData = quotation.items.map((item) => {
-            const unitPrice = pricesByItemId.get(item.id);
+        const purchaseItemsData = itensGanhos.map((item) => {
+            const price = pricesByItemId.get(item.id)!;
+            const unitPrice = this.effectivePrice(price);
             const quantidade = Number(item.quantidadeSugerida);
-            const itemTotal = unitPrice != null ? unitPrice * quantidade : null;
+            const itemTotal = unitPrice * quantidade;
 
-            if (itemTotal != null) total += itemTotal;
+            total += itemTotal;
 
             return {
                 name: item.descricao,
                 quantity: item.quantidadeSugerida,
                 unit: item.unidadeMedida === 'KG' ? 'kg' : 'un',
-                unitPrice:
-                    unitPrice != null ? new Prisma.Decimal(unitPrice) : undefined,
-                total:
-                    itemTotal != null ? new Prisma.Decimal(itemTotal) : undefined,
+                unitPrice: new Prisma.Decimal(unitPrice),
+                total: new Prisma.Decimal(itemTotal),
             };
         });
 
@@ -1212,17 +1540,40 @@ export class QuotationsService {
 
             await tx.quotationSupplier.update({
                 where: { id: quotationSupplier.id },
-                data: { confirmedAt: new Date() },
+                data: { confirmedAt: new Date(), purchaseId: created.id },
             });
 
-            await tx.quotation.update({
-                where: { id: quotation.id },
-                data: {
-                    status: QuotationStatus.ORDER_CONFIRMED,
-                    orderConfirmedAt: new Date(),
-                    purchaseId: created.id,
-                },
-            });
+            // Só fecha a cotação inteira (ORDER_CONFIRMED) quando TODOS
+            // os fornecedores que ganharam algum item já confirmaram —
+            // numa cotação de fornecedor único isso já acontece nesse
+            // mesmo confirmPublicOrder, igual antes.
+            const outrosVencedoresPendentes = quotation.suppliers.some(
+                (s) =>
+                    s.id !== quotationSupplier.id &&
+                    s.prices.some((p) => p.selected) &&
+                    !s.confirmedAt,
+            );
+
+            if (!outrosVencedoresPendentes) {
+                // purchaseId aqui (campo legado, ver comentário no schema)
+                // só faz sentido quando sobrou um vencedor só — numa
+                // cotação dividida entre vários fornecedores cada um tem
+                // a sua Purchase em QuotationSupplier.purchaseId, e esse
+                // campo antigo fica em branco de propósito.
+                const totalVencedores = quotation.suppliers.filter((s) =>
+                    s.prices.some((p) => p.selected),
+                ).length;
+
+                await tx.quotation.update({
+                    where: { id: quotation.id },
+                    data: {
+                        status: QuotationStatus.ORDER_CONFIRMED,
+                        orderConfirmedAt: new Date(),
+                        purchaseId:
+                            totalVencedores === 1 ? created.id : undefined,
+                    },
+                });
+            }
 
             return created;
         });
@@ -1243,7 +1594,7 @@ export class QuotationsService {
             supplierName: quotationSupplier.supplier.name,
             categoryName: quotation.category.name,
             storeName: quotation.store.name,
-            itemsCount: quotation.items.length,
+            itemsCount: itensGanhos.length,
             total,
             items: purchaseItemsData.map((item) => ({
                 descricao: item.name,

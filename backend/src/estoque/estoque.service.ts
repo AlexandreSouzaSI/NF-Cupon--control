@@ -1042,10 +1042,27 @@ export class EstoqueService {
     // serializeItem/listaCompra).
     // ---------------------------------------------------------------
 
-    async gerarModeloPlanilha(): Promise<Buffer> {
-        const linhas = [
+    async gerarModeloPlanilha(storeId: string, user: any): Promise<Buffer> {
+        if (!storeId) {
+            throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
+        }
+
+        this.ensureStoreAccess(storeId, user);
+
+        const itensExistentes = await this.prisma.stockItem.findMany({
+            where: { storeId },
+            orderBy: { nome: 'asc' },
+        });
+
+        const linhas: (string | number)[][] = [
             ['Nome', 'Descrição', 'Categoria', 'Quantidade', 'Valor', 'Mínimo', 'Máximo'],
-            [
+        ];
+
+        if (itensExistentes.length === 0) {
+            // Loja sem nenhum item cadastrado ainda — mantém a linha de
+            // exemplo, senão a planilha sai só com o cabeçalho e ninguém
+            // entende o formato esperado.
+            linhas.push([
                 'Picanha',
                 'Proteínas - Frigorífico',
                 ESTOQUE_CATEGORIAS[1],
@@ -1053,8 +1070,26 @@ export class EstoqueService {
                 '',
                 '',
                 '',
-            ],
-        ];
+            ]);
+        } else {
+            // Já tem itens: a planilha nasce com Nome/Descrição/Categoria
+            // já preenchidos (Quantidade/Valor em branco de propósito —
+            // reimportar com Quantidade preenchida LANÇA UMA ENTRADA, soma
+            // no saldo atual; deixar em branco evita duplicar estoque sem
+            // querer). Mínimo/Máximo vêm com o valor atual, pra editar em
+            // massa sem perder o que já estava configurado.
+            for (const item of itensExistentes) {
+                linhas.push([
+                    item.nome,
+                    item.descricao || '',
+                    item.categoria || '',
+                    '',
+                    '',
+                    item.estoqueMinimo != null ? Number(item.estoqueMinimo) : '',
+                    item.estoqueMaximo != null ? Number(item.estoqueMaximo) : '',
+                ]);
+            }
+        }
 
         const worksheet = XLSX.utils.aoa_to_sheet(linhas);
         worksheet['!cols'] = [

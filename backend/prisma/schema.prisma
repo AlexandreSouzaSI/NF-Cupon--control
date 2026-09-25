@@ -733,8 +733,10 @@ model QuotationItem {
 
 // Um fornecedor convidado pra uma cotação — o link público que ele
 // recebe é autenticado só pelo token (sem login). confirmToken só é
-// gerado quando esse fornecedor especificamente é escolhido como
-// vencedor (segunda rodada: "aqui está o pedido fechado, confirma?").
+// gerado quando esse fornecedor especificamente ganha pelo menos um item
+// (pode ganhar vários fornecedores na mesma cotação — ver
+// QuotationSupplierPrice.selected — cada um com seu próprio confirmToken
+// e sua própria Purchase, só com os itens que ele ganhou).
 model QuotationSupplier {
   id String @id @default(uuid())
 
@@ -754,6 +756,14 @@ model QuotationSupplier {
   confirmSentAt DateTime?
   confirmedAt   DateTime?
 
+  // Preenchido quando esse fornecedor confirma o pedido (Fase 6) — só com
+  // os itens que ele ganhou (ver QuotationSupplierPrice.selected). Cada
+  // fornecedor vencedor numa cotação multi-fornecedor gera a sua própria
+  // Purchase — diferente de Quotation.purchaseId (legado, de quando só
+  // existia um vencedor por cotação inteira).
+  purchaseId String?   @unique
+  purchase   Purchase? @relation("QuotationSupplierPurchase", fields: [purchaseId], references: [id])
+
   createdAt DateTime @default(now())
 
   prices           QuotationSupplierPrice[]
@@ -765,6 +775,11 @@ model QuotationSupplier {
 }
 
 // Preço que um fornecedor deu pra um item específico da cotação.
+// `selected` é quem decide, célula a célula, de qual fornecedor aquele
+// item vai ser comprado — dá pra ter itens de uma mesma cotação
+// escolhidos de fornecedores diferentes. A aplicação garante (fora do
+// Prisma, não dá pra expressar isso como constraint) que no máximo um
+// QuotationSupplierPrice por quotationItemId fica com selected=true.
 model QuotationSupplierPrice {
   id String @id @default(uuid())
 
@@ -774,7 +789,22 @@ model QuotationSupplierPrice {
   quotationItemId String
   quotationItem   QuotationItem @relation(fields: [quotationItemId], references: [id], onDelete: Cascade)
 
+  // Preço que o fornecedor mandou originalmente (preenchido só pela
+  // página pública, nunca sobrescrito depois — serve de histórico/
+  // comparação com editedUnitPrice).
   unitPrice Decimal @db.Decimal(12, 4)
+
+  // Preço com desconto negociado manualmente pelo comprador (ex: ligação
+  // pro fornecedor). Quando preenchido, é o valor usado no total do
+  // fornecedor e na Purchase gerada — unitPrice original fica só de
+  // referência ("antes: R$ X").
+  editedUnitPrice Decimal?  @db.Decimal(12, 4)
+  editedAt        DateTime?
+  editedById      String?
+
+  // Item escolhido desse fornecedor especificamente (clique na célula da
+  // tela de comparação).
+  selected Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -886,9 +916,15 @@ model Purchase {
   incomingGoodsNfs IncomingGoodsNf[]
 
   // Preenchido quando essa compra nasceu automaticamente de uma Cotação
-  // confirmada pelo fornecedor (ver Quotation.purchaseId) — nesse caso
+  // confirmada pelo fornecedor (ver Quotation.purchaseId, campo legado de
+  // quando só existia um vencedor por cotação inteira) — nesse caso
   // origin vem WHATSAPP (enum PurchaseOrigin já tinha esse valor).
   quotation Quotation?
+
+  // Compra gerada pela confirmação de UM fornecedor específico numa
+  // cotação multi-fornecedor (ver QuotationSupplier.purchaseId) — só com
+  // os itens que esse fornecedor ganhou.
+  quotationSupplier QuotationSupplier? @relation("QuotationSupplierPurchase")
 
   @@index([storeId])
   @@index([supplierId])

@@ -125,6 +125,11 @@ export type MenuItem = {
 
 export type MenuGroup = {
     group: string;
+    // Ícone + cor do título do grupo (Estoque, Compras, Financeiro...) —
+    // mesma paleta soft dos itens, só pra dar um ponto de referência
+    // visual rápido ao escanear o menu, sem gritar.
+    icon: LucideIcon;
+    color: MenuColor;
     items: MenuItem[];
 };
 
@@ -141,6 +146,8 @@ const ALL_ROLES: MenuRole[] = [
 export const menu: MenuGroup[] = [
     {
         group: 'Principal',
+        icon: Home,
+        color: 'slate',
         items: [
             {
                 label: 'Início',
@@ -160,6 +167,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Estoque',
+        icon: Warehouse,
+        color: 'blue',
         items: [
             {
                 label: 'Dashboard de Estoque',
@@ -220,6 +229,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Compras',
+        icon: ShoppingCart,
+        color: 'blue',
         items: [
             {
                 label: 'Dashboard de Compras',
@@ -276,6 +287,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Fiscal',
+        icon: Receipt,
+        color: 'purple',
         items: [
             {
                 label: 'Dashboard Fiscal',
@@ -365,6 +378,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Financeiro',
+        icon: Wallet,
+        color: 'teal',
         items: [
             {
                 label: 'Dashboard Financeiro',
@@ -391,6 +406,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Tarefas',
+        icon: ListChecks,
+        color: 'violet',
         items: [
             {
                 label: 'Tarefas',
@@ -404,6 +421,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Relatórios',
+        icon: BarChart3,
+        color: 'indigo',
         items: [
             {
                 label: 'Relatórios',
@@ -417,6 +436,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Cadastros',
+        icon: Users,
+        color: 'slate',
         items: [
             {
                 label: 'Cadastros',
@@ -429,6 +450,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'RH',
+        icon: UserCog,
+        color: 'pink',
         items: [
             {
                 label: 'Funcionários',
@@ -450,6 +473,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Ajuda',
+        icon: HelpCircle,
+        color: 'teal',
         items: [
             {
                 label: 'Dúvidas',
@@ -462,6 +487,8 @@ export const menu: MenuGroup[] = [
     },
     {
         group: 'Sistema',
+        icon: AlertTriangle,
+        color: 'orange',
         items: [
             {
                 label: 'Alertas',

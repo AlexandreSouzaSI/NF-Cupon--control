@@ -203,8 +203,12 @@ export class EstoqueController {
     // conflitar (não tem risco aqui, mas mantendo o padrão dos outros
     // módulos).
     @Get('modelo')
-    async gerarModelo(@Res() res: Response) {
-        const buffer = await this.estoqueService.gerarModeloPlanilha();
+    async gerarModelo(
+        @Query('storeId') storeId: string,
+        @CurrentUser() user: any,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.estoqueService.gerarModeloPlanilha(storeId, user);
 
         res.set({
             'Content-Type':
