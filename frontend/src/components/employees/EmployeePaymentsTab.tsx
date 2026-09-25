@@ -117,13 +117,13 @@ const periodCards: {
         key: 'ALL',
         label: 'Em aberto',
         icon: Wallet,
-        activeClass: 'border-emerald-500 bg-emerald-500/10 text-emerald-500',
+        activeClass: 'border-blue-500 bg-blue-500/10 text-blue-500',
     },
 ];
 
 const statusColor: Record<string, string> = {
     OPEN: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400',
-    PAID: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+    PAID: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
     OVERDUE: 'border-red-500/30 bg-red-500/10 text-red-400',
 };
 
@@ -536,7 +536,7 @@ export function EmployeePaymentsTab() {
                     <select
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value)}
-                        className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                        className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                     >
                         <option value="">Todos os tipos</option>
                         {Object.entries(TYPE_LABELS).map(([key, label]) => (
@@ -556,7 +556,7 @@ export function EmployeePaymentsTab() {
 
                 <button
                     onClick={() => setShowManualForm((prev) => !prev)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-green-500 px-4 py-2 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600"
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600"
                 >
                     <Plus size={16} />
                     Lançamento avulso
@@ -597,7 +597,7 @@ export function EmployeePaymentsTab() {
                                     e.target.value as EmployeePaymentType,
                                 )
                             }
-                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         >
                             {MANUAL_TYPES.map((type) => (
                                 <option key={type} value={type}>
@@ -618,7 +618,7 @@ export function EmployeePaymentsTab() {
                             value={manualValue}
                             onChange={(e) => setManualValue(e.target.value)}
                             placeholder="0,00"
-                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -632,7 +632,7 @@ export function EmployeePaymentsTab() {
                             onChange={(e) =>
                                 setManualDueDate(e.target.value)
                             }
-                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -643,14 +643,14 @@ export function EmployeePaymentsTab() {
                         <input
                             value={manualNotes}
                             onChange={(e) => setManualNotes(e.target.value)}
-                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </div>
 
                     <div className="sm:col-span-2 lg:col-span-5 flex gap-3">
                         <button
                             disabled={savingManual}
-                            className="h-11 rounded-xl bg-green-500 px-5 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                            className="h-11 rounded-xl bg-blue-500 px-5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                         >
                             {savingManual ? 'Salvando...' : 'Criar lançamento'}
                         </button>
@@ -726,7 +726,7 @@ export function EmployeePaymentsTab() {
                                                     href={`${API_URL}${payment.receiptFileUrl}`}
                                                     target="_blank"
                                                     rel="noreferrer"
-                                                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20"
+                                                    className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-500/20"
                                                 >
                                                     <FileText size={14} />
                                                     Comprovante
@@ -739,7 +739,7 @@ export function EmployeePaymentsTab() {
                                                     onClick={() =>
                                                         startPay(payment)
                                                     }
-                                                    className="inline-flex items-center gap-1 rounded-lg bg-green-500 px-3 py-1.5 text-xs font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                                                    className="inline-flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                                                 >
                                                     <CheckCircle2 size={14} />
                                                     Marcar pago
@@ -808,7 +808,7 @@ export function EmployeePaymentsTab() {
                                                 onClick={() =>
                                                     confirmPay(payment)
                                                 }
-                                                className="h-10 rounded-xl bg-green-500 px-4 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                                                className="h-10 rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                                             >
                                                 {isProcessing
                                                     ? 'Confirmando...'
@@ -838,7 +838,7 @@ export function EmployeePaymentsTab() {
                                             onChange={(e) =>
                                                 setEditValue(e.target.value)
                                             }
-                                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                         />
 
                                         <input
@@ -847,7 +847,7 @@ export function EmployeePaymentsTab() {
                                             onChange={(e) =>
                                                 setEditDueDate(e.target.value)
                                             }
-                                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                         />
 
                                         <input
@@ -856,7 +856,7 @@ export function EmployeePaymentsTab() {
                                                 setEditNotes(e.target.value)
                                             }
                                             placeholder="Observações"
-                                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                         />
 
                                         <div className="flex gap-2">
@@ -865,7 +865,7 @@ export function EmployeePaymentsTab() {
                                                 onClick={() =>
                                                     saveEdit(payment)
                                                 }
-                                                className="h-10 flex-1 rounded-xl bg-green-500 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                                                className="h-10 flex-1 rounded-xl bg-blue-500 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                                             >
                                                 Salvar
                                             </button>

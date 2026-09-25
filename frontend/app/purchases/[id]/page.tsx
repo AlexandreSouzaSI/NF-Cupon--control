@@ -207,7 +207,7 @@ const purchaseStatusColor: Record<string, string> = {
     WAITING_RECEIPT:
         'border-orange-500/30 bg-orange-500/10 text-orange-400',
     RECEIVED_OK:
-        'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+        'border-blue-500/30 bg-blue-500/10 text-blue-400',
     RECEIVED_WITH_DIFFERENCE:
         'border-red-500/30 bg-red-500/10 text-red-400',
     WAITING_INVOICE:
@@ -680,7 +680,7 @@ function PurchaseDetailPageInner() {
                         </button>
 
                         <div className="flex items-start gap-3">
-                            <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-400">
+                            <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                                 <ShoppingCart size={25} />
                             </div>
 
@@ -715,7 +715,7 @@ function PurchaseDetailPageInner() {
                             ] || purchase.status}
                         </span>
 
-                        <strong className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xl text-emerald-400">
+                        <strong className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-xl text-blue-400">
                             {formatCurrency(purchase.value)}
                         </strong>
                     </div>
@@ -850,11 +850,11 @@ function PurchaseDetailPageInner() {
                             )}
 
                             {purchase.orderMirrorUrl && (
-                                <div className="mt-4 flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                                    <Paperclip className="text-emerald-400" />
+                                <div className="mt-4 flex items-center gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+                                    <Paperclip className="text-blue-400" />
 
                                     <div>
-                                        <p className="text-sm text-emerald-300">
+                                        <p className="text-sm text-blue-300">
                                             Espelho do pedido
                                         </p>
 
@@ -862,7 +862,7 @@ function PurchaseDetailPageInner() {
                                             href={`${API_URL}${purchase.orderMirrorUrl}`}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="font-medium text-emerald-400 hover:underline"
+                                            className="font-medium text-blue-400 hover:underline"
                                         >
                                             {purchase.orderMirrorName ||
                                                 'Ver anexo'}
@@ -1006,7 +1006,7 @@ function PurchaseDetailPageInner() {
                                                                     </span>
                                                                 ) : difference ===
                                                                     0 ? (
-                                                                    <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
+                                                                    <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs text-blue-400">
                                                                         Correto
                                                                     </span>
                                                                 ) : difference <
@@ -1055,7 +1055,7 @@ function PurchaseDetailPageInner() {
                                     </p>
                                 </div>
 
-                                <PackageCheck className="text-emerald-400" />
+                                <PackageCheck className="text-blue-400" />
                             </div>
 
                             {purchase.receipts.length === 0 ? (
@@ -1160,7 +1160,7 @@ function PurchaseDetailPageInner() {
                             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div
                                     className={`rounded-2xl border p-4 ${hasCoupon
-                                        ? 'border-emerald-500/20 bg-emerald-500/10'
+                                        ? 'border-blue-500/20 bg-blue-500/10'
                                         : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950'
                                         }`}
                                 >
@@ -1171,7 +1171,7 @@ function PurchaseDetailPageInner() {
                                     <strong
                                         className={
                                             hasCoupon
-                                                ? 'text-emerald-400'
+                                                ? 'text-blue-400'
                                                 : 'text-zinc-700 dark:text-zinc-300'
                                         }
                                     >
@@ -1183,7 +1183,7 @@ function PurchaseDetailPageInner() {
 
                                 <div
                                     className={`rounded-2xl border p-4 ${hasInvoice
-                                        ? 'border-emerald-500/20 bg-emerald-500/10'
+                                        ? 'border-blue-500/20 bg-blue-500/10'
                                         : 'border-red-500/20 bg-red-500/10'
                                         }`}
                                 >
@@ -1194,7 +1194,7 @@ function PurchaseDetailPageInner() {
                                     <strong
                                         className={
                                             hasInvoice
-                                                ? 'text-emerald-400'
+                                                ? 'text-blue-400'
                                                 : 'text-red-400'
                                         }
                                     >
@@ -1463,7 +1463,7 @@ function PurchaseDetailPageInner() {
                                                 onClick={
                                                     approvePurchase
                                                 }
-                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700 disabled:opacity-50"
+                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                                             >
                                                 <ShieldCheck
                                                     size={18}
@@ -1505,7 +1505,7 @@ function PurchaseDetailPageInner() {
                                                     true,
                                                 )
                                             }
-                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-cyan-700 disabled:opacity-50"
+                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 font-semibold text-white hover:bg-cyan-700 disabled:opacity-50"
                                         >
                                             <PackageCheck
                                                 size={18}
@@ -1525,7 +1525,7 @@ function PurchaseDetailPageInner() {
                                             onClick={
                                                 closePurchase
                                             }
-                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-semibold text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 font-semibold text-blue-400 hover:bg-blue-500/20 disabled:opacity-50"
                                         >
                                             <CheckCircle2
                                                 size={18}
@@ -1639,7 +1639,7 @@ function PurchaseDetailPageInner() {
                                                                 size={
                                                                     19
                                                                 }
-                                                                className="text-emerald-400"
+                                                                className="text-blue-400"
                                                             />
                                                         ) : rejectedActions.includes(
                                                             history.action,
@@ -1881,7 +1881,7 @@ function PurchaseDetailPageInner() {
                                     type="button"
                                     disabled={processing}
                                     onClick={confirmReceipt}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-cyan-700 disabled:opacity-50"
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-5 py-3 font-semibold text-white hover:bg-cyan-700 disabled:opacity-50"
                                 >
                                     <PackageCheck size={18} />
                                     {processing

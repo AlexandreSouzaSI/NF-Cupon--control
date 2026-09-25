@@ -92,7 +92,7 @@ function statusLabel(status: LossNfeStatus) {
 function statusColor(status: LossNfeStatus) {
     switch (status) {
         case 'AUTORIZADA':
-            return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500';
+            return 'border-blue-500/30 bg-blue-500/10 text-blue-500';
         case 'REJEITADA':
         case 'CANCELADA':
             return 'border-red-500/30 bg-red-500/10 text-red-400';
@@ -179,7 +179,7 @@ function LossesPageInner() {
                     <button
                         onClick={() => setTab('registrar')}
                         className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${tab === 'registrar'
-                            ? 'bg-emerald-600 text-white'
+                            ? 'bg-blue-600 text-white'
                             : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                             }`}
                     >
@@ -189,7 +189,7 @@ function LossesPageInner() {
                     <button
                         onClick={() => setTab('relatorio')}
                         className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${tab === 'relatorio'
-                            ? 'bg-emerald-600 text-white'
+                            ? 'bg-blue-600 text-white'
                             : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                             }`}
                     >
@@ -199,7 +199,7 @@ function LossesPageInner() {
                     <button
                         onClick={() => setTab('nfe')}
                         className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${tab === 'nfe'
-                            ? 'bg-emerald-600 text-white'
+                            ? 'bg-blue-600 text-white'
                             : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                             }`}
                     >
@@ -449,7 +449,7 @@ function RegistrarTab() {
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex h-48 w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:border-emerald-500 hover:text-emerald-500"
+                            className="flex h-48 w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:border-blue-500 hover:text-blue-500"
                         >
                             <Camera size={28} />
                             <span className="text-sm font-medium">
@@ -476,7 +476,7 @@ function RegistrarTab() {
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         placeholder="Quebra, vencimento, extravio... (vale pra todos os itens dessa foto — pode vir sugerido do último registro desse produto)"
-                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                     />
                 </div>
 
@@ -497,7 +497,7 @@ function RegistrarTab() {
                                 className="space-y-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3"
                             >
                                 <div className="flex items-center gap-2">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-500">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-xs font-semibold text-blue-500">
                                         {index + 1}
                                     </span>
                                     <input
@@ -512,7 +512,7 @@ function RegistrarTab() {
                                         }
                                         onBlur={(e) => sugerirMotivo(e.target.value)}
                                         placeholder="Ex: Heineken long neck"
-                                        className="h-11 flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
+                                        className="h-11 flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                     />
                                     {items.length > 1 && (
                                         <button
@@ -541,7 +541,7 @@ function RegistrarTab() {
                                             updateItem(index, 'quantity', e.target.value)
                                         }
                                         placeholder="Qtd."
-                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
+                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                     />
                                     <input
                                         value={item.unit}
@@ -549,7 +549,7 @@ function RegistrarTab() {
                                             updateItem(index, 'unit', e.target.value)
                                         }
                                         placeholder="Un. (Lt, kg)"
-                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
+                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                     />
                                     <input
                                         data-tour={
@@ -565,7 +565,7 @@ function RegistrarTab() {
                                             updateItem(index, 'unitValue', e.target.value)
                                         }
                                         placeholder="Valor R$"
-                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-emerald-500"
+                                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                     />
                                 </div>
 
@@ -573,7 +573,7 @@ function RegistrarTab() {
                                     value={item.ncm}
                                     onChange={(e) => updateItem(index, 'ncm', e.target.value)}
                                     placeholder="NCM (opcional)"
-                                    className="h-9 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-xs outline-none focus:border-emerald-500"
+                                    className="h-9 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-xs outline-none focus:border-blue-500"
                                 />
                             </div>
                         ))}
@@ -582,7 +582,7 @@ function RegistrarTab() {
                     <button
                         type="button"
                         onClick={addItem}
-                        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:border-emerald-500 hover:text-emerald-500"
+                        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:border-blue-500 hover:text-blue-500"
                     >
                         <Plus size={16} />
                         Adicionar item
@@ -600,7 +600,7 @@ function RegistrarTab() {
                 <button
                     data-tour="loss-submit"
                     disabled={saving}
-                    className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    className="h-12 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                     {saving
                         ? 'Registrando...'
@@ -655,7 +655,7 @@ function RegistrarTab() {
                                         {loss.reportedBy.name}
                                     </p>
                                     {loss.unitValue && (
-                                        <p className="text-xs text-emerald-500">
+                                        <p className="text-xs text-blue-500">
                                             {formatCurrency(Number(loss.unitValue))} /
                                             un. — pronta pra NF de perda
                                         </p>
@@ -736,14 +736,14 @@ function RelatorioTab() {
                         type="month"
                         value={monthValue}
                         onChange={(e) => setMonthValue(e.target.value)}
-                        className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                        className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                     />
                 </div>
 
                 <button
                     onClick={() => window.print()}
                     disabled={!report || report.losses.length === 0}
-                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                     <Printer size={16} />
                     Imprimir / Salvar PDF
@@ -1103,7 +1103,7 @@ function NfPerdaTab() {
                                     <label
                                         key={loss.id}
                                         className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm ${selected[loss.id]
-                                            ? 'border-emerald-500 bg-emerald-500/5'
+                                            ? 'border-blue-500 bg-blue-500/5'
                                             : 'border-zinc-200 dark:border-zinc-800'
                                             }`}
                                     >
@@ -1158,7 +1158,7 @@ function NfPerdaTab() {
                                 step={1}
                                 value={serie}
                                 onChange={(e) => setSerie(e.target.value)}
-                                className="h-11 w-28 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                                className="h-11 w-28 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                             <p className="mt-1 text-xs text-zinc-500">
                                 Já vem preenchida com a série salva na loja — confira e
@@ -1176,7 +1176,7 @@ function NfPerdaTab() {
                                 onChange={(e) => setJustificativa(e.target.value)}
                                 placeholder="Ex: Quebra de garrafas no estoque, produtos vencidos descartados em 05/09..."
                                 rows={4}
-                                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-emerald-500"
+                                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-blue-500"
                             />
                             <p className="mt-1 text-xs text-zinc-500">
                                 Vai pro texto oficial da nota (infAdFisco). Se
@@ -1193,7 +1193,7 @@ function NfPerdaTab() {
                                 value={cfop}
                                 onChange={(e) => setCfop(e.target.value)}
                                 placeholder="5927"
-                                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-emerald-500"
+                                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-blue-500"
                             />
                             <p className="mt-1 text-xs text-zinc-500">
                                 5927 é a sugestão padrão pra baixa de perda.
@@ -1212,7 +1212,7 @@ function NfPerdaTab() {
                                     value={cstIbsCbs}
                                     onChange={(e) => setCstIbsCbs(e.target.value)}
                                     placeholder="410"
-                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-emerald-500"
+                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-blue-500"
                                 />
                             </div>
 
@@ -1225,7 +1225,7 @@ function NfPerdaTab() {
                                     value={cClassTrib}
                                     onChange={(e) => setCClassTrib(e.target.value)}
                                     placeholder="410030"
-                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-emerald-500"
+                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-3 text-sm outline-none focus:border-blue-500"
                                 />
                             </div>
                         </div>
@@ -1241,7 +1241,7 @@ function NfPerdaTab() {
                             data-tour="lossnfe-submit"
                             onClick={handleEmit}
                             disabled={emitting || selectedIds.length === 0}
-                            className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                            className="h-12 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             {emitting ? 'Gerando...' : 'Gerar NF de perda (teste)'}
                         </button>
@@ -1310,7 +1310,7 @@ function NfPerdaTab() {
                                             </p>
 
                                             {nfe.protocolo && (
-                                                <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-500">
+                                                <p className="mt-1 text-xs text-blue-600 dark:text-blue-500">
                                                     Protocolo: {nfe.protocolo}
                                                 </p>
                                             )}
@@ -1325,7 +1325,7 @@ function NfPerdaTab() {
                                         <div className="flex shrink-0 flex-wrap gap-2">
                                             <button
                                                 onClick={() => setViewingNfeId(nfe.id)}
-                                                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-500 hover:bg-emerald-500/20"
+                                                className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-500 hover:bg-blue-500/20"
                                             >
                                                 <CheckCircle2 size={14} />
                                                 Visualizar

@@ -230,7 +230,7 @@ export function LinkNfTab({
                                             </p>
                                         </div>
                                     </div>
-                                    <span className="text-xs text-emerald-600">{aberto ? 'Fechar' : 'Vincular'}</span>
+                                    <span className="text-xs text-blue-600">{aberto ? 'Fechar' : 'Vincular'}</span>
                                 </button>
 
                                 {aberto && (
@@ -274,7 +274,7 @@ export function LinkNfTab({
                                                                     <button
                                                                         onClick={() => updateLinha(item.itemIndex, { modo: 'existente' })}
                                                                         className={`px-2.5 py-1.5 text-xs font-medium ${linha.modo === 'existente'
-                                                                            ? 'bg-emerald-600 text-white'
+                                                                            ? 'bg-blue-600 text-white'
                                                                             : 'text-zinc-600 dark:text-zinc-300'
                                                                             }`}
                                                                     >
@@ -283,7 +283,7 @@ export function LinkNfTab({
                                                                     <button
                                                                         onClick={() => updateLinha(item.itemIndex, { modo: 'novo' })}
                                                                         className={`px-2.5 py-1.5 text-xs font-medium ${linha.modo === 'novo'
-                                                                            ? 'bg-emerald-600 text-white'
+                                                                            ? 'bg-blue-600 text-white'
                                                                             : 'text-zinc-600 dark:text-zinc-300'
                                                                             }`}
                                                                     >
@@ -307,13 +307,13 @@ export function LinkNfTab({
                                                                             value={linha.novoNome}
                                                                             onChange={(e) => updateLinha(item.itemIndex, { novoNome: e.target.value })}
                                                                             placeholder="Nome do item"
-                                                                            className="w-40 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                                            className="w-40 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                                         />
                                                                         <input
                                                                             value={linha.novaCategoria}
                                                                             onChange={(e) => updateLinha(item.itemIndex, { novaCategoria: e.target.value })}
                                                                             placeholder="Categoria (opcional)"
-                                                                            className="w-36 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                                            className="w-36 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                                         />
                                                                         <select
                                                                             value={linha.novaUnidadeMedida}
@@ -322,7 +322,7 @@ export function LinkNfTab({
                                                                                     novaUnidadeMedida: e.target.value as 'KG' | 'LITRO' | 'UNIDADE',
                                                                                 })
                                                                             }
-                                                                            className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                                            className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                                         >
                                                                             <option value="KG">KG</option>
                                                                             <option value="LITRO">Litro</option>
@@ -338,7 +338,7 @@ export function LinkNfTab({
                                                                     value={linha.quantidade}
                                                                     onChange={(e) => updateLinha(item.itemIndex, { quantidade: e.target.value })}
                                                                     placeholder="Quantidade"
-                                                                    className="w-28 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                                    className="w-28 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                                 />
                                                                 <input
                                                                     type="number"
@@ -347,7 +347,7 @@ export function LinkNfTab({
                                                                     value={linha.valorTotal}
                                                                     onChange={(e) => updateLinha(item.itemIndex, { valorTotal: e.target.value })}
                                                                     placeholder="Valor total"
-                                                                    className="w-28 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                                    className="w-28 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                                 />
                                                             </div>
                                                         </div>
@@ -364,7 +364,7 @@ export function LinkNfTab({
                                                     <button
                                                         onClick={() => salvarVinculo(nf.id)}
                                                         disabled={salvando}
-                                                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                                                     >
                                                         {salvando ? (
                                                             <Loader2 size={14} className="animate-spin" />

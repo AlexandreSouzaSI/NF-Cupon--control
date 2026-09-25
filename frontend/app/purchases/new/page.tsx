@@ -749,16 +749,16 @@ export default function NewPurchasePage() {
                             <div
                                 key={item.number}
                                 className={`rounded-2xl border p-4 ${active
-                                    ? 'border-emerald-500 bg-emerald-500/10'
+                                    ? 'border-blue-500 bg-blue-500/10'
                                     : completed
-                                        ? 'border-emerald-500/30 bg-emerald-500/5'
+                                        ? 'border-blue-500/30 bg-blue-500/5'
                                         : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
                                     <div
                                         className={`flex h-9 w-9 items-center justify-center rounded-full ${active || completed
-                                            ? 'bg-emerald-500 text-zinc-900 dark:text-white'
+                                            ? 'bg-blue-500 text-white'
                                             : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
                                             }`}
                                     >
@@ -781,7 +781,7 @@ export default function NewPurchasePage() {
                 {step === 1 && (
                     <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                         <div className="mb-5 flex items-center gap-3">
-                            <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-400">
+                            <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                                 <ShoppingCart size={22} />
                             </div>
 
@@ -796,12 +796,12 @@ export default function NewPurchasePage() {
                             </div>
                         </div>
 
-                        <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
-                            <Building2 size={18} className="text-emerald-400" />
+                        <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3">
+                            <Building2 size={18} className="text-blue-400" />
                             <span className="text-sm text-zinc-700 dark:text-zinc-300">
                                 Registrando compra para
                             </span>
-                            <strong className="text-emerald-400">
+                            <strong className="text-blue-400">
                                 {activeStore?.name || 'loja não identificada'}
                             </strong>
                         </div>
@@ -810,7 +810,7 @@ export default function NewPurchasePage() {
                             type="button"
                             onClick={() => setSimplifiedMode((current) => !current)}
                             className={`mb-5 flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${simplifiedMode
-                                ? 'border-emerald-500 bg-emerald-500/10'
+                                ? 'border-blue-500 bg-blue-500/10'
                                 : 'border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-950'
                                 }`}
                         >
@@ -827,7 +827,7 @@ export default function NewPurchasePage() {
 
                             <div
                                 className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition ${simplifiedMode
-                                    ? 'bg-emerald-500'
+                                    ? 'bg-blue-500'
                                     : 'bg-zinc-300 dark:bg-zinc-700'
                                     }`}
                             >
@@ -852,7 +852,7 @@ export default function NewPurchasePage() {
                                                 .value as PurchaseCategory,
                                         )
                                     }
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                 >
                                     <option value="SUPPLIER_ORDER">
                                         Pedido com fornecedor
@@ -868,7 +868,7 @@ export default function NewPurchasePage() {
                                 <div
                                     className={`mt-2 rounded-xl border px-3 py-2 text-xs ${categoryInfo[category].requiresApproval
                                         ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-300'
-                                        : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                                        : 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-300'
                                         }`}
                                 >
                                     {categoryInfo[category].requiresApproval
@@ -893,7 +893,7 @@ export default function NewPurchasePage() {
                                         )
                                     }
                                     placeholder="Ex.: Pedido semanal de carnes"
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                 />
                             </div>
 
@@ -910,7 +910,7 @@ export default function NewPurchasePage() {
                                                 .value as PaymentMethod,
                                         )
                                     }
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                 >
                                     {Object.entries(paymentMethodLabels)
                                         // "Conta da empresa" saiu das opções de Nova Compra — segue
@@ -955,7 +955,7 @@ export default function NewPurchasePage() {
                                         )
                                     }
                                     placeholder="Digite o nome do fornecedor"
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                 />
 
                                 {supplierDropdownOpen &&
@@ -1011,7 +1011,7 @@ export default function NewPurchasePage() {
                                         }
                                         inputMode="decimal"
                                         placeholder="0,00"
-                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                     />
                                 </div>
                             )}
@@ -1047,7 +1047,7 @@ export default function NewPurchasePage() {
                                                     '/cadastros?tab=cartoes',
                                                 )
                                             }
-                                            className="mt-2 text-sm font-medium text-emerald-500 hover:text-emerald-400"
+                                            className="mt-2 text-sm font-medium text-blue-500 hover:text-blue-400"
                                         >
                                             Nenhum cartão nessa loja ainda —
                                             cadastrar um cartão
@@ -1089,7 +1089,7 @@ export default function NewPurchasePage() {
                                                     .getElementById('order-mirror-camera')
                                                     ?.click()
                                             }
-                                            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
                                         >
                                             <Camera size={14} />
                                             Tirar foto
@@ -1135,7 +1135,7 @@ export default function NewPurchasePage() {
                             onClick={() =>
                                 setShowMoreDetails((current) => !current)
                             }
-                            className="mt-4 text-sm font-medium text-emerald-500 hover:text-emerald-400"
+                            className="mt-4 text-sm font-medium text-blue-500 hover:text-blue-400"
                         >
                             {showMoreDetails
                                 ? '− Ocultar mais detalhes'
@@ -1157,7 +1157,7 @@ export default function NewPurchasePage() {
                                                     .value as PurchaseOrigin,
                                             )
                                         }
-                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                     >
                                         {Object.entries(originLabels).map(
                                             ([value, label]) => (
@@ -1185,7 +1185,7 @@ export default function NewPurchasePage() {
                                                 event.target.value,
                                             )
                                         }
-                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                     />
                                 </div>
 
@@ -1202,7 +1202,7 @@ export default function NewPurchasePage() {
                                                 event.target.value,
                                             )
                                         }
-                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                     />
                                 </div>
 
@@ -1217,7 +1217,7 @@ export default function NewPurchasePage() {
                                             setNotes(event.target.value)
                                         }
                                         placeholder="Urgência, autorização, informações do pedido ou detalhes adicionais"
-                                        className="min-h-28 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-3 outline-none focus:border-emerald-500"
+                                        className="min-h-28 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-3 outline-none focus:border-blue-500"
                                     />
                                 </div>
                             </div>
@@ -1241,7 +1241,7 @@ export default function NewPurchasePage() {
                             <button
                                 type="button"
                                 onClick={addItem}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-700"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-medium hover:bg-blue-700"
                             >
                                 <Plus size={18} />
                                 Adicionar item
@@ -1287,7 +1287,7 @@ export default function NewPurchasePage() {
                                                     )
                                                 }
                                                 placeholder="Ex.: Contra-filé"
-                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-emerald-500"
+                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -1307,7 +1307,7 @@ export default function NewPurchasePage() {
                                                     )
                                                 }
                                                 inputMode="decimal"
-                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-emerald-500"
+                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -1326,7 +1326,7 @@ export default function NewPurchasePage() {
                                                             .value,
                                                     )
                                                 }
-                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-emerald-500"
+                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-blue-500"
                                             >
                                                 <option value="UN">
                                                     UN
@@ -1369,7 +1369,7 @@ export default function NewPurchasePage() {
                                                 }
                                                 inputMode="decimal"
                                                 placeholder="0,00"
-                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-emerald-500"
+                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -1390,7 +1390,7 @@ export default function NewPurchasePage() {
                                                 }
                                                 inputMode="decimal"
                                                 placeholder="0,00"
-                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-emerald-500"
+                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -1410,7 +1410,7 @@ export default function NewPurchasePage() {
                                                     )
                                                 }
                                                 placeholder="Marca, tamanho, especificação ou observação"
-                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-emerald-500"
+                                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-blue-500"
                                             />
                                         </div>
                                     </div>
@@ -1418,11 +1418,11 @@ export default function NewPurchasePage() {
                             ))}
                         </div>
 
-                        <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                            <p className="text-sm text-emerald-300">
+                        <div className="mt-5 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+                            <p className="text-sm text-blue-300">
                                 Valor total calculado
                             </p>
-                            <strong className="text-2xl text-emerald-400">
+                            <strong className="text-2xl text-blue-400">
                                 {formatCurrency(calculatedItemsTotal)}
                             </strong>
                         </div>
@@ -1506,7 +1506,7 @@ export default function NewPurchasePage() {
                                     Cadastro simplificado — sem item a item
                                 </p>
                                 {mirrorFile && (
-                                    <p className="mt-2 flex items-center gap-1 text-sm text-emerald-500">
+                                    <p className="mt-2 flex items-center gap-1 text-sm text-blue-500">
                                         <Paperclip size={14} />
                                         {mirrorFile.name}
                                     </p>
@@ -1547,7 +1547,7 @@ export default function NewPurchasePage() {
                                                     </p>
                                                 </div>
 
-                                                <strong className="text-emerald-400">
+                                                <strong className="text-blue-400">
                                                     {formatCurrency(
                                                         itemTotal,
                                                     )}
@@ -1559,11 +1559,11 @@ export default function NewPurchasePage() {
                             </div>
                         )}
 
-                        <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                            <p className="text-sm text-emerald-300">
+                        <div className="mt-5 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+                            <p className="text-sm text-blue-300">
                                 Valor total da compra
                             </p>
-                            <strong className="text-3xl text-emerald-400">
+                            <strong className="text-3xl text-blue-400">
                                 {formatCurrency(
                                     simplifiedMode
                                         ? parseDecimal(simplifiedValue)
@@ -1595,7 +1595,7 @@ export default function NewPurchasePage() {
                         <button
                             type="button"
                             onClick={goToNextStep}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
                         >
                             Continuar
                             <ArrowRight size={18} />
@@ -1605,7 +1605,7 @@ export default function NewPurchasePage() {
                             type="button"
                             disabled={saving}
                             onClick={handleSubmit}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700 disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             <Check size={18} />
                             {saving

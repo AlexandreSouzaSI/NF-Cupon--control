@@ -131,7 +131,7 @@ export default function NotificationsPage() {
         <AppLayout title="Notificações">
             <div className="mb-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                 <div className="flex items-center gap-3">
-                    <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                    <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                         <Bell size={24} />
                     </div>
 
@@ -151,7 +151,7 @@ export default function NotificationsPage() {
                 <div className="mb-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-950 p-3 text-green-400">
+                            <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-950 p-3 text-blue-400">
                                 {pushStatus === 'subscribed' ? (
                                     <BellRing size={22} />
                                 ) : (
@@ -185,7 +185,7 @@ export default function NotificationsPage() {
                                 disabled={pushBusy}
                                 className={`shrink-0 rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-50 ${pushStatus === 'subscribed'
                                     ? 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                                    : 'border-green-500/30 text-green-400 hover:bg-green-500/20'
+                                    : 'border-blue-500/30 text-blue-400 hover:bg-blue-500/20'
                                     }`}
                             >
                                 {pushBusy
@@ -203,7 +203,7 @@ export default function NotificationsPage() {
                 <p className="text-zinc-600 dark:text-zinc-400">Carregando notificações...</p>
             ) : notifications.length === 0 ? (
                 <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center">
-                    <CheckCircle2 className="mx-auto mb-3 text-green-400" />
+                    <CheckCircle2 className="mx-auto mb-3 text-blue-400" />
 
                     <h2 className="text-xl font-bold">
                         Nenhuma notificação
@@ -223,12 +223,12 @@ export default function NotificationsPage() {
                                 key={notification.id}
                                 className={`rounded-3xl border p-5 ${notification.read
                                     ? 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
-                                    : 'border-green-500/30 bg-green-500/10'
+                                    : 'border-blue-500/30 bg-blue-500/10'
                                     }`}
                             >
                                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                     <div className="flex gap-3">
-                                        <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-950 p-3 text-green-400">
+                                        <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-950 p-3 text-blue-400">
                                             <Icon size={22} />
                                         </div>
 
@@ -254,7 +254,7 @@ export default function NotificationsPage() {
                                             onClick={() =>
                                                 markAsRead(notification.id)
                                             }
-                                            className="rounded-xl border border-green-500/30 px-4 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20"
+                                            className="rounded-xl border border-blue-500/30 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20"
                                         >
                                             Marcar como lida
                                         </button>

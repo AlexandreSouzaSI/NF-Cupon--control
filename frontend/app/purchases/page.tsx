@@ -200,7 +200,7 @@ const acceptTabs: {
         key: 'ARRIVED',
         label: 'Chegaram',
         icon: CheckCircle2,
-        activeClass: 'border-emerald-500 bg-emerald-500/10 text-emerald-500',
+        activeClass: 'border-blue-500 bg-blue-500/10 text-blue-500',
     },
 ];
 
@@ -226,7 +226,7 @@ const statusColor: Record<string, string> = {
     APPROVED: 'bg-blue-500/10 text-blue-400',
     REJECTED: 'bg-red-500/10 text-red-400',
     WAITING_RECEIPT: 'bg-orange-500/10 text-orange-400',
-    RECEIVED_OK: 'bg-green-500/10 text-green-400',
+    RECEIVED_OK: 'bg-blue-500/10 text-blue-400',
     RECEIVED_WITH_DIFFERENCE: 'bg-red-500/10 text-red-400',
     WAITING_INVOICE: 'bg-orange-500/10 text-orange-400',
     HAS_COUPON_ONLY: 'bg-yellow-500/10 text-yellow-400',
@@ -505,7 +505,7 @@ function PurchasesPageInner() {
 
                     <button
                         onClick={() => router.push('/purchases/new')}
-                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 font-medium text-zinc-900 dark:text-white hover:bg-emerald-700"
+                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
                     >
                         <Plus size={18} />
                         Nova compra
@@ -585,7 +585,7 @@ function PurchasesPageInner() {
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <CreditCard
                                                     size={18}
-                                                    className="text-emerald-400"
+                                                    className="text-blue-400"
                                                 />
                                                 <h3 className="font-semibold">
                                                     {purchase.description}
@@ -636,7 +636,7 @@ function PurchasesPageInner() {
                                                                 disabled={
                                                                     openingDanfeId === incomingNf.id
                                                                 }
-                                                                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-60"
+                                                                className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20 disabled:opacity-60"
                                                             >
                                                                 {openingDanfeId === incomingNf.id ? (
                                                                     <Loader2
@@ -657,7 +657,7 @@ function PurchasesPageInner() {
                                                             href={`${API_URL}${doc.fileUrl}`}
                                                             target="_blank"
                                                             rel="noreferrer"
-                                                            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20"
+                                                            className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20"
                                                         >
                                                             <FileText size={16} />
                                                             Abrir{' '}
@@ -716,7 +716,7 @@ function PurchasesPageInner() {
                                                                 : undefined
                                                         }
                                                         className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${(purchase.paymentStatus || 'TO_PAY') === 'PAID'
-                                                            ? 'bg-emerald-500/10 text-emerald-500'
+                                                            ? 'bg-blue-500/10 text-blue-500'
                                                             : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'
                                                             } ${userCanManageBilling ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
                                                     >
@@ -877,7 +877,7 @@ function PurchasesPageInner() {
                                                         onClick={() =>
                                                             closePurchase(purchase.id)
                                                         }
-                                                        className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20"
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20"
                                                     >
                                                         <CheckCircle2 size={16} />
                                                         Fechar

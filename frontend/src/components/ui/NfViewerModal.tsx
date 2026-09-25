@@ -310,7 +310,7 @@ export function NfViewerModal({ title, viewUrl, danfeUrl, xmlUrl, onClose }: NfV
                             <button
                                 onClick={handleDownloadDanfe}
                                 disabled={downloadingDanfe}
-                                title="Baixar DANFE simplificado — PDF gerado pelo GestIA pra conferência interna, não é o layout oficial (sem código de barras). Pra pegar o documento no layout oficial, use o XML."
+                                title="Baixar DANFE simplificado — PDF gerado pelo Galho Hub pra conferência interna, não é o layout oficial (sem código de barras). Pra pegar o documento no layout oficial, use o XML."
                                 className="inline-flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-500 hover:bg-orange-500/20 disabled:opacity-60"
                             >
                                 {downloadingDanfe ? (
@@ -411,7 +411,7 @@ function GoodsNfView({ nf }: { nf: NfeView }) {
         <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
                 {nf.situacao && (
-                    <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-500">
+                    <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-500">
                         {nf.situacao}
                     </span>
                 )}

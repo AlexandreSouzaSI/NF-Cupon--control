@@ -91,7 +91,7 @@ export function SuppliersReportTab() {
             <select
                 value={storeFilter}
                 onChange={(e) => setStoreFilter(e.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500 sm:w-64"
+                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500 sm:w-64"
             >
                 <option value="">Todas as lojas</option>
 
@@ -105,14 +105,14 @@ export function SuppliersReportTab() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                     <div className="mb-4 flex items-center justify-between">
-                        <ReceiptText className="text-green-400" />
+                        <ReceiptText className="text-blue-400" />
                         <span className="rounded-full bg-zinc-50 dark:bg-zinc-950 px-3 py-1 text-xs text-zinc-600 dark:text-zinc-400">
                             fornecedores
                         </span>
                     </div>
 
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">Total comprado</p>
-                    <strong className="mt-2 block text-3xl text-green-400">
+                    <strong className="mt-2 block text-3xl text-blue-400">
                         {formatCurrency(totalValue)}
                     </strong>
                 </div>
@@ -182,7 +182,7 @@ export function SuppliersReportTab() {
                                     <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3 md:text-right">
                                         <div>
                                             <p className="text-zinc-500">Valor</p>
-                                            <strong className="text-green-400">
+                                            <strong className="text-blue-400">
                                                 {formatCurrency(supplier.totalValue)}
                                             </strong>
                                         </div>

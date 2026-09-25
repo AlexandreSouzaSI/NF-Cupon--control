@@ -120,7 +120,7 @@ function formatDate(value: string) {
 // na mesma cor (hash simples do nome), então dá pra reconhecer de relance
 // sem precisar ler o texto toda vez.
 const STORE_BADGE_COLORS = [
-    'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     'bg-purple-500/10 text-purple-600 dark:text-purple-400',
     'bg-amber-500/10 text-amber-600 dark:text-amber-400',
@@ -222,7 +222,7 @@ function TasksPageInner() {
                         <button
                             onClick={() => setTab('quadro')}
                             className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${tab === 'quadro'
-                                ? 'bg-emerald-600 text-white'
+                                ? 'bg-blue-600 text-white'
                                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                                 }`}
                         >
@@ -232,7 +232,7 @@ function TasksPageInner() {
                         <button
                             onClick={() => setTab('gerenciar')}
                             className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${tab === 'gerenciar'
-                                ? 'bg-emerald-600 text-white'
+                                ? 'bg-blue-600 text-white'
                                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                                 }`}
                         >
@@ -260,7 +260,7 @@ function TasksPageInner() {
 function StatusBadge({ status }: { status: OccurrenceStatus }) {
     if (status === 'DONE') {
         return (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-500">
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-500">
                 <CheckCircle2 size={13} />
                 Concluída
             </span>
@@ -549,7 +549,7 @@ function QuadroTab({
                         href={`${API_URL}${occurrence.task.attachmentUrl}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex w-fit items-center gap-1 rounded-lg bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-500 hover:underline"
+                        className="inline-flex w-fit items-center gap-1 rounded-lg bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-500 hover:underline"
                     >
                         <Paperclip size={12} />
                         {occurrence.task.attachmentName || 'Anexo da tarefa'}
@@ -592,7 +592,7 @@ function QuadroTab({
                                 href={`${API_URL}${occurrence.attachmentUrl}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-emerald-500 hover:underline"
+                                className="inline-flex items-center gap-1 text-blue-500 hover:underline"
                             >
                                 <Paperclip size={12} />
                                 {occurrence.attachmentName || 'Anexo'}
@@ -608,7 +608,7 @@ function QuadroTab({
                             onChange={(e) => setConfirmNotes(e.target.value)}
                             placeholder="Observação (opcional)"
                             rows={2}
-                            className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                            className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
                         />
                         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-3">
                             {confirmFile ? (
@@ -632,7 +632,7 @@ function QuadroTab({
                                                 .getElementById(`confirm-camera-${occurrence.id}`)
                                                 ?.click()
                                         }
-                                        className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
                                     >
                                         <Camera size={14} />
                                         Tirar foto
@@ -674,7 +674,7 @@ function QuadroTab({
                             <button
                                 onClick={() => handleConfirm(occurrence)}
                                 disabled={acting}
-                                className="flex-1 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                className="flex-1 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                             >
                                 {acting ? 'Confirmando...' : 'Confirmar'}
                             </button>
@@ -734,7 +734,7 @@ function QuadroTab({
                                 onClick={() => openConfirmForm(occurrence.id)}
                                 disabled={acting}
                                 title="Concluir"
-                                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 lg:py-2.5"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 lg:py-2.5"
                             >
                                 <CheckCircle2 size={16} />
                             </button>
@@ -760,7 +760,7 @@ function QuadroTab({
                             onClick={() => handleNotifyWhatsapp(occurrence)}
                             disabled={acting}
                             title="Enviar lembrete pelo WhatsApp"
-                            className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-emerald-300 dark:border-emerald-900 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50"
+                            className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-blue-300 dark:border-blue-900 px-3 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 disabled:opacity-50"
                         >
                             <MessageCircle size={16} />
                             Notificar WhatsApp
@@ -783,8 +783,8 @@ function QuadroTab({
     return (
         <div className="space-y-5">
             {assigneeFilter && (
-                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2.5 text-sm">
-                    <span className="text-emerald-700 dark:text-emerald-400">
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-blue-300 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 px-4 py-2.5 text-sm">
+                    <span className="text-blue-700 dark:text-blue-400">
                         Mostrando tarefas de{' '}
                         <span className="font-semibold">
                             {assigneeFilter.name}
@@ -793,7 +793,7 @@ function QuadroTab({
                     <button
                         type="button"
                         onClick={clearAssigneeFilter}
-                        className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                        className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40"
                     >
                         <X size={13} />
                         Ver quadro geral
@@ -823,7 +823,7 @@ function QuadroTab({
                                     key={column.key}
                                     onClick={() => setActiveColumn(column.key)}
                                     className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition ${active
-                                        ? 'bg-emerald-600 text-white'
+                                        ? 'bg-blue-600 text-white'
                                         : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400'
                                         }`}
                                 >
@@ -1090,7 +1090,7 @@ function GerenciarTab() {
                     <button
                         data-tour="task-new-button"
                         onClick={startCreate}
-                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                     >
                         <Plus size={16} />
                         Nova tarefa
@@ -1134,7 +1134,7 @@ function GerenciarTab() {
                                             })
                                         }
                                         className={`rounded-full px-3 py-1 text-xs font-medium transition ${form.storeId === store.id
-                                            ? 'bg-emerald-600 text-white'
+                                            ? 'bg-blue-600 text-white'
                                             : 'border border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                                             }`}
                                     >
@@ -1202,7 +1202,7 @@ function GerenciarTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, title: e.target.value })
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -1215,7 +1215,7 @@ function GerenciarTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, description: e.target.value })
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -1255,7 +1255,7 @@ function GerenciarTab() {
                                         recurrence: e.target.value as Recurrence,
                                     })
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             >
                                 <option value="DAILY">Diária</option>
                                 <option value="WEEKLY">Semanal</option>
@@ -1274,7 +1274,7 @@ function GerenciarTab() {
                                     onChange={(e) =>
                                         setForm({ ...form, weekday: e.target.value })
                                     }
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                 >
                                     {WEEKDAY_LABELS.map((label, index) => (
                                         <option key={index} value={index}>
@@ -1298,7 +1298,7 @@ function GerenciarTab() {
                                     onChange={(e) =>
                                         setForm({ ...form, dayOfMonth: e.target.value })
                                     }
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                 />
                             </div>
                         )}
@@ -1314,7 +1314,7 @@ function GerenciarTab() {
                                     onChange={(e) =>
                                         setForm({ ...form, dueDate: e.target.value })
                                     }
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                 />
                             </div>
                         )}
@@ -1348,7 +1348,7 @@ function GerenciarTab() {
                                                     .getElementById('task-attachment-camera')
                                                     ?.click()
                                             }
-                                            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
                                         >
                                             <Camera size={14} />
                                             Tirar foto
@@ -1393,7 +1393,7 @@ function GerenciarTab() {
                     <button
                         data-tour="task-form-submit"
                         disabled={saving}
-                        className="h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto sm:px-8"
+                        className="h-12 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 sm:w-auto sm:px-8"
                     >
                         {saving
                             ? 'Salvando...'
@@ -1453,7 +1453,7 @@ function GerenciarTab() {
                                         href={`${API_URL}${task.attachmentUrl}`}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-500 hover:underline"
+                                        className="mt-1 inline-flex items-center gap-1 text-xs text-blue-500 hover:underline"
                                     >
                                         <Paperclip size={12} />
                                         {task.attachmentName || 'Anexo'}

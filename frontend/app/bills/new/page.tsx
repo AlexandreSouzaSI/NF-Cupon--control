@@ -882,12 +882,12 @@ function NewBillPageInner() {
                 </header>
 
                 {purchase && (
-                    <section className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+                    <section className="rounded-3xl border border-blue-500/20 bg-blue-500/10 p-5">
                         <div className="flex items-start gap-3">
-                            <ReceiptText className="mt-1 text-emerald-400" />
+                            <ReceiptText className="mt-1 text-blue-400" />
 
                             <div>
-                                <p className="text-sm text-emerald-300">
+                                <p className="text-sm text-blue-300">
                                     Conta vinculada à
                                     compra
                                 </p>
@@ -898,7 +898,7 @@ function NewBillPageInner() {
                                     }
                                 </h3>
 
-                                <p className="mt-1 text-sm text-emerald-400/80">
+                                <p className="mt-1 text-sm text-blue-400/80">
                                     {
                                         purchase.store
                                             .name
@@ -910,7 +910,7 @@ function NewBillPageInner() {
                                         : ''}
                                 </p>
 
-                                <strong className="mt-2 block text-xl text-emerald-400">
+                                <strong className="mt-2 block text-xl text-blue-400">
                                     {formatCurrency(
                                         purchase.value,
                                     )}
@@ -969,7 +969,7 @@ function NewBillPageInner() {
                                     <div>
                                         <label
                                             className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium ${couponUploaded
-                                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                                ? 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400'
                                                 : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                                                 }`}
                                         >
@@ -1511,12 +1511,12 @@ function NewBillPageInner() {
                                 </>
                             )}
 
-                        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
-                            <Building2 size={18} className="text-emerald-400" />
+                        <div className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3">
+                            <Building2 size={18} className="text-blue-400" />
                             <span className="text-sm text-zinc-700 dark:text-zinc-300">
                                 Loja
                             </span>
-                            <strong className="text-emerald-400">
+                            <strong className="text-blue-400">
                                 {selectedStore?.name || 'não identificada'}
                             </strong>
                         </div>
@@ -1647,7 +1647,7 @@ function NewBillPageInner() {
                                 saving ||
                                 uploading
                             }
-                            className="rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700 disabled:opacity-50"
+                            className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             {saving
                                 ? 'Salvando...'

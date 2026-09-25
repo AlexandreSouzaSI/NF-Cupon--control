@@ -215,7 +215,7 @@ function TabButton({
         <button
             onClick={onClick}
             className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${active
-                ? 'bg-emerald-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                 }`}
         >
@@ -372,7 +372,7 @@ function CadastroTab() {
                 className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
             >
                 <div className="mb-5 flex items-center gap-3">
-                    <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-500">
+                    <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-500">
                         <Users size={22} />
                     </div>
                     <div>
@@ -395,7 +395,7 @@ function CadastroTab() {
                             onChange={(e) =>
                                 setForm({ ...form, name: e.target.value })
                             }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -414,14 +414,14 @@ function CadastroTab() {
                                     defaultDailyValue: e.target.value,
                                 })
                             }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-emerald-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
                     <div className="flex gap-3">
                         <button
                             disabled={saving}
-                            className="h-12 flex-1 rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                            className="h-12 flex-1 rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             {saving
                                 ? 'Salvando...'
@@ -720,7 +720,7 @@ function DiasTrabalhadosTab() {
                                     <div
                                         key={col.weekday}
                                         className={`rounded-2xl border p-4 text-center transition ${isChecked
-                                            ? 'border-emerald-500 bg-emerald-500/10'
+                                            ? 'border-blue-500 bg-blue-500/10'
                                             : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950'
                                             }`}
                                     >
@@ -737,7 +737,7 @@ function DiasTrabalhadosTab() {
                                             </p>
                                             <div
                                                 className={`mx-auto flex h-10 w-10 items-center justify-center rounded-xl border-2 ${isChecked
-                                                    ? 'border-emerald-500 bg-emerald-500 text-white'
+                                                    ? 'border-blue-500 bg-blue-500 text-white'
                                                     : 'border-zinc-300 dark:border-zinc-700'
                                                     }`}
                                             >
@@ -761,7 +761,7 @@ function DiasTrabalhadosTab() {
                                                             e.target.value,
                                                     })
                                                 }
-                                                className="mt-3 h-9 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 text-center text-sm outline-none focus:border-emerald-500"
+                                                className="mt-3 h-9 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 text-center text-sm outline-none focus:border-blue-500"
                                             />
                                         )}
                                     </div>
@@ -779,7 +779,7 @@ function DiasTrabalhadosTab() {
                     <button
                         onClick={handleSave}
                         disabled={saving || loading}
-                        className="mt-6 h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto sm:px-8"
+                        className="mt-6 h-12 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 sm:w-auto sm:px-8"
                     >
                         {saving ? 'Salvando...' : 'Salvar semana'}
                     </button>
@@ -961,7 +961,7 @@ function PagamentosTab() {
                                                 >
                                                     {day ? (
                                                         <span
-                                                            className="inline-flex text-emerald-500"
+                                                            className="inline-flex text-blue-500"
                                                             title={formatCurrency(
                                                                 day.value,
                                                             )}
@@ -1014,7 +1014,7 @@ function PagamentosTab() {
                                 Pagamentos para Sexta ({formatShortDate(fridayOfWeek)})
                                 — Terça a Quinta
                             </p>
-                            <p className="mt-1 text-3xl font-bold text-emerald-500">
+                            <p className="mt-1 text-3xl font-bold text-blue-500">
                                 {formatCurrency(summary.totalSexta)}
                             </p>
                         </div>
@@ -1024,7 +1024,7 @@ function PagamentosTab() {
                                 Pagamentos para Segunda ({formatShortDate(mondayAfter)})
                                 — Sexta a Domingo
                             </p>
-                            <p className="mt-1 text-3xl font-bold text-emerald-500">
+                            <p className="mt-1 text-3xl font-bold text-blue-500">
                                 {formatCurrency(summary.totalSegunda)}
                             </p>
                         </div>
@@ -1071,7 +1071,7 @@ function PaymentGroupCell({
                         onClick={() => paymentId && onUndo(paymentId)}
                         disabled={loadingKey}
                         title="Desfazer confirmação"
-                        className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-500 hover:bg-blue-500/20 disabled:opacity-50"
                     >
                         <CheckCircle2 size={14} />
                         Pago
@@ -1185,7 +1185,7 @@ function RelatorioTab() {
                 <button
                     onClick={() => setMode('dia')}
                     className={`rounded-xl px-4 py-2 text-sm font-medium transition ${mode === 'dia'
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-blue-600 text-white'
                         : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                         }`}
                 >
@@ -1194,7 +1194,7 @@ function RelatorioTab() {
                 <button
                     onClick={() => setMode('freelancer')}
                     className={`rounded-xl px-4 py-2 text-sm font-medium transition ${mode === 'freelancer'
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-blue-600 text-white'
                         : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                         }`}
                 >
@@ -1240,7 +1240,7 @@ function RelatorioTab() {
                                     </div>
 
                                     <div className="flex items-center gap-3">
-                                        <span className="text-xl font-bold text-emerald-500">
+                                        <span className="text-xl font-bold text-blue-500">
                                             {formatCurrency(total)}
                                         </span>
                                         {isExpanded ? (
@@ -1332,7 +1332,7 @@ function RelatorioTab() {
                                             </div>
 
                                             <div className="flex items-center gap-3">
-                                                <span className="text-xl font-bold text-emerald-500">
+                                                <span className="text-xl font-bold text-blue-500">
                                                     {formatCurrency(payment.totalValue)}
                                                 </span>
                                                 {isExpanded ? (

@@ -162,7 +162,7 @@ export function PurchasesDashboardTab({
                 <button
                     type="button"
                     onClick={() => setSelectedMonth(currentMonthValue())}
-                    className="ml-1 h-9 rounded-xl px-3 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                    className="ml-1 h-9 rounded-xl px-3 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
                 >
                     Hoje
                 </button>
@@ -194,7 +194,7 @@ export function PurchasesDashboardTab({
                     <button
                         type="button"
                         onClick={load}
-                        className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 font-medium text-zinc-900 dark:text-white hover:bg-emerald-700"
+                        className="mt-4 rounded-xl bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
                     >
                         Tentar novamente
                     </button>
@@ -243,15 +243,15 @@ export function PurchasesDashboardTab({
                 <button
                     type="button"
                     onClick={() => onSelectStage('OK')}
-                    className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-left transition hover:border-emerald-500/40"
+                    className="rounded-3xl border border-blue-500/20 bg-blue-500/10 p-5 text-left transition hover:border-blue-500/40"
                 >
                     <div className="mb-3 flex items-center justify-between">
-                        <div className="rounded-2xl bg-emerald-500/20 p-3 text-emerald-500">
+                        <div className="rounded-2xl bg-blue-500/20 p-3 text-blue-500">
                             <CheckCircle2 size={22} />
                         </div>
                     </div>
 
-                    <strong className="block text-3xl text-emerald-500">
+                    <strong className="block text-3xl text-blue-500">
                         {summary.pipeline.ok}
                     </strong>
 

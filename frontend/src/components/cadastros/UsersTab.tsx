@@ -389,12 +389,12 @@ export function UsersTab() {
                 ref={formRef}
                 onSubmit={handleSubmit}
                 className={`rounded-3xl border bg-white dark:bg-zinc-900 p-5 transition ${editingUser
-                    ? 'border-emerald-400 ring-2 ring-emerald-400/30'
+                    ? 'border-blue-400 ring-2 ring-blue-400/30'
                     : 'border-zinc-200 dark:border-zinc-800'
                     }`}
             >
                 <div className="mb-5 flex items-center gap-3">
-                    <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                    <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                         <UserPlus size={22} />
                     </div>
 
@@ -419,7 +419,7 @@ export function UsersTab() {
                             onChange={(e) =>
                                 setForm({ ...form, name: e.target.value })
                             }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -433,7 +433,7 @@ export function UsersTab() {
                             onChange={(e) =>
                                 setForm({ ...form, email: e.target.value })
                             }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -447,7 +447,7 @@ export function UsersTab() {
                                 setForm({ ...form, phone: e.target.value })
                             }
                             placeholder="(31) 99999-8888"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                         <p className="mt-1 text-xs text-zinc-500">
                             Opcional — usado só pra mandar aviso de tarefa no
@@ -488,7 +488,7 @@ export function UsersTab() {
                             onChange={(e) =>
                                 setForm({ ...form, password: e.target.value })
                             }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -502,7 +502,7 @@ export function UsersTab() {
                             onChange={(e) =>
                                 setForm({ ...form, role: e.target.value })
                             }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         >
                             {selectableRoles.map((role) => (
                                 <option key={role.value} value={role.value}>
@@ -514,7 +514,7 @@ export function UsersTab() {
                         <div className="mt-2 flex items-start gap-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 p-3 text-xs text-zinc-600 dark:text-zinc-400">
                             <ShieldCheck
                                 size={14}
-                                className="mt-0.5 shrink-0 text-emerald-500"
+                                className="mt-0.5 shrink-0 text-blue-500"
                             />
                             <span>
                                 {
@@ -645,7 +645,7 @@ export function UsersTab() {
                         <button
                             data-tour="user-form-submit"
                             disabled={saving}
-                            className="h-12 flex-1 rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                            className="h-12 flex-1 rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                         >
                             {saving
                                 ? 'Salvando...'
@@ -713,7 +713,7 @@ export function UsersTab() {
 
                                             <span
                                                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${user.active
-                                                    ? 'bg-emerald-500/10 text-emerald-400'
+                                                    ? 'bg-blue-500/10 text-blue-400'
                                                     : 'bg-red-500/10 text-red-400'
                                                     }`}
                                             >

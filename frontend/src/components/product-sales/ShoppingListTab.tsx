@@ -309,13 +309,13 @@ export function ShoppingListTab() {
                                 onClick={() => calcular(opcao.tipo)}
                                 disabled={loading}
                                 className={`flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${ativo
-                                    ? 'border-emerald-500/40 bg-emerald-500/10'
+                                    ? 'border-blue-500/40 bg-blue-500/10'
                                     : 'border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/50'
                                     }`}
                             >
                                 <div
                                     className={`flex h-9 w-9 items-center justify-center rounded-xl ${ativo
-                                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                        ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
                                         : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800'
                                         }`}
                                 >
@@ -395,7 +395,7 @@ export function ShoppingListTab() {
 
                         <button
                             onClick={() => setMostrarPeriodos((v) => !v)}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
                         >
                             {mostrarPeriodos ? 'Esconder períodos' : 'Ver períodos considerados'}
                             {mostrarPeriodos ? (
@@ -434,7 +434,7 @@ export function ShoppingListTab() {
                                     key={v.visao}
                                     onClick={() => setVisao(v.visao)}
                                     className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition ${ativo
-                                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                        ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400'
                                         : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800/50'
                                         }`}
                                 >
@@ -485,7 +485,7 @@ export function ShoppingListTab() {
                                                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
                                                         {formatarUnidades(item.sugestao10)}
                                                     </td>
-                                                    <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                                    <td className="px-4 py-3 text-right font-semibold text-blue-600 dark:text-blue-400">
                                                         {formatarUnidades(item.sugestao20)}
                                                     </td>
                                                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
@@ -567,7 +567,7 @@ export function ShoppingListTab() {
                                                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
                                                         {formatarUnidades(item.sugestao10)}
                                                     </td>
-                                                    <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                                    <td className="px-4 py-3 text-right font-semibold text-blue-600 dark:text-blue-400">
                                                         {formatarUnidades(item.sugestao20)}
                                                     </td>
                                                     <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-300">
@@ -640,7 +640,7 @@ export function ShoppingListTab() {
                                                             <td className="px-4 py-3 text-right text-zinc-500">
                                                                 {formatarQuantidade(item.pico, item.unidadeMedida)}
                                                             </td>
-                                                            <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                                            <td className="px-4 py-3 text-right font-semibold text-blue-600 dark:text-blue-400">
                                                                 {formatarQuantidade(
                                                                     item.sugestao,
                                                                     item.unidadeMedida,

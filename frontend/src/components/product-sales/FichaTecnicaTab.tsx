@@ -259,7 +259,7 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                         <ChefHat size={18} />
                     </div>
                     <div>
@@ -298,7 +298,7 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                             value={busca}
                             onChange={(e) => setBusca(e.target.value)}
                             placeholder="Buscar prato..."
-                            className="w-full rounded-lg border border-zinc-200 bg-transparent py-2 pl-8 pr-3 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="w-full rounded-lg border border-zinc-200 bg-transparent py-2 pl-8 pr-3 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         />
                     </div>
                 </div>
@@ -365,7 +365,7 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                     </div>
 
                                     {editando && (
-                                        <div className="mt-3 space-y-2 rounded-xl border border-emerald-400/40 bg-emerald-500/5 p-3">
+                                        <div className="mt-3 space-y-2 rounded-xl border border-blue-400/40 bg-blue-500/5 p-3">
                                             {linhas.map((linha) => {
                                                 if (linha.tipo === 'producao') {
                                                     return (
@@ -409,7 +409,7 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                                                     atualizarGramas(linha.key, e.target.value)
                                                                 }
                                                                 placeholder="Qtd"
-                                                                className="w-24 rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                                className="w-24 rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                                                             />
 
                                                             <button
@@ -471,7 +471,7 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                                                       ? 'Unidades'
                                                                       : 'Gramas'
                                                             }
-                                                            className="w-24 rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                            className="w-24 rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                                                         />
 
                                                         <button
@@ -505,7 +505,7 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                                     <button
                                                         onClick={() => salvar(prato)}
                                                         disabled={salvando}
-                                                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                                                     >
                                                         {salvando ? (
                                                             <Loader2 size={14} className="animate-spin" />

@@ -195,7 +195,7 @@ export function TourGuide() {
                 style={tooltipStyle}
             >
                 <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 text-emerald-500">
+                    <div className="flex items-center gap-2 text-blue-500">
                         <HelpCircle size={16} />
                         <span className="text-xs font-semibold uppercase tracking-wide">
                             Passo {stepIndex + 1} de {activeTour.steps.length}
@@ -256,7 +256,7 @@ export function TourGuide() {
 
                         <button
                             onClick={next}
-                            className="inline-flex h-9 items-center gap-1 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700"
+                            className="inline-flex h-9 items-center gap-1 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
                         >
                             {isLast ? 'Concluir' : 'Próximo'}
                             {!isLast && <ChevronRight size={14} />}

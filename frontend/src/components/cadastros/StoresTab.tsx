@@ -496,7 +496,7 @@ export function StoresTab() {
                     className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
                 >
                     <div className="mb-5 flex items-center gap-3">
-                        <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                        <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                             <Building2 size={22} />
                         </div>
 
@@ -521,7 +521,7 @@ export function StoresTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, name: e.target.value })
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -535,7 +535,7 @@ export function StoresTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, cnpj: e.target.value })
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -548,7 +548,7 @@ export function StoresTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, address: e.target.value })
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -561,7 +561,7 @@ export function StoresTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, phone: e.target.value })
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -580,7 +580,7 @@ export function StoresTab() {
                                         uf: e.target.value.toUpperCase(),
                                     })
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                             <p className="mt-1 text-xs text-zinc-500">
                                 Necessário pra buscar as NF-e de mercadoria
@@ -624,7 +624,7 @@ export function StoresTab() {
                                                 }
                                                 autoComplete="off"
                                                 name="loss-nfe-logradouro"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -639,7 +639,7 @@ export function StoresTab() {
                                                 }
                                                 autoComplete="off"
                                                 name="loss-nfe-numero"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -654,7 +654,7 @@ export function StoresTab() {
                                                 }
                                                 autoComplete="off"
                                                 name="loss-nfe-complemento"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -669,7 +669,7 @@ export function StoresTab() {
                                                 }
                                                 autoComplete="off"
                                                 name="loss-nfe-bairro"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -684,7 +684,7 @@ export function StoresTab() {
                                                 }
                                                 autoComplete="off"
                                                 name="loss-nfe-municipio"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -703,7 +703,7 @@ export function StoresTab() {
                                                 placeholder="Ex: 3106200"
                                                 autoComplete="off"
                                                 name="loss-nfe-codigo-ibge"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -718,7 +718,7 @@ export function StoresTab() {
                                                 }
                                                 autoComplete="off"
                                                 name="loss-nfe-cep"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                         </div>
 
@@ -737,7 +737,7 @@ export function StoresTab() {
                                                 placeholder="Ou deixe em branco se isento"
                                                 autoComplete="off"
                                                 name="loss-nfe-ie"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                         </div>
                                     </div>
@@ -749,7 +749,7 @@ export function StoresTab() {
                             <button
                                 data-tour="store-form-submit"
                                 disabled={saving}
-                                className="h-12 flex-1 rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                                className="h-12 flex-1 rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                             >
                                 {saving
                                     ? 'Salvando...'
@@ -865,7 +865,7 @@ export function StoresTab() {
                                     <div className="mt-4 border-t border-zinc-200 dark:border-zinc-800 pt-4">
                                         {certStatus[store.id]?.hasCertificate ? (
                                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                                <div className="flex items-center gap-2 text-sm text-emerald-500">
+                                                <div className="flex items-center gap-2 text-sm text-blue-500">
                                                     <ShieldCheck size={16} />
                                                     <span>
                                                         Certificado cadastrado
@@ -895,7 +895,7 @@ export function StoresTab() {
                                                         className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium disabled:cursor-wait ${testingCertStoreId ===
                                                             store.id
                                                             ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-500'
-                                                            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                                                            : 'border-blue-500/30 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'
                                                             }`}
                                                     >
                                                         {testingCertStoreId ===
@@ -1056,7 +1056,7 @@ export function StoresTab() {
                                                         )
                                                     }
                                                     placeholder="Senha do certificado"
-                                                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500 sm:w-48"
+                                                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500 sm:w-48"
                                                 />
 
                                                 <div className="flex gap-2">
@@ -1067,7 +1067,7 @@ export function StoresTab() {
                                                                 store.id,
                                                             )
                                                         }
-                                                        className="h-10 rounded-xl bg-green-500 px-4 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                                                        className="h-10 rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                                                     >
                                                         {certSaving
                                                             ? 'Enviando...'
@@ -1117,7 +1117,7 @@ export function StoresTab() {
                                                                     {log.success ? (
                                                                         <CheckCircle2
                                                                             size={14}
-                                                                            className="mt-0.5 shrink-0 text-emerald-500"
+                                                                            className="mt-0.5 shrink-0 text-blue-500"
                                                                         />
                                                                     ) : (
                                                                         <XCircle

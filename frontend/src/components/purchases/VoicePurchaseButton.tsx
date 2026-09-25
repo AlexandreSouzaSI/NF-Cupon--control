@@ -207,7 +207,7 @@ export function VoicePurchaseButton({ onDraftReady, disabled }: Props) {
             <button
                 type="button"
                 disabled
-                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-500"
+                className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-sm font-medium text-blue-500"
             >
                 <Loader2 size={16} className="animate-spin" />
                 Transcrevendo e preenchendo...
@@ -238,7 +238,7 @@ export function VoicePurchaseButton({ onDraftReady, disabled }: Props) {
             onClick={startRecording}
             disabled={disabled}
             title="Fale o fornecedor, a forma de pagamento e os itens da compra"
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-sm font-semibold text-blue-500 hover:bg-blue-500/20 disabled:opacity-50"
         >
             <Mic size={16} />
             Cadastrar por voz

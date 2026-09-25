@@ -565,7 +565,7 @@ export function ImportProductSalesTab({
                     <label
                         className={`inline-flex h-11 shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-5 font-semibold sm:mb-0 ${uploading
                             ? 'cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-600'
-                            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400'
+                            : 'border-blue-500/30 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:text-blue-400'
                             }`}
                     >
                         {uploading ? (
@@ -728,7 +728,7 @@ export function ImportProductSalesTab({
                                 <div key={item.id} className="p-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3">
-                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                                                 <FileSpreadsheet size={18} />
                                             </div>
                                             <div>
@@ -805,7 +805,7 @@ export function ImportProductSalesTab({
                                                     onClick={() => salvarEdicao(item.id)}
                                                     disabled={salvandoEdicao}
                                                     title="Salvar"
-                                                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
                                                 >
                                                     {salvandoEdicao ? (
                                                         <Loader2 size={16} className="animate-spin" />

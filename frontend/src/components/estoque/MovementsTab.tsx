@@ -136,7 +136,7 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
                             <button
                                 onClick={() => setTipo('ENTRADA')}
                                 className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium ${tipo === 'ENTRADA'
-                                    ? 'bg-emerald-600 text-white'
+                                    ? 'bg-blue-600 text-white'
                                     : 'text-zinc-600 dark:text-zinc-300'
                                     }`}
                             >
@@ -162,7 +162,7 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
                             step="0.001"
                             value={quantidade}
                             onChange={(e) => setQuantidade(e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         />
                     </div>
 
@@ -174,7 +174,7 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
                             step="0.01"
                             value={valorTotal}
                             onChange={(e) => setValorTotal(e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         />
                     </div>
 
@@ -183,14 +183,14 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
                         <input
                             value={observacao}
                             onChange={(e) => setObservacao(e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         />
                     </div>
 
                     <button
                         onClick={registrar}
                         disabled={salvando || !stockItemId || !quantidade}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                     >
                         {salvando && <Loader2 size={14} className="animate-spin" />}
                         Lançar
@@ -231,7 +231,7 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
                                         </td>
                                         <td className="px-4 py-3 text-zinc-500">{ORIGEM_LABEL[mov.origem]}</td>
                                         <td
-                                            className={`px-4 py-3 text-right font-semibold ${mov.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-red-500'
+                                            className={`px-4 py-3 text-right font-semibold ${mov.tipo === 'ENTRADA' ? 'text-blue-600' : 'text-red-500'
                                                 }`}
                                         >
                                             {mov.tipo === 'ENTRADA' ? '+' : '-'}

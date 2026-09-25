@@ -68,7 +68,7 @@ export default function DemoSignupPage() {
         <main className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
             <div className="w-full max-w-md rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 shadow-2xl">
                 <div className="mb-8">
-                    <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-500">
+                    <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-500">
                         <TimerReset size={14} />
                         Teste grátis por 1 hora
                     </div>
@@ -94,7 +94,7 @@ export default function DemoSignupPage() {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Opcional"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-blue-500"
                         />
                     </div>
 
@@ -108,7 +108,7 @@ export default function DemoSignupPage() {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-blue-500"
                         />
                     </div>
 
@@ -123,14 +123,14 @@ export default function DemoSignupPage() {
                             minLength={6}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-blue-500"
                         />
                     </div>
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="flex h-12 w-full items-center justify-center rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white transition hover:bg-green-600 disabled:opacity-50"
+                        className="flex h-12 w-full items-center justify-center rounded-xl bg-blue-500 font-semibold text-white transition hover:bg-blue-600 disabled:opacity-50"
                     >
                         {loading ? (
                             <Loader2 className="animate-spin" />
@@ -144,7 +144,7 @@ export default function DemoSignupPage() {
                         <button
                             type="button"
                             onClick={() => router.push('/login')}
-                            className="font-semibold text-green-500 hover:underline"
+                            className="font-semibold text-blue-500 hover:underline"
                         >
                             Entrar
                         </button>

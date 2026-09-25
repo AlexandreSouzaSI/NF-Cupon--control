@@ -229,7 +229,7 @@ export default function FinancialDashboardPage() {
                                                 '/bills?period=MES&paid=PAGAS',
                                             )
                                         }
-                                        className="flex items-center gap-1.5 text-emerald-500 hover:underline"
+                                        className="flex items-center gap-1.5 text-blue-500 hover:underline"
                                     >
                                         <CheckCircle2 size={15} />
                                         Pagas:{' '}
@@ -359,7 +359,7 @@ export default function FinancialDashboardPage() {
                                     <div className="flex items-center gap-2">
                                         <BarChart3
                                             size={18}
-                                            className="text-emerald-500"
+                                            className="text-blue-500"
                                         />
                                         <h3 className="text-sm font-semibold">
                                             Top 5 maiores pagamentos
@@ -433,7 +433,7 @@ export default function FinancialDashboardPage() {
                                                                 </p>
                                                             </div>
 
-                                                            <span className="shrink-0 font-semibold text-emerald-500">
+                                                            <span className="shrink-0 font-semibold text-blue-500">
                                                                 {formatCurrency(
                                                                     bill.value,
                                                                 )}
@@ -546,9 +546,9 @@ function PeriodRow({
                 <button
                     type="button"
                     onClick={onPagasClick}
-                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-left transition hover:bg-emerald-500/10 dark:bg-emerald-500/[0.06]"
+                    className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 text-left transition hover:bg-blue-500/10 dark:bg-blue-500/[0.06]"
                 >
-                    <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-500">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-blue-500">
                         <CheckCircle2 size={13} />
                         Pagas
                     </p>

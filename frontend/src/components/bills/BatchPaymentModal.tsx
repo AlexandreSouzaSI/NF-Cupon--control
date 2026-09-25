@@ -258,7 +258,7 @@ export function BatchPaymentModal({ onClose }: { onClose: () => void }) {
                                 type="button"
                                 onClick={salvar}
                                 disabled={saving}
-                                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                             >
                                 {saving ? 'Salvando...' : 'Salvar'}
                             </button>

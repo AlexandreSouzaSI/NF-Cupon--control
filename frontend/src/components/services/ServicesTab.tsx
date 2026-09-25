@@ -269,7 +269,7 @@ export function ServicesTab() {
                                     setNameFilter(e.target.value)
                                 }
                                 placeholder="Nome ou prestador"
-                                className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 pl-9 pr-3 text-sm outline-none focus:border-green-500 sm:w-52"
+                                className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 pl-9 pr-3 text-sm outline-none focus:border-blue-500 sm:w-52"
                             />
                         </div>
 
@@ -279,7 +279,7 @@ export function ServicesTab() {
                             onChange={(e) =>
                                 setMonthFilter(e.target.value)
                             }
-                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </div>
                 </div>
@@ -348,13 +348,13 @@ export function ServicesTab() {
                                                 href={`${API_URL}${service.nfFileUrl}`}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20"
+                                                className="inline-flex items-center gap-2 rounded-xl bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-400 hover:bg-blue-500/20"
                                             >
                                                 <CheckCircle2 size={16} />
                                                 NF anexada
                                             </a>
                                         ) : (
-                                            <label className="flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-green-500 px-4 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600">
+                                            <label className="flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600">
                                                 <Upload size={16} />
                                                 Anexar NF
                                                 <input

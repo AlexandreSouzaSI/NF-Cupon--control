@@ -292,7 +292,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                 {user.isDemo && (
                     <button
                         onClick={() => router.push('/demo')}
-                        className="rounded-xl bg-green-500 px-4 py-2 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600"
+                        className="rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600"
                     >
                         Criar novo teste
                     </button>
@@ -313,7 +313,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             <main className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4 text-zinc-900 dark:text-white">
                 <div className="w-full max-w-md rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8">
                     <div className="mb-6 text-center">
-                        <Building2 className="mx-auto mb-3 text-emerald-400" size={32} />
+                        <Building2 className="mx-auto mb-3 text-blue-400" size={32} />
                         <h1 className="text-xl font-bold">Selecione a loja</h1>
                         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                             Você está vinculado a mais de uma loja. Escolha em
@@ -327,7 +327,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                             <button
                                 key={store.id}
                                 onClick={() => handleSelectStore(store)}
-                                className="flex w-full items-center justify-between rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-3 text-left hover:border-emerald-500"
+                                className="flex w-full items-center justify-between rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-3 text-left hover:border-blue-500"
                             >
                                 <span className="font-medium">{store.name}</span>
                                 <ChevronDown size={18} className="-rotate-90 text-zinc-500" />
@@ -426,7 +426,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                     : 'cursor-default'
                                 }`}
                         >
-                            <Building2 size={16} className="text-emerald-400" />
+                            <Building2 size={16} className="text-blue-400" />
                             <span className="hidden max-w-[140px] truncate sm:inline">
                                 {activeStore?.name}
                             </span>
@@ -446,7 +446,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                         key={store.id}
                                         onClick={() => handleSelectStore(store)}
                                         className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 ${store.id === activeStore?.id
-                                                ? 'text-emerald-400'
+                                                ? 'text-blue-400'
                                                 : 'text-zinc-700 dark:text-zinc-300'
                                             }`}
                                     >
@@ -502,8 +502,8 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                 <aside className="hidden min-h-[calc(100vh-73px)] w-72 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 md:block">
                     <div className="mb-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
                         <div className="mb-2 flex items-center gap-2">
-                            <FileText size={18} className="text-emerald-400" />
-                            <strong>GestIA</strong>
+                            <FileText size={18} className="text-blue-400" />
+                            <strong>Galho Hub</strong>
                         </div>
 
                         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -514,7 +514,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                             {roleLabels[user.role]}
                         </p>
 
-                        <p className="mt-2 flex items-center gap-1 text-xs text-emerald-400">
+                        <p className="mt-2 flex items-center gap-1 text-xs text-blue-400">
                             <Building2 size={12} />
                             {activeStore?.name}
                         </p>
@@ -574,7 +574,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                                         </span>
 
                                                         {item.badgeKey && badgeValue > 0 && (
-                                                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-zinc-900 dark:text-white">
+                                                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
                                                                 {badgeValue}
                                                             </span>
                                                         )}
@@ -597,7 +597,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                     onClick={() => router.push('/admin/modules')}
                                     className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
                                 >
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
                                         <ShieldCheck size={18} />
                                     </span>
                                     <span className="flex-1">Módulos por loja</span>
@@ -633,7 +633,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                                 key={store.id}
                                                 onClick={() => handleSelectStore(store)}
                                                 className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm ${store.id === activeStore?.id
-                                                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                                                        ? 'border-blue-500/40 bg-blue-500/10 text-blue-400'
                                                         : 'border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
                                                     }`}
                                             >
@@ -702,7 +702,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                                                 </span>
 
                                                                 {item.badgeKey && badgeValue > 0 && (
-                                                                    <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-zinc-900 dark:text-white">
+                                                                    <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
                                                                         {badgeValue}
                                                                     </span>
                                                                 )}
@@ -728,7 +728,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                             }}
                                             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
                                         >
-                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
                                                 <ShieldCheck size={18} />
                                             </span>
                                             <span className="flex-1">Módulos por loja</span>

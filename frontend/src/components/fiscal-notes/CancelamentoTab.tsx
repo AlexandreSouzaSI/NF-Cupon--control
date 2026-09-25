@@ -189,7 +189,7 @@ export function CancelamentoTab() {
                                                     ? 'text-red-400'
                                                     : doc.status === 'RASCUNHO'
                                                         ? 'text-amber-600 dark:text-amber-500'
-                                                        : 'text-emerald-500'
+                                                        : 'text-blue-500'
                                             }
                                         >
                                             {STATUS_LABEL[doc.status] || doc.status}

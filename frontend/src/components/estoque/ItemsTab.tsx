@@ -364,7 +364,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Buscar item..."
-                        className="w-full rounded-xl border border-zinc-200 bg-transparent py-2 pl-9 pr-3 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                        className="w-full rounded-xl border border-zinc-200 bg-transparent py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                     />
                 </div>
 
@@ -372,7 +372,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                     <select
                         value={categoriaFiltro}
                         onChange={(e) => setCategoriaFiltro(e.target.value)}
-                        className="w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                        className="w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                     >
                         <option value="">Todas as categorias</option>
                         {categoriasFixas.map((c) => (
@@ -388,7 +388,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                         value={descricaoFiltro}
                         onChange={(e) => setDescricaoFiltro(e.target.value)}
                         placeholder="Filtrar por descrição..."
-                        className="w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                        className="w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                     />
                 </div>
 
@@ -404,7 +404,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
 
                 <button
                     onClick={() => setShowNew((v) => !v)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
                 >
                     <Plus size={14} />
                     Novo item
@@ -412,13 +412,13 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
             </div>
 
             {showNew && (
-                <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-3">
                     <div className="flex-1 min-w-[160px]">
                         <label className="text-xs text-zinc-500">Nome</label>
                         <input
                             value={novoNome}
                             onChange={(e) => setNovoNome(e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         />
                     </div>
                     <div className="flex-1 min-w-[180px]">
@@ -427,7 +427,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                             value={novaDescricao}
                             onChange={(e) => setNovaDescricao(e.target.value)}
                             placeholder="Ex: Proteínas - Frigorífico"
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         />
                     </div>
                     <div className="min-w-[160px]">
@@ -435,7 +435,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                         <select
                             value={novaCategoria}
                             onChange={(e) => setNovaCategoria(e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         >
                             <option value="">Sem categoria</option>
                             {categoriasFixas.map((c) => (
@@ -450,7 +450,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                         <select
                             value={novaUnidade}
                             onChange={(e) => setNovaUnidade(e.target.value as UnidadeMedida)}
-                            className="mt-1 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         >
                             <option value="KG">KG</option>
                             <option value="LITRO">Litro</option>
@@ -464,7 +464,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                             onChange={(e) => setNovoMinimo(e.target.value)}
                             inputMode="decimal"
                             placeholder="0"
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         />
                     </div>
                     <div className="w-28">
@@ -475,13 +475,13 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                             inputMode="decimal"
                             placeholder="0"
                             title="Nível alvo — a sugestão de compra repõe até aqui, não só até o mínimo"
-                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                            className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                         />
                     </div>
                     <button
                         onClick={criarItem}
                         disabled={salvandoNovo || !novoNome.trim()}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                     >
                         {salvandoNovo ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                         Criar
@@ -490,14 +490,14 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
             )}
 
             {selecionados.size > 0 && (
-                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-3">
                     <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                         {selecionados.size} item(ns) selecionado(s)
                     </span>
                     <select
                         value={unidadeEmMassa}
                         onChange={(e) => setUnidadeEmMassa(e.target.value as UnidadeMedida)}
-                        className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                        className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                     >
                         <option value="KG">KG</option>
                         <option value="LITRO">Litro</option>
@@ -506,7 +506,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                     <button
                         onClick={aplicarUnidadeEmMassa}
                         disabled={aplicandoEmMassa}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                     >
                         {aplicandoEmMassa ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                         Aplicar unidade
@@ -540,7 +540,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                         type="checkbox"
                                         checked={items.length > 0 && selecionados.size === items.length}
                                         onChange={toggleSelecionarTodos}
-                                        className="accent-emerald-600"
+                                        className="accent-blue-600"
                                         title="Selecionar todos"
                                     />
                                 </th>
@@ -567,7 +567,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                 type="checkbox"
                                                 checked={selecionados.has(item.id)}
                                                 onChange={() => toggleSelecionado(item.id)}
-                                                className="accent-emerald-600"
+                                                className="accent-blue-600"
                                             />
                                         </td>
                                         <td className="px-4 py-3 font-medium text-zinc-900 dark:text-white">
@@ -591,12 +591,12 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                         value={formDescricao}
                                                         onChange={(e) => setFormDescricao(e.target.value)}
                                                         placeholder="Descrição"
-                                                        className="w-44 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                        className="w-44 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                     />
                                                     <select
                                                         value={formCategoria}
                                                         onChange={(e) => setFormCategoria(e.target.value)}
-                                                        className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                        className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                     >
                                                         <option value="">Sem categoria</option>
                                                         {categoriasFixas.map((c) => (
@@ -608,7 +608,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                     <select
                                                         value={formUnidade}
                                                         onChange={(e) => setFormUnidade(e.target.value as UnidadeMedida)}
-                                                        className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                        className="rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                     >
                                                         <option value="KG">KG</option>
                                                         <option value="LITRO">Litro</option>
@@ -620,7 +620,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                         inputMode="decimal"
                                                         placeholder="Mínimo"
                                                         title="Estoque mínimo — abaixo disso entra na Lista de Compra"
-                                                        className="w-24 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                        className="w-24 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                     />
                                                     <input
                                                         value={formMaximo}
@@ -628,12 +628,12 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                         inputMode="decimal"
                                                         placeholder="Máximo"
                                                         title="Estoque máximo — nível alvo pra sugestão de compra"
-                                                        className="w-24 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                        className="w-24 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                     />
                                                     <button
                                                         onClick={() => salvarEdicao(item.id)}
                                                         disabled={salvandoEdicao}
-                                                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                                                     >
                                                         {salvandoEdicao ? (
                                                             <Loader2 size={14} className="animate-spin" />
@@ -703,7 +703,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                             title="Configurações de Lista de Compra (Venda/Lista)"
                                                             className={`rounded-lg p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
                                                                 expandidoListaId === item.id
-                                                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                                                    ? 'text-blue-600 dark:text-blue-400'
                                                                     : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
                                                             }`}
                                                         >
@@ -762,7 +762,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                             type="checkbox"
                                                             checked={formListaProteina}
                                                             onChange={(e) => setFormListaProteina(e.target.checked)}
-                                                            className="accent-emerald-600"
+                                                            className="accent-blue-600"
                                                         />
                                                         Proteína
                                                     </label>
@@ -771,7 +771,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                         value={formListaCategoria}
                                                         onChange={(e) => setFormListaCategoria(e.target.value)}
                                                         title="Seção do pedido pro fornecedor, como o chefe de produção organiza a Lista de Compra."
-                                                        className="rounded-lg border border-purple-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-purple-500/40"
+                                                        className="rounded-lg border border-purple-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-purple-500/40"
                                                     >
                                                         <option value="">Sem categoria (Outros)</option>
                                                         <option value="Proteínas e Cortes">Proteínas e Cortes</option>
@@ -785,7 +785,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                         onChange={(e) => setFormListaOrdem(e.target.value)}
                                                         placeholder="Ordem"
                                                         title="Posição desse item dentro da categoria na Lista de Compra (menor primeiro)."
-                                                        className="w-20 rounded-lg border border-purple-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-purple-500/40"
+                                                        className="w-20 rounded-lg border border-purple-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-purple-500/40"
                                                     />
 
                                                     <input
@@ -796,7 +796,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                         onChange={(e) => setFormListaPorcaoPadrao(e.target.value)}
                                                         placeholder="Porção padrão (g)"
                                                         title="Corte sempre porcionado nesse tamanho (ex: 200g). Gramaturas maiores viram múltiplos disso (400g = 2x 200g) e gramaturas menores ficam separadas (ex: Filé Mignon 100g do Kids)."
-                                                        className="w-40 rounded-lg border border-amber-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-amber-500/40"
+                                                        className="w-40 rounded-lg border border-amber-400/60 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-amber-500/40"
                                                     />
 
                                                     <input
@@ -807,13 +807,13 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
                                                         onChange={(e) => setFormListaPesoUnidade(e.target.value)}
                                                         placeholder="Peso da peça/pacote (g)"
                                                         title="Peso de uma peça/pacote inteiro (ex: picanha ~1200g, pacote de batata frita 400g) pra sugerir também 'quantas peças/pacotes' comprar."
-                                                        className="w-44 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                        className="w-44 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                     />
 
                                                     <button
                                                         onClick={() => salvarConfigLista(item.id)}
                                                         disabled={salvandoLista}
-                                                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                                                     >
                                                         {salvandoLista ? (
                                                             <Loader2 size={14} className="animate-spin" />

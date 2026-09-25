@@ -492,7 +492,7 @@ function CreditApurationRow({
                 />
                 {temCredito && credito > 0 && (
                     <div
-                        className="absolute inset-y-0 rounded-full bg-emerald-500/60"
+                        className="absolute inset-y-0 rounded-full bg-blue-500/60"
                         style={{
                             left: `${valorPercent}%`,
                             width: `${creditoPercent}%`,
@@ -504,7 +504,7 @@ function CreditApurationRow({
             <div className="flex flex-wrap items-center justify-between gap-x-4 text-xs text-zinc-500">
                 <span>Débito (sobre a receita): {formatCurrency(debito)}</span>
                 {temCredito ? (
-                    <span className="text-emerald-500">
+                    <span className="text-blue-500">
                         Crédito usado (compras): {formatCurrency(credito)}
                     </span>
                 ) : (
@@ -1109,7 +1109,7 @@ function CalculationBreakdown({ result }: { result: CalculationResult }) {
                             ICMS ({result.presumido.icmsAliquotaUsada}%)
                             {result.presumido.icmsTemCredito &&
                                 result.presumido.icmsCredito > 0 && (
-                                    <span className="text-emerald-500">
+                                    <span className="text-blue-500">
                                         {' '}
                                         (débito {formatCurrency(result.presumido.icmsDebito)} −
                                         crédito {formatCurrency(result.presumido.icmsCredito)})
@@ -1154,7 +1154,7 @@ function CalculationBreakdown({ result }: { result: CalculationResult }) {
                     <div className="flex justify-between">
                         <span>
                             PIS/COFINS (não-cumulativo)
-                            <span className="text-emerald-500">
+                            <span className="text-blue-500">
                                 {' '}
                                 (débito {formatCurrency(result.real.pisCofinsDebito)} −
                                 crédito {formatCurrency(result.real.pisCofinsCredito)})
@@ -1166,7 +1166,7 @@ function CalculationBreakdown({ result }: { result: CalculationResult }) {
                         <span>
                             ICMS ({result.real.icmsAliquotaUsada}%)
                             {result.real.icmsTemCredito && result.real.icmsCredito > 0 && (
-                                <span className="text-emerald-500">
+                                <span className="text-blue-500">
                                     {' '}
                                     (débito {formatCurrency(result.real.icmsDebito)} −
                                     crédito {formatCurrency(result.real.icmsCredito)})
@@ -1594,7 +1594,7 @@ function ConfiguracaoTab() {
                                     <p className="font-semibold">
                                         {REGIME_LABELS[config.regime]}
                                         {!config.effectiveTo && (
-                                            <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
+                                            <span className="ml-2 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-500">
                                                 Vigente
                                             </span>
                                         )}

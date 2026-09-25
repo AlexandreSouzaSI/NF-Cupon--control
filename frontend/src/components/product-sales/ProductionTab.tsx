@@ -362,7 +362,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
                                 value={formNome}
                                 onChange={(e) => setFormNome(e.target.value)}
                                 placeholder="Ex: Picanha 200g, Molho da Casa"
-                                className="w-full rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                className="w-full rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                             />
                         </div>
 
@@ -373,7 +373,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
                             <select
                                 value={formUnidade}
                                 onChange={(e) => setFormUnidade(e.target.value as ProductionUnidade)}
-                                className="w-full rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                className="w-full rounded-lg border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                             >
                                 <option value="KG">Peso (KG)</option>
                                 <option value="ML">Volume (ML)</option>
@@ -406,7 +406,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
                                         atualizarLinha(linha.key, 'stockItemId', id)
                                     }
                                     placeholder="Selecione o item do estoque..."
-                                    className="min-w-[220px] flex-1 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                    className="min-w-[220px] flex-1 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                 />
 
                                 <input
@@ -418,7 +418,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
                                         atualizarLinha(linha.key, 'quantidade', e.target.value)
                                     }
                                     placeholder={`Por 1 ${unidadeLabel(formUnidade)}`}
-                                    className="w-32 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                    className="w-32 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                 />
 
                                 <button
@@ -443,7 +443,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
                         <button
                             onClick={salvar}
                             disabled={salvando || !formNome.trim()}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                         >
                             {salvando ? (
                                 <Loader2 size={14} className="animate-spin" />
@@ -564,14 +564,14 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
                                                 value={produzirQtd}
                                                 onChange={(e) => setProduzirQtd(e.target.value)}
                                                 placeholder={`Quantidade produzida (${unidadeLabel(item.unidadeMedida)})`}
-                                                className="w-56 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                className="w-56 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                             />
                                             <input
                                                 type="text"
                                                 value={produzirObs}
                                                 onChange={(e) => setProduzirObs(e.target.value)}
                                                 placeholder="Observação (opcional)"
-                                                className="min-w-[180px] flex-1 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                className="min-w-[180px] flex-1 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                             />
                                             <button
                                                 onClick={revisarProduzir}
@@ -625,7 +625,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
                                             <button
                                                 onClick={() => confirmarProduzir(item)}
                                                 disabled={salvandoProducao}
-                                                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                                             >
                                                 {salvandoProducao ? (
                                                     <Loader2 size={14} className="animate-spin" />
@@ -705,7 +705,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
                                                         <span
                                                             className={
                                                                 m.tipo === 'PRODUCAO'
-                                                                    ? 'font-semibold text-emerald-600 dark:text-emerald-400'
+                                                                    ? 'font-semibold text-blue-600 dark:text-blue-400'
                                                                     : 'font-semibold text-red-500'
                                                             }
                                                         >

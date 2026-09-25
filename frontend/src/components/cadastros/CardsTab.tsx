@@ -153,7 +153,7 @@ export function CardsTab() {
                 className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
             >
                 <div className="mb-5 flex items-center gap-3">
-                    <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                    <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                         <Plus size={22} />
                     </div>
 
@@ -180,7 +180,7 @@ export function CardsTab() {
                             <select
                                 value={storeId}
                                 onChange={(e) => setStoreId(e.target.value)}
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             >
                                 <option value="">Selecione a loja</option>
 
@@ -201,7 +201,7 @@ export function CardsTab() {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Ex: Cartão Principal Anchieta"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -214,7 +214,7 @@ export function CardsTab() {
                             onChange={(e) => setLastDigits(e.target.value)}
                             placeholder="0000"
                             maxLength={4}
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -226,13 +226,13 @@ export function CardsTab() {
                             value={holderName}
                             onChange={(e) => setHolderName(e.target.value)}
                             placeholder="Ex: Empresa"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
                     <button
                         disabled={creating}
-                        className="h-12 w-full rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                        className="h-12 w-full rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                     >
                         {creating ? 'Salvando...' : 'Cadastrar cartão'}
                     </button>

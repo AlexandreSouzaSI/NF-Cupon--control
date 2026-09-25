@@ -1,11 +1,11 @@
 {
-    "name": "GestIA",
-    "short_name": "GestIA",
+    "name": "Galho Hub",
+    "short_name": "Galho Hub",
     "description": "Gestão de compras, notas fiscais, tarefas e perdas pra redes de lojas",
     "start_url": "/home",
     "display": "standalone",
     "background_color": "#09090b",
-    "theme_color": "#22c55e",
+    "theme_color": "#3b82f6",
     "orientation": "portrait",
     "icons": [
         {

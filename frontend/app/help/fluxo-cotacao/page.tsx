@@ -255,7 +255,7 @@ export default function FluxoCotacaoPage() {
                                         className="grid grid-cols-4 items-center border-t border-zinc-200 px-2 py-1.5 text-[11px] dark:border-zinc-800"
                                     >
                                         <span>{row[0]}</span>
-                                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                        <span className="font-semibold text-blue-600 dark:text-blue-400">
                                             {row[1]}
                                         </span>
                                         <span>{row[2]}</span>
@@ -263,7 +263,7 @@ export default function FluxoCotacaoPage() {
                                     </div>
                                 ))}
                                 <div className="border-t border-zinc-200 bg-zinc-50 px-2 py-2 dark:border-zinc-800 dark:bg-zinc-950">
-                                    <div className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                    <div className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
                                         <Trophy size={12} />
                                         Escolher João Hortifruti
                                     </div>
@@ -347,22 +347,22 @@ export default function FluxoCotacaoPage() {
 
                     <div className="relative flex gap-4 sm:gap-6">
                         <div className="flex flex-col items-center">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white">
                                 <CheckCircle2 size={18} />
                             </div>
                         </div>
                         <div className="flex-1">
-                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 sm:p-5">
+                            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10 sm:p-5">
                                 <div className="flex items-center gap-2">
                                     <ShoppingCart
                                         size={16}
-                                        className="text-emerald-600 dark:text-emerald-400"
+                                        className="text-blue-600 dark:text-blue-400"
                                     />
-                                    <h3 className="font-semibold text-emerald-700 dark:text-emerald-400">
+                                    <h3 className="font-semibold text-blue-700 dark:text-blue-400">
                                         Pronto: a Compra nasce sozinha
                                     </h3>
                                 </div>
-                                <p className="mt-2 text-sm text-emerald-800/80 dark:text-emerald-300/80">
+                                <p className="mt-2 text-sm text-blue-800/80 dark:text-blue-300/80">
                                     No instante em que o fornecedor confirma,
                                     o sistema cria a Compra automaticamente
                                     com os itens, preços e o fornecedor

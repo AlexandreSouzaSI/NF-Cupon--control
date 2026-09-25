@@ -320,7 +320,7 @@ export function SuppliersTab() {
                     className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
                 >
                     <div className="mb-5 flex items-center gap-3">
-                        <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                        <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                             <Plus size={22} />
                         </div>
 
@@ -341,7 +341,7 @@ export function SuppliersTab() {
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder="Ex: Distribuidora Souza"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -353,7 +353,7 @@ export function SuppliersTab() {
                                 value={cnpj}
                                 onChange={(e) => setCnpj(e.target.value)}
                                 placeholder="00.000.000/0001-00"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -365,7 +365,7 @@ export function SuppliersTab() {
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 placeholder="(31) 99999-9999"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                             <p className="mt-1 text-xs text-zinc-500">
                                 Usado pra mandar o link de Cotação.
@@ -374,7 +374,7 @@ export function SuppliersTab() {
 
                         <button
                             disabled={creating}
-                            className="h-12 w-full rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                            className="h-12 w-full rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                         >
                             {creating ? 'Salvando...' : 'Cadastrar fornecedor'}
                         </button>
@@ -443,19 +443,19 @@ export function SuppliersTab() {
                                                 value={editName}
                                                 onChange={(e) => setEditName(e.target.value)}
                                                 placeholder="Nome"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                             <input
                                                 value={editCnpj}
                                                 onChange={(e) => setEditCnpj(e.target.value)}
                                                 placeholder="CNPJ"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                             />
                                             <input
                                                 value={editPhone}
                                                 onChange={(e) => setEditPhone(e.target.value)}
                                                 placeholder="Telefone (WhatsApp)"
-                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                                className="h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                             />
 
                                             <div className="flex justify-end gap-2 pt-1">
@@ -518,7 +518,7 @@ export function SuppliersTab() {
                                                                     )
                                                                 }
                                                                 className={`rounded-full border px-3 py-1 text-xs font-medium transition ${checked
-                                                                    ? 'border-green-500 bg-green-500/10 text-green-600 dark:text-green-400'
+                                                                    ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
                                                                     : 'border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400'
                                                                     }`}
                                                             >
@@ -585,7 +585,7 @@ export function SuppliersTab() {
                                                             supplier.id,
                                                         )
                                                     }
-                                                    className="rounded-lg bg-green-500 px-3 py-1.5 text-xs font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                                                    className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                                                 >
                                                     {savingCategories
                                                         ? 'Salvando...'
@@ -613,7 +613,7 @@ export function SuppliersTab() {
                                                         supplier,
                                                     )
                                                 }
-                                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs text-zinc-500 hover:border-green-500 hover:text-green-500"
+                                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-1 text-xs text-zinc-500 hover:border-blue-500 hover:text-blue-500"
                                             >
                                                 <Tag size={12} />
                                                 {(supplier.categories || [])
@@ -656,7 +656,7 @@ export function SuppliersTab() {
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
                         placeholder="Nome da categoria"
-                        className="h-11 flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                        className="h-11 flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                     />
                     <button
                         disabled={creatingCategory}

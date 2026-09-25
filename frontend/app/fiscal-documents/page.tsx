@@ -294,7 +294,7 @@ export default function FiscalDocumentsPage() {
                     <button
                         onClick={() => setActiveTab('DONE')}
                         className={`flex items-center justify-between gap-3 rounded-3xl border p-4 text-left transition ${activeTab === 'DONE'
-                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500'
+                            ? 'border-blue-500 bg-blue-500/10 text-blue-500'
                             : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700'
                             }`}
                     >
@@ -451,7 +451,7 @@ export default function FiscalDocumentsPage() {
                                                 <>
                                                     <button
                                                         onClick={() => setLinkingId(nf.id)}
-                                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white hover:bg-emerald-600"
+                                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600"
                                                     >
                                                         <CheckCircle2 size={16} />
                                                         Essa compra existiu
@@ -507,7 +507,7 @@ export default function FiscalDocumentsPage() {
                                                 <Receipt
                                                     className={
                                                         hasInvoice
-                                                            ? 'text-emerald-400'
+                                                            ? 'text-blue-400'
                                                             : 'text-orange-400'
                                                     }
                                                     size={20}
@@ -552,7 +552,7 @@ export default function FiscalDocumentsPage() {
                                                                     href={`${API_URL}${doc.fileUrl}`}
                                                                     target="_blank"
                                                                     rel="noreferrer"
-                                                                    className="mt-2 inline-block text-sm font-medium text-green-400 hover:text-green-300"
+                                                                    className="mt-2 inline-block text-sm font-medium text-blue-400 hover:text-blue-300"
                                                                 >
                                                                     Abrir arquivo
                                                                 </a>
@@ -564,7 +564,7 @@ export default function FiscalDocumentsPage() {
                                         </div>
 
                                         {hasInvoice ? (
-                                            <span className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-5 py-3 font-semibold text-emerald-400">
+                                            <span className="inline-flex items-center gap-2 rounded-2xl bg-blue-500/10 px-5 py-3 font-semibold text-blue-400">
                                                 <CheckCircle2 size={18} />
                                                 NF anexada
                                             </span>
@@ -592,7 +592,7 @@ export default function FiscalDocumentsPage() {
                                                     />
                                                 </label>
 
-                                                <label className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-green-500 px-5 font-semibold text-zinc-900 dark:text-white hover:bg-green-600">
+                                                <label className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-500 px-5 font-semibold text-white hover:bg-blue-600">
                                                     <Upload size={18} />
                                                     NF
 

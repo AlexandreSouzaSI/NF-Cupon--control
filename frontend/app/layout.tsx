@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GestIA",
+  title: "Galho Hub",
   description: "Gestão de compras, notas fiscais, tarefas e perdas pra redes de lojas",
   manifest: "/manifest.json",
   icons: {
@@ -31,12 +31,12 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "GestIA",
+    title: "Galho Hub",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#22c55e",
+  themeColor: "#3b82f6",
   width: "device-width",
   initialScale: 1,
 };

@@ -99,7 +99,7 @@ const comoFunciona = [
 
 const faqs = [
   {
-    question: 'O GestIA já emite nota fiscal de verdade?',
+    question: 'O Galho Hub já emite nota fiscal de verdade?',
     answer:
       'Sim. O sistema já busca automaticamente as notas de compra e serviço direto da Sefaz, e também já emite nota fiscal de baixa por perda e devolução, homologada com o webservice oficial.',
   },
@@ -127,8 +127,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-10 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <FileText size={22} className="text-emerald-400" />
-            <strong className="text-lg">GestIA</strong>
+            <img src="/logo-galho-hub.png" alt="Galho Hub" className="h-9 w-auto rounded-lg" />
           </div>
 
           <div className="flex items-center gap-3">
@@ -141,7 +140,7 @@ export default function LandingPage() {
 
             <Link
               href="/demo"
-              className="rounded-xl bg-green-500 px-4 py-2 text-sm font-semibold text-zinc-900 dark:text-white transition hover:bg-green-600"
+              className="rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-600"
             >
               Testar grátis
             </Link>
@@ -151,7 +150,7 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-4 py-20 text-center">
-        <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-1.5 text-xs font-semibold text-emerald-500">
+        <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-1.5 text-xs font-semibold text-blue-500">
           <BadgeCheck size={14} />
           Já em uso real, todos os dias
         </span>
@@ -162,7 +161,7 @@ export default function LandingPage() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
-          O GestIA centraliza compra, recebimento, nota fiscal, conta a
+          O Galho Hub centraliza compra, recebimento, nota fiscal, conta a
           pagar, tarefas e tributos de cada empresa do seu grupo — pra
           acabar com compra sem documento, conta esquecida e informação
           espalhada em WhatsApp e planilha.
@@ -171,7 +170,7 @@ export default function LandingPage() {
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
             href="/demo"
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-500 px-6 font-semibold text-zinc-900 dark:text-white transition hover:bg-green-600 sm:w-auto"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 font-semibold text-white transition hover:bg-blue-600 sm:w-auto"
           >
             Testar grátis
             <ArrowRight size={18} />
@@ -202,7 +201,7 @@ export default function LandingPage() {
           <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {comoFunciona.map((item) => (
               <div key={item.step}>
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-green-500 font-bold text-zinc-900 dark:text-white">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 font-bold text-white">
                   {item.step}
                 </div>
 
@@ -234,7 +233,7 @@ export default function LandingPage() {
               key={recurso.title}
               className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
             >
-              <recurso.icon size={22} className="text-emerald-400" />
+              <recurso.icon size={22} className="text-blue-400" />
 
               <h3 className="mt-3 font-semibold">{recurso.title}</h3>
 
@@ -260,7 +259,7 @@ export default function LandingPage() {
           </p>
 
           <div className="mx-auto mt-10 max-w-md rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-8 text-left">
-            <p className="text-sm font-semibold text-emerald-500">
+            <p className="text-sm font-semibold text-blue-500">
               Sob medida por empresa
             </p>
 
@@ -274,7 +273,7 @@ export default function LandingPage() {
                 <li key={item} className="flex items-start gap-2">
                   <CheckCircle2
                     size={18}
-                    className="mt-0.5 shrink-0 text-emerald-400"
+                    className="mt-0.5 shrink-0 text-blue-400"
                   />
                   {item}
                 </li>
@@ -283,7 +282,7 @@ export default function LandingPage() {
 
             <Link
               href="/demo"
-              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white transition hover:bg-green-600"
+              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-500 font-semibold text-white transition hover:bg-blue-600"
             >
               Testar grátis
               <ArrowRight size={18} />
@@ -295,14 +294,14 @@ export default function LandingPage() {
       {/* Confiança */}
       <section className="mx-auto max-w-6xl px-4 py-16">
         <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-10 text-center">
-          <ScanLine size={28} className="mx-auto text-emerald-400" />
+          <ScanLine size={28} className="mx-auto text-blue-400" />
 
           <h2 className="mt-4 text-2xl font-bold">
             Validado na operação de verdade
           </h2>
 
           <p className="mx-auto mt-3 max-w-2xl text-zinc-600 dark:text-zinc-400">
-            O GestIA não nasceu de planilha de protótipo — ele roda hoje
+            O Galho Hub não nasceu de planilha de protótipo — ele roda hoje
             no dia a dia de uma rede real de lojas, cuidando de compra,
             nota fiscal e financeiro desde o primeiro café da manhã até o
             fechamento do caixa.
@@ -310,21 +309,21 @@ export default function LandingPage() {
 
           <div className="mx-auto mt-8 flex max-w-xl flex-col justify-center gap-6 sm:flex-row">
             <div>
-              <p className="text-2xl font-bold text-emerald-400">3+</p>
+              <p className="text-2xl font-bold text-blue-400">3+</p>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 empresas de um mesmo grupo, no mesmo painel
               </p>
             </div>
 
             <div>
-              <p className="text-2xl font-bold text-emerald-400">100%</p>
+              <p className="text-2xl font-bold text-blue-400">100%</p>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 das notas de compra buscadas direto da Sefaz
               </p>
             </div>
 
             <div>
-              <p className="text-2xl font-bold text-emerald-400">24/7</p>
+              <p className="text-2xl font-bold text-blue-400">24/7</p>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 sincronização automática, sem intervenção manual
               </p>
@@ -354,7 +353,7 @@ export default function LandingPage() {
 
                   <ClipboardCheck
                     size={18}
-                    className="text-emerald-400 opacity-0 transition group-open:opacity-100"
+                    className="text-blue-400 opacity-0 transition group-open:opacity-100"
                   />
                 </summary>
 
@@ -381,7 +380,7 @@ export default function LandingPage() {
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
             href="/demo"
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-500 px-6 font-semibold text-zinc-900 dark:text-white transition hover:bg-green-600 sm:w-auto"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-500 px-6 font-semibold text-white transition hover:bg-blue-600 sm:w-auto"
           >
             Testar grátis
             <ArrowRight size={18} />
@@ -397,14 +396,65 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-200 dark:border-zinc-800 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 text-sm text-zinc-500 sm:flex-row">
-          <div className="flex items-center gap-2">
-            <FileText size={16} className="text-emerald-400" />
-            GestIA
+      <footer className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 px-4 py-12">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid gap-10 md:grid-cols-[1.2fr_0.8fr_0.8fr]">
+            <div>
+              <img
+                src="/logo-galho-hub.png"
+                alt="Galho Hub"
+                className="h-14 w-auto rounded-lg"
+              />
+
+              <p className="mt-4 max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
+                Compras, notas fiscais, estoque e financeiro de rede de
+                lojas, tudo num painel só.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+                Navegação
+              </h3>
+
+              <div className="mt-4 flex flex-col gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+                <a href="#como-funciona" className="hover:text-blue-400">
+                  Como funciona
+                </a>
+                <a href="#recursos" className="hover:text-blue-400">
+                  Recursos
+                </a>
+                <a href="#planos" className="hover:text-blue-400">
+                  Planos
+                </a>
+                <a href="#faq" className="hover:text-blue-400">
+                  Perguntas frequentes
+                </a>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+                Comece agora
+              </h3>
+
+              <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+                Teste grátis com uma loja de demonstração, sem compromisso.
+              </p>
+
+              <Link
+                href="/demo"
+                className="mt-5 inline-flex rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600"
+              >
+                Testar grátis
+              </Link>
+            </div>
           </div>
 
-          <p>© {new Date().getFullYear()} GestIA. Todos os direitos reservados.</p>
+          <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-zinc-200 dark:border-zinc-800 pt-6 text-xs text-zinc-500 sm:flex-row">
+            <p>© {new Date().getFullYear()} Galho Hub. Todos os direitos reservados.</p>
+            <p>Desenvolvido por Alexandre Moura de Souza</p>
+          </div>
         </div>
       </footer>
     </main>

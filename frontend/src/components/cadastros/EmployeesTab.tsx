@@ -289,7 +289,7 @@ export function EmployeesTab() {
 
                 <button
                     onClick={startCreate}
-                    className="inline-flex items-center gap-2 rounded-xl bg-green-500 px-4 py-2 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600"
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600"
                 >
                     <Plus size={16} />
                     Novo funcionário
@@ -324,7 +324,7 @@ export function EmployeesTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, name: e.target.value })
                                 }
-                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -337,7 +337,7 @@ export function EmployeesTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, cpf: e.target.value })
                                 }
-                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -350,7 +350,7 @@ export function EmployeesTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, role: e.target.value })
                                 }
-                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -363,7 +363,7 @@ export function EmployeesTab() {
                                 onChange={(e) =>
                                     setForm({ ...form, phone: e.target.value })
                                 }
-                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -380,7 +380,7 @@ export function EmployeesTab() {
                                         admissionDate: e.target.value,
                                     })
                                 }
-                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -400,7 +400,7 @@ export function EmployeesTab() {
                                     })
                                 }
                                 placeholder="0,00"
-                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                         </div>
                     </div>
@@ -427,7 +427,7 @@ export function EmployeesTab() {
                                         })
                                     }
                                     placeholder="0,00"
-                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                 />
                             </div>
 
@@ -447,7 +447,7 @@ export function EmployeesTab() {
                                         })
                                     }
                                     placeholder="Ex: 20"
-                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                 />
                             </div>
 
@@ -467,7 +467,7 @@ export function EmployeesTab() {
                                         })
                                     }
                                     placeholder="0,00"
-                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                 />
                             </div>
 
@@ -487,7 +487,7 @@ export function EmployeesTab() {
                                         })
                                     }
                                     placeholder="Ex: 05"
-                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                 />
                             </div>
 
@@ -507,7 +507,7 @@ export function EmployeesTab() {
                                         })
                                     }
                                     placeholder="0,00"
-                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                 />
                                 <p className="mt-1 text-xs text-zinc-500">
                                     Total por dia = valor x 2 (ida e volta).
@@ -535,7 +535,7 @@ export function EmployeesTab() {
                                         })
                                     }
                                     placeholder="0,00"
-                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                 />
                             </div>
 
@@ -555,7 +555,7 @@ export function EmployeesTab() {
                                         })
                                     }
                                     placeholder="Opcional"
-                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                 />
                             </div>
                         </div>
@@ -579,7 +579,7 @@ export function EmployeesTab() {
                                             paymentMethod: e.target.value,
                                         })
                                     }
-                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                    className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                 >
                                     {Object.entries(
                                         PAYMENT_METHOD_LABELS,
@@ -606,7 +606,7 @@ export function EmployeesTab() {
                                                         e.target.value,
                                                 })
                                             }
-                                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                         >
                                             {Object.entries(
                                                 PIX_KEY_TYPE_LABELS,
@@ -631,7 +631,7 @@ export function EmployeesTab() {
                                                 })
                                             }
                                             placeholder="CPF, e-mail, telefone ou chave aleatória"
-                                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-green-500"
+                                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                         />
                                     </div>
                                 </>
@@ -648,14 +648,14 @@ export function EmployeesTab() {
                             onChange={(e) =>
                                 setForm({ ...form, notes: e.target.value })
                             }
-                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </div>
 
                     <div className="mt-5 flex gap-3">
                         <button
                             disabled={saving}
-                            className="h-11 rounded-xl bg-green-500 px-5 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                            className="h-11 rounded-xl bg-blue-500 px-5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                         >
                             {saving
                                 ? 'Salvando...'

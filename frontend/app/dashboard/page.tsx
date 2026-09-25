@@ -122,7 +122,7 @@ export default function DashboardPage() {
                 <button
                     type="button"
                     onClick={() => setSelectedMonth(currentMonthValue())}
-                    className="ml-1 h-9 rounded-xl px-3 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                    className="ml-1 h-9 rounded-xl px-3 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
                 >
                     Hoje
                 </button>
@@ -157,7 +157,7 @@ export default function DashboardPage() {
                         <button
                             type="button"
                             onClick={loadSummary}
-                            className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 font-medium text-zinc-900 dark:text-white hover:bg-emerald-700"
+                            className="mt-4 rounded-xl bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
                         >
                             Tentar novamente
                         </button>
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                                     <div className="mt-3 space-y-2 text-sm">
                                         <div className="flex items-center justify-between">
                                             <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
-                                                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                                <span className="h-2 w-2 rounded-full bg-blue-500" />
                                                 Concluídas (mês)
                                             </span>
                                             <span className="font-semibold">

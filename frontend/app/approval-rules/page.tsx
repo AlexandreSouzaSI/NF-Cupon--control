@@ -34,7 +34,7 @@ const levelLabel = {
 };
 
 const levelColor = {
-    AUTO: 'text-green-400',
+    AUTO: 'text-blue-400',
     MANAGER: 'text-yellow-400',
     OWNER: 'text-red-400',
 };
@@ -137,7 +137,7 @@ export default function ApprovalRulesPage() {
                     className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
                 >
                     <div className="mb-5 flex items-center gap-3">
-                        <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                        <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                             <Plus size={22} />
                         </div>
 
@@ -164,7 +164,7 @@ export default function ApprovalRulesPage() {
                                     setName(e.target.value)
                                 }
                                 placeholder="Ex: Compras pequenas"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -179,7 +179,7 @@ export default function ApprovalRulesPage() {
                                     setMinValue(e.target.value)
                                 }
                                 placeholder="0,00"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -194,7 +194,7 @@ export default function ApprovalRulesPage() {
                                     setMaxValue(e.target.value)
                                 }
                                 placeholder="500,00"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -210,7 +210,7 @@ export default function ApprovalRulesPage() {
                                         e.target.value as any,
                                     )
                                 }
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             >
                                 <option value="AUTO">
                                     Aprovação automática
@@ -228,7 +228,7 @@ export default function ApprovalRulesPage() {
 
                         <button
                             disabled={creating}
-                            className="h-12 w-full rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                            className="h-12 w-full rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                         >
                             {creating
                                 ? 'Salvando...'
@@ -291,7 +291,7 @@ export default function ApprovalRulesPage() {
                                             {rule.level === 'AUTO' ? (
                                                 <CheckCircle2
                                                     size={18}
-                                                    className="text-green-400"
+                                                    className="text-blue-400"
                                                 />
                                             ) : (
                                                 <AlertTriangle

@@ -132,7 +132,7 @@ export default function EstoqueDashboardPage() {
                                 icon={Wallet}
                                 label="Valor total em estoque"
                                 value={formatCurrency(data?.valorTotalEstoque || 0)}
-                                colorClass="text-emerald-500"
+                                colorClass="text-blue-500"
                             />
                             <SummaryCard
                                 icon={Boxes}
@@ -245,7 +245,7 @@ export default function EstoqueDashboardPage() {
                                             >
                                                 <span className="flex min-w-0 items-center gap-2 truncate">
                                                     {entrada ? (
-                                                        <ArrowUpCircle size={15} className="shrink-0 text-emerald-500" />
+                                                        <ArrowUpCircle size={15} className="shrink-0 text-blue-500" />
                                                     ) : (
                                                         <ArrowDownCircle size={15} className="shrink-0 text-red-500" />
                                                     )}

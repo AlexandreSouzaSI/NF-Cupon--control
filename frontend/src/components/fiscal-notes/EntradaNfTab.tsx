@@ -654,7 +654,7 @@ export function EntradaNfTab() {
                             onChange={(e) =>
                                 handleToggleAccepted(e.target.checked)
                             }
-                            className="h-4 w-4 accent-emerald-500"
+                            className="h-4 w-4 accent-blue-500"
                         />
                         NFs Aceitas
                     </label>
@@ -752,7 +752,7 @@ export function EntradaNfTab() {
 
                                     <div className="flex flex-col gap-2 sm:min-w-[260px]">
                                         {showAccepted ? (
-                                            <span className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-500">
+                                            <span className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-500">
                                                 <CheckCircle2 size={16} />
                                                 {nf.purchaseId
                                                     ? 'Vinculada a uma compra'
@@ -813,7 +813,7 @@ export function EntradaNfTab() {
 
                                                 <button
                                                     onClick={() => setAcceptingId(nf.id)}
-                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white hover:bg-emerald-600"
+                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600"
                                                 >
                                                     <CheckCircle2 size={16} />
                                                     Aceitar e gerar conta
@@ -822,7 +822,7 @@ export function EntradaNfTab() {
                                                 <button
                                                     disabled={busyId === nf.id}
                                                     onClick={() => handleAcceptWithoutBill(nf.id)}
-                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
+                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 text-sm font-medium text-blue-500 hover:bg-blue-500/20 disabled:opacity-50"
                                                 >
                                                     Aceitar sem gerar conta
                                                 </button>

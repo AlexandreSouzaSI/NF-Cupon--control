@@ -155,7 +155,7 @@ export function AutocompleteInput({
                                 onMouseEnter={() => setIndiceAtivo(i)}
                                 className={`block w-full truncate px-3 py-1.5 text-left text-sm ${
                                     i === indiceAtivo
-                                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                        ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'
                                         : 'text-zinc-700 dark:text-zinc-200'
                                 }`}
                             >

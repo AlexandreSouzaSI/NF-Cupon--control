@@ -78,7 +78,7 @@ export default function AlertsPage() {
                 <p className="text-zinc-600 dark:text-zinc-400">Carregando alertas...</p>
             ) : alerts.length === 0 ? (
                 <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center">
-                    <CheckCircle2 className="mx-auto mb-3 text-green-400" />
+                    <CheckCircle2 className="mx-auto mb-3 text-blue-400" />
                     <h2 className="text-xl font-bold">Nenhum alerta pendente</h2>
                     <p className="mt-2 text-zinc-600 dark:text-zinc-400">
                         Tudo sob controle no momento.
@@ -126,7 +126,7 @@ export default function AlertsPage() {
                                                     ` • ${alert.purchase.supplier.name}`}
                                             </p>
 
-                                            <p className="mt-2 text-lg font-bold text-green-400">
+                                            <p className="mt-2 text-lg font-bold text-blue-400">
                                                 {formatCurrency(alert.purchase.value)}
                                             </p>
                                         </div>
@@ -135,7 +135,7 @@ export default function AlertsPage() {
 
                                 <button
                                     onClick={() => resolveAlert(alert.id)}
-                                    className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20"
+                                    className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20"
                                 >
                                     Marcar como resolvido
                                 </button>

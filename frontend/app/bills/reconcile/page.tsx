@@ -258,7 +258,7 @@ export default function BillsReconcilePage() {
                             data-tour="reconcile-import-button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading || loadingBills}
-                            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700 disabled:opacity-50"
+                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             {uploading ? (
                                 <Loader2 size={18} className="animate-spin" />
@@ -311,7 +311,7 @@ export default function BillsReconcilePage() {
                                     <div
                                         key={transaction.fitId}
                                         className={`rounded-3xl border p-5 ${status === 'CONFIRMED'
-                                            ? 'border-emerald-500/30 bg-emerald-500/5'
+                                            ? 'border-blue-500/30 bg-blue-500/5'
                                             : status === 'IGNORED'
                                                 ? 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 opacity-60'
                                                 : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
@@ -338,7 +338,7 @@ export default function BillsReconcilePage() {
                                             </div>
 
                                             {status === 'CONFIRMED' ? (
-                                                <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-400">
+                                                <span className="inline-flex items-center gap-2 rounded-xl bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-400">
                                                     <CheckCircle2 size={16} />
                                                     Conciliada
                                                 </span>
@@ -417,7 +417,7 @@ export default function BillsReconcilePage() {
                                                                     .fitId
                                                                 ]
                                                             }
-                                                            className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700 disabled:opacity-50"
+                                                            className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                                                         >
                                                             {isProcessing ? (
                                                                 <Loader2

@@ -121,7 +121,7 @@ export function ImportEstoqueTab({ onImported }: { onImported: () => void }) {
                         Baixar modelo
                     </button>
 
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
                         {importando ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
                         Importar planilha
                         <input
@@ -143,7 +143,7 @@ export function ImportEstoqueTab({ onImported }: { onImported: () => void }) {
                         <p className="text-xs text-zinc-500">Linhas lidas</p>
                     </div>
                     <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-center dark:border-zinc-800 dark:bg-zinc-900">
-                        <p className="text-xl font-bold text-emerald-600">{resultado.criados}</p>
+                        <p className="text-xl font-bold text-blue-600">{resultado.criados}</p>
                         <p className="text-xs text-zinc-500">Itens criados</p>
                     </div>
                     <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-center dark:border-zinc-800 dark:bg-zinc-900">

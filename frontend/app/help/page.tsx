@@ -121,9 +121,9 @@ export default function HelpPage() {
                                             onClick={() =>
                                                 startTour(tour.id, tour.href)
                                             }
-                                            className="flex items-start gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left transition hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-500/5"
+                                            className="flex items-start gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left transition hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-500/5"
                                         >
-                                            <div className="shrink-0 rounded-xl bg-emerald-500/10 p-2 text-emerald-500">
+                                            <div className="shrink-0 rounded-xl bg-blue-500/10 p-2 text-blue-500">
                                                 <PlayCircle size={20} />
                                             </div>
                                             <div className="min-w-0">

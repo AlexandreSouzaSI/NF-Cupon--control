@@ -243,7 +243,7 @@ export default function FiscalDashboardPage() {
                                 )}
                                 secondary={`${summary?.faturamento.count || 0
                                     } nota(s) de saída`}
-                                colorClass="text-emerald-500"
+                                colorClass="text-blue-500"
                             />
 
                             <SummaryCard

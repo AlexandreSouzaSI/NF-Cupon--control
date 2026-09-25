@@ -254,7 +254,7 @@ export default function ApprovalsPage() {
                                                     onClick={() =>
                                                         approve(purchase.id)
                                                     }
-                                                    className="flex h-11 items-center gap-2 rounded-2xl bg-green-500 px-5 font-medium text-zinc-900 dark:text-white hover:bg-green-600"
+                                                    className="flex h-11 items-center gap-2 rounded-2xl bg-blue-500 px-5 font-medium text-white hover:bg-blue-600"
                                                 >
                                                     <Check size={18} />
                                                     Aprovar
@@ -264,7 +264,7 @@ export default function ApprovalsPage() {
                                                     onClick={() =>
                                                         reject(purchase.id)
                                                     }
-                                                    className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-zinc-900 dark:text-white hover:bg-red-600"
+                                                    className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-white hover:bg-red-600"
                                                 >
                                                     <X size={18} />
                                                     Reprovar
@@ -357,7 +357,7 @@ export default function ApprovalsPage() {
                                                         onClick={() =>
                                                             unreject(purchase.id)
                                                         }
-                                                        className="flex h-11 items-center gap-2 rounded-2xl bg-emerald-500 px-5 font-medium text-zinc-900 dark:text-white hover:bg-emerald-600"
+                                                        className="flex h-11 items-center gap-2 rounded-2xl bg-blue-500 px-5 font-medium text-white hover:bg-blue-600"
                                                     >
                                                         <RotateCcw size={18} />
                                                         Aprovar de novo
@@ -368,7 +368,7 @@ export default function ApprovalsPage() {
                                                             onClick={() =>
                                                                 remove(purchase)
                                                             }
-                                                            className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-zinc-900 dark:text-white hover:bg-red-600"
+                                                            className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-white hover:bg-red-600"
                                                         >
                                                             <Trash2 size={18} />
                                                             Excluir

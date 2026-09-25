@@ -134,8 +134,8 @@ export default function CotacaoConfirmarPage() {
                 </div>
 
                 {jaConfirmado ? (
-                    <div className="space-y-3 rounded-2xl border border-green-500/30 bg-green-500/10 p-4 print:border-zinc-300 print:bg-white">
-                        <p className="flex items-center gap-2 text-sm font-semibold text-green-400 print:text-black">
+                    <div className="space-y-3 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 print:border-zinc-300 print:bg-white">
+                        <p className="flex items-center gap-2 text-sm font-semibold text-blue-400 print:text-black">
                             <CheckCircle2 size={16} />
                             Pedido já confirmado. Obrigado!
                         </p>

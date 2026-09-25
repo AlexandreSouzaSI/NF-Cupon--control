@@ -171,7 +171,7 @@ export function DashboardTab({
                     </div>
 
                     <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                        <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                             <TrendingUp size={18} />
                         </div>
                         <p className="text-xs text-zinc-500">Valor vendido (total)</p>
@@ -188,7 +188,7 @@ export function DashboardTab({
                     <button
                         onClick={() => setMetrica('quantidade')}
                         className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${metrica === 'quantidade'
-                                ? 'bg-emerald-600 text-white'
+                                ? 'bg-blue-600 text-white'
                                 : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
                             }`}
                     >
@@ -197,7 +197,7 @@ export function DashboardTab({
                     <button
                         onClick={() => setMetrica('valor')}
                         className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${metrica === 'valor'
-                                ? 'bg-emerald-600 text-white'
+                                ? 'bg-blue-600 text-white'
                                 : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
                             }`}
                     >
@@ -220,7 +220,7 @@ export function DashboardTab({
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
                             <div className="mb-4 flex items-center gap-2">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                                     <BarChart3 size={18} />
                                 </div>
                                 <div>

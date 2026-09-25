@@ -133,7 +133,7 @@ function ProductsPageInner() {
                                     key={tab.key}
                                     onClick={() => setActiveTab(tab.key)}
                                     className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${isActive
-                                        ? 'bg-emerald-600 text-zinc-900 dark:text-white'
+                                        ? 'bg-blue-600 text-white'
                                         : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                                         }`}
                                 >

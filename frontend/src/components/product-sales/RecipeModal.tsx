@@ -272,7 +272,7 @@ export function RecipeModal({
                                                             ? 'ML'
                                                             : 'Gramas'
                                                 }
-                                                className="w-24 rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700"
+                                                className="w-24 rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"
                                             />
 
                                             <button
@@ -331,7 +331,7 @@ export function RecipeModal({
                                                       ? 'Mililitros (volume)'
                                                       : 'Gramas (peso)'
                                             }
-                                            className={`w-24 rounded-xl border bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-500 ${unidade === 'UNIDADE'
+                                            className={`w-24 rounded-xl border bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 ${unidade === 'UNIDADE'
                                                 ? 'border-amber-400/60 dark:border-amber-500/40'
                                                 : 'border-zinc-200 dark:border-zinc-700'
                                                 }`}
@@ -368,7 +368,7 @@ export function RecipeModal({
                             <button
                                 onClick={handleSalvar}
                                 disabled={saving}
-                                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                             >
                                 {saving && <Loader2 size={16} className="animate-spin" />}
                                 Salvar

@@ -108,7 +108,7 @@ export function CardsReportTab() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                 />
 
                 <span className="text-zinc-500">até</span>
@@ -117,12 +117,12 @@ export function CardsReportTab() {
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                 />
 
                 <button
                     onClick={loadReports}
-                    className="h-10 rounded-xl bg-emerald-600 px-4 text-sm font-medium text-zinc-900 dark:text-white hover:bg-emerald-700"
+                    className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
                 >
                     Filtrar
                 </button>
@@ -133,7 +133,7 @@ export function CardsReportTab() {
                     <p className="text-xs text-zinc-600 dark:text-zinc-400">
                         Total em cartões
                     </p>
-                    <strong className="mt-1 block text-xl text-emerald-500 sm:text-2xl">
+                    <strong className="mt-1 block text-xl text-blue-500 sm:text-2xl">
                         {formatCurrency(totalValue)}
                     </strong>
                 </div>
@@ -218,7 +218,7 @@ export function CardsReportTab() {
                                         </div>
                                     </div>
 
-                                    <strong className="text-lg text-emerald-500 sm:pl-7">
+                                    <strong className="text-lg text-blue-500 sm:pl-7">
                                         {formatCurrency(card.totalValue)}
                                     </strong>
                                 </button>
@@ -250,7 +250,7 @@ export function CardsReportTab() {
                                                     <span
                                                         className={
                                                             purchase.hasInvoice
-                                                                ? 'text-emerald-500'
+                                                                ? 'text-blue-500'
                                                                 : 'text-orange-400'
                                                         }
                                                     >

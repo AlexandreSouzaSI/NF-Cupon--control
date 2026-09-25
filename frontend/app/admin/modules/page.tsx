@@ -172,7 +172,7 @@ export default function AdminModulesPage() {
         <AppLayout title="Módulos por loja">
             <div className="space-y-6">
                 <header className="flex items-start gap-3">
-                    <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+                    <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
                         <ShieldCheck size={20} />
                     </div>
 
@@ -242,7 +242,7 @@ export default function AdminModulesPage() {
                                                             type="button"
                                                             disabled={savingThis}
                                                             onClick={() => saveStore(store)}
-                                                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                            className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
                                                         >
                                                             {savingThis ? 'Salvando...' : 'Salvar'}
                                                         </button>
@@ -267,7 +267,7 @@ export default function AdminModulesPage() {
                                                 >
                                                     <input
                                                         type="checkbox"
-                                                        className="h-4 w-4 accent-emerald-500"
+                                                        className="h-4 w-4 accent-blue-500"
                                                         disabled={savingThis}
                                                         checked={store.enabledModules.includes(
                                                             module.value,

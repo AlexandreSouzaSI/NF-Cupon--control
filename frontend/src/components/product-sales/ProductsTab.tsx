@@ -46,7 +46,7 @@ function formatarNumero(valor: number) {
 
 const CATEGORY_COLORS = [
     'bg-blue-500/10 text-blue-500',
-    'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     'bg-amber-500/10 text-amber-500',
     'bg-purple-500/10 text-purple-500',
     'bg-pink-500/10 text-pink-500',
@@ -190,7 +190,7 @@ export function ProductsTab({
                                             <button
                                                 onClick={() => setProdutoReceita(item.produto)}
                                                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition ${item.temReceita
-                                                        ? 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400'
+                                                        ? 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:text-blue-400'
                                                         : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
                                                     }`}
                                             >
@@ -250,7 +250,7 @@ export function ProductsTab({
                 </div>
 
                 <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                    <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                         <TrendingUp size={18} />
                     </div>
                     <p className="text-xs text-zinc-500">Valor vendido (total)</p>
@@ -275,7 +275,7 @@ export function ProductsTab({
                         <button
                             key={cat.categoria}
                             onClick={() => setCategoriaSelecionada(cat.categoria)}
-                            className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-5 text-left transition hover:border-emerald-500/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+                            className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-5 text-left transition hover:border-blue-500/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
                         >
                             <div className="flex items-center justify-between">
                                 <div

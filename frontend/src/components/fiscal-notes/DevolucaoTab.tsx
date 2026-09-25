@@ -483,7 +483,7 @@ export function DevolucaoTab() {
                                                 </label>
 
                                                 {item.cfopDevolucaoSugerido ? (
-                                                    <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-500">
+                                                    <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-500">
                                                         CFOP devolução: {item.cfopDevolucaoSugerido}
                                                     </span>
                                                 ) : (
@@ -660,7 +660,7 @@ export function DevolucaoTab() {
                                                         ? 'text-red-400'
                                                         : dev.status === 'RASCUNHO'
                                                             ? 'text-amber-600 dark:text-amber-500'
-                                                            : 'text-emerald-500'
+                                                            : 'text-blue-500'
                                                 }
                                             >
                                                 {STATUS_LABEL[dev.status] || dev.status}
@@ -668,7 +668,7 @@ export function DevolucaoTab() {
                                         </p>
 
                                         {dev.protocolo && (
-                                            <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-500">
+                                            <p className="mt-1 text-xs text-blue-600 dark:text-blue-500">
                                                 Protocolo: {dev.protocolo}
                                             </p>
                                         )}
@@ -683,7 +683,7 @@ export function DevolucaoTab() {
                                     <div className="flex flex-wrap gap-2">
                                         <button
                                             onClick={() => setViewingId(dev.id)}
-                                            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-500 hover:bg-emerald-500/20"
+                                            className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-500 hover:bg-blue-500/20"
                                         >
                                             <CheckCircle2 size={14} />
                                             Visualizar

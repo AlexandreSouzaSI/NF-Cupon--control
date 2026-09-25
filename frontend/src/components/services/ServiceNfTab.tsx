@@ -573,14 +573,14 @@ export function ServiceNfTab() {
 
     return (
         <div className="space-y-5">
-            <section className="rounded-3xl border border-emerald-500/30 bg-emerald-500/5 p-5">
+            <section className="rounded-3xl border border-blue-500/30 bg-blue-500/5 p-5">
                 <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
                     Valor total das NFs geradas{' '}
                     {mode === 'MONTH' && month
                         ? `em ${month.split('-').reverse().join('/')}`
                         : 'no período selecionado'}
                 </p>
-                <p className="mt-1 text-3xl font-bold text-emerald-500">
+                <p className="mt-1 text-3xl font-bold text-blue-500">
                     {loadingAllNfTotal ? '...' : formatCurrency(allNfTotal)}
                 </p>
                 <p className="text-sm text-zinc-500">
@@ -616,7 +616,7 @@ export function ServiceNfTab() {
                                 onChange={(e) =>
                                     handleToggleAccepted(e.target.checked)
                                 }
-                                className="h-4 w-4 accent-emerald-500"
+                                className="h-4 w-4 accent-blue-500"
                             />
                             NFs Aceitas
                         </label>
@@ -648,7 +648,7 @@ export function ServiceNfTab() {
                         <button
                             onClick={() => setMode('MONTH')}
                             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${mode === 'MONTH'
-                                ? 'bg-green-500 text-zinc-900 dark:text-white'
+                                ? 'bg-blue-500 text-white'
                                 : 'text-zinc-600 dark:text-zinc-400'
                                 }`}
                         >
@@ -657,7 +657,7 @@ export function ServiceNfTab() {
                         <button
                             onClick={() => setMode('RANGE')}
                             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${mode === 'RANGE'
-                                ? 'bg-green-500 text-zinc-900 dark:text-white'
+                                ? 'bg-blue-500 text-white'
                                 : 'text-zinc-600 dark:text-zinc-400'
                                 }`}
                         >
@@ -671,7 +671,7 @@ export function ServiceNfTab() {
                             type="month"
                             value={month}
                             onChange={(e) => setMonth(e.target.value)}
-                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     ) : (
                         <div
@@ -684,7 +684,7 @@ export function ServiceNfTab() {
                                 onChange={(e) =>
                                     setStartDate(e.target.value)
                                 }
-                                className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                             <span className="text-sm text-zinc-500">
                                 até
@@ -695,7 +695,7 @@ export function ServiceNfTab() {
                                 onChange={(e) =>
                                     setEndDate(e.target.value)
                                 }
-                                className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-green-500"
+                                className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                             />
                         </div>
                     )}
@@ -704,7 +704,7 @@ export function ServiceNfTab() {
                         data-tour="servico-download-button"
                         onClick={handleDownload}
                         disabled={downloading}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                     >
                         {downloading ? (
                             <Loader2 size={16} className="animate-spin" />
@@ -798,7 +798,7 @@ export function ServiceNfTab() {
 
                                     <div className="flex flex-col gap-2 sm:min-w-[260px]">
                                         {showAccepted ? (
-                                            <span className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-500">
+                                            <span className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-500">
                                                 <CheckCircle2 size={16} />
                                                 {incoming.serviceId
                                                     ? 'Vinculada a um serviço'
@@ -843,7 +843,7 @@ export function ServiceNfTab() {
                                                                 incoming,
                                                             )
                                                         }
-                                                        className="h-10 flex-1 rounded-xl bg-emerald-500 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+                                                        className="h-10 flex-1 rounded-xl bg-blue-500 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                                                     >
                                                         <span className="inline-flex items-center justify-center gap-2">
                                                             <Link2 size={16} />
@@ -884,7 +884,7 @@ export function ServiceNfTab() {
                                                             incoming.id,
                                                         )
                                                     }
-                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white hover:bg-emerald-600"
+                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600"
                                                 >
                                                     <CheckCircle2 size={16} />
                                                     Aceitar e gerar conta
@@ -899,7 +899,7 @@ export function ServiceNfTab() {
                                                             incoming.id,
                                                         )
                                                     }
-                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
+                                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 text-sm font-medium text-blue-500 hover:bg-blue-500/20 disabled:opacity-50"
                                                 >
                                                     Aceitar sem gerar conta
                                                 </button>
@@ -1015,7 +1015,7 @@ export function ServiceNfTab() {
                                         href={`${API_URL}${item.fileUrl}`}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20"
+                                        className="inline-flex items-center gap-2 rounded-xl bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-400 hover:bg-blue-500/20"
                                     >
                                         <CheckCircle2 size={16} />
                                         Abrir NF

@@ -152,7 +152,7 @@ export function QuantityTab({
                     {linhasPorcao.length > 0 && (
                         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
                             <div className="flex items-center gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-                                <Scale size={16} className="text-emerald-500" />
+                                <Scale size={16} className="text-blue-500" />
                                 <p className="text-sm font-semibold text-zinc-900 dark:text-white">
                                     Porções por tamanho servido
                                 </p>
@@ -178,7 +178,7 @@ export function QuantityTab({
                                             <td className="px-4 py-3 text-right text-zinc-500">
                                                 {formatarGramas(linha.gramas)}
                                             </td>
-                                            <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                            <td className="px-4 py-3 text-right font-semibold text-blue-600 dark:text-blue-400">
                                                 {formatarNumero(linha.quantidade)} un
                                             </td>
                                         </tr>

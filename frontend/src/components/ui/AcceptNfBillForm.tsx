@@ -172,7 +172,7 @@ export function AcceptNfBillForm({
         supplierQuery.trim().length > 0 && dueDate.length > 0 && !submitting;
 
     return (
-        <div className="space-y-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+        <div className="space-y-3 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
                 <div className="relative">
                     <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
@@ -191,7 +191,7 @@ export function AcceptNfBillForm({
                             )
                         }
                         placeholder="Nome da empresa"
-                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                     />
 
                     {supplierDropdownOpen && supplierQuery.trim() && (
@@ -223,7 +223,7 @@ export function AcceptNfBillForm({
                     <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
                         Categoria{' '}
                         {categorySuggested && (
-                            <span className="text-emerald-500">
+                            <span className="text-blue-500">
                                 (sugerida pelo histórico)
                             </span>
                         )}
@@ -241,7 +241,7 @@ export function AcceptNfBillForm({
                             )
                         }
                         placeholder="Ex: Revenda, Matéria-prima..."
-                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                     />
 
                     {categoryDropdownOpen && categoryQuery.trim() && (
@@ -289,7 +289,7 @@ export function AcceptNfBillForm({
                         type="date"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                     />
                 </div>
             </div>
@@ -307,7 +307,7 @@ export function AcceptNfBillForm({
                                 type="button"
                                 onClick={() => setPixOrBoleto(option)}
                                 className={`rounded-md px-3 py-1 text-xs font-medium transition ${pixOrBoleto === option
-                                    ? 'bg-emerald-500 text-white'
+                                    ? 'bg-blue-500 text-white'
                                     : 'text-zinc-600 dark:text-zinc-400'
                                     }`}
                             >
@@ -326,7 +326,7 @@ export function AcceptNfBillForm({
                         value={pixKey}
                         onChange={(e) => setPixKey(e.target.value)}
                         placeholder="Chave PIX"
-                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                     />
                 )}
 
@@ -335,7 +335,7 @@ export function AcceptNfBillForm({
                         value={barcode}
                         onChange={(e) => setBarcode(e.target.value)}
                         placeholder="Código de barras / linha digitável"
-                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                     />
                 )}
             </div>
@@ -345,7 +345,7 @@ export function AcceptNfBillForm({
                     type="button"
                     disabled={!canSubmit}
                     onClick={handleSubmit}
-                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-blue-500 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                 >
                     {submitting && (
                         <Loader2 size={16} className="animate-spin" />

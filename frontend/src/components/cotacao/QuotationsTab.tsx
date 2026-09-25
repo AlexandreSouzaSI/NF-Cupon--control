@@ -86,7 +86,7 @@ const STATUS_COLOR: Record<QuotationStatus, string> = {
     DRAFT: 'bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
     SENT: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
     SUPPLIER_SELECTED: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
-    ORDER_CONFIRMED: 'bg-green-500/10 text-green-600 dark:text-green-400',
+    ORDER_CONFIRMED: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     CANCELED: 'bg-red-500/10 text-red-500',
 };
 
@@ -340,7 +340,7 @@ export function QuotationsTab() {
                         )}
 
                         {detail.status === 'ORDER_CONFIRMED' && (
-                            <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-4 text-sm text-green-700 dark:text-green-400">
+                            <div className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4 text-sm text-blue-700 dark:text-blue-400">
                                 Pedido confirmado — a(s) compra(s) já
                                 foram criadas e estão aguardando recebimento
                                 em Compras.
@@ -382,7 +382,7 @@ export function QuotationsTab() {
                                                             {s.confirmedAt && (
                                                                 <CheckCircle2
                                                                     size={13}
-                                                                    className="text-green-500"
+                                                                    className="text-blue-500"
                                                                 />
                                                             )}
                                                         </div>

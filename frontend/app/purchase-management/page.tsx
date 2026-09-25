@@ -99,7 +99,7 @@ export default function PurchaseManagementPage() {
         <AppLayout title="Compras">
             <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                 <div className="mb-5 flex items-center gap-3">
-                    <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                    <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                         <ReceiptText size={22} />
                     </div>
 
@@ -115,7 +115,7 @@ export default function PurchaseManagementPage() {
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                        className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                     >
                         <option value="">Todos os status</option>
                         <option value="PURCHASED">Aprovadas</option>
@@ -127,7 +127,7 @@ export default function PurchaseManagementPage() {
 
                     <button
                         onClick={loadPurchases}
-                        className="flex h-12 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 font-semibold text-zinc-900 dark:text-white hover:bg-green-600"
+                        className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 font-semibold text-white hover:bg-blue-600"
                     >
                         <Search size={18} />
                         Buscar
@@ -171,7 +171,7 @@ export default function PurchaseManagementPage() {
                                                         href={`${API_URL}${doc.fileUrl}`}
                                                         target="_blank"
                                                         rel="noreferrer"
-                                                        className="inline-flex items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20"
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20"
                                                     >
                                                         <FileText size={16} />
                                                         Abrir {doc.type === 'COUPON' ? 'cupom' : 'NF'}
@@ -182,7 +182,7 @@ export default function PurchaseManagementPage() {
                                     </div>
 
                                     <div className="md:text-right">
-                                        <strong className="block text-xl text-green-400">
+                                        <strong className="block text-xl text-blue-400">
                                             {formatCurrency(purchase.value)}
                                         </strong>
 
@@ -202,7 +202,7 @@ export default function PurchaseManagementPage() {
                                         {purchase.status === 'RECEIVED_OK' && (
                                             <button
                                                 onClick={() => closePurchase(purchase.id)}
-                                                className="mt-3 block w-full rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20 md:w-auto"
+                                                className="mt-3 block w-full rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20 md:w-auto"
                                             >
                                                 Fechar compra
                                             </button>

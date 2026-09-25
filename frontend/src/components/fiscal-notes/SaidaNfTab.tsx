@@ -283,7 +283,7 @@ export function SaidaNfTab() {
                         </p>
                     </div>
 
-                    <label className="inline-flex h-11 shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-green-500 px-5 font-semibold text-zinc-900 dark:text-white hover:bg-green-600">
+                    <label className="inline-flex h-11 shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-500 px-5 font-semibold text-white hover:bg-blue-600">
                         {uploading ? (
                             <Loader2 size={18} className="animate-spin" />
                         ) : (
@@ -323,8 +323,8 @@ export function SaidaNfTab() {
                 )}
 
                 {revenueUpdated.length > 0 && (
-                    <div className="mb-3 space-y-1 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3">
-                        <p className="text-sm font-semibold text-emerald-500">
+                    <div className="mb-3 space-y-1 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-3">
+                        <p className="text-sm font-semibold text-blue-500">
                             Faturamento atualizado
                         </p>
                         {revenueUpdated.map((entry) => (
@@ -382,7 +382,7 @@ export function SaidaNfTab() {
                                         <h3 className="font-semibold capitalize">
                                             {formatMonth(month)}
                                         </h3>
-                                        <p className="text-sm font-semibold text-green-500">
+                                        <p className="text-sm font-semibold text-blue-500">
                                             {monthNotes.length} NF(s) •{' '}
                                             {formatCurrency(total)}
                                         </p>
@@ -425,7 +425,7 @@ export function SaidaNfTab() {
                                                             href={`${API_URL}${note.fileUrl}`}
                                                             target="_blank"
                                                             rel="noreferrer"
-                                                            className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20"
+                                                            className="inline-flex items-center gap-2 rounded-xl bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-400 hover:bg-blue-500/20"
                                                         >
                                                             Abrir XML
                                                         </a>

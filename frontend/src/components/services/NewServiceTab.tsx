@@ -114,7 +114,7 @@ export function NewServiceTab() {
                 className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
             >
                 <div className="mb-5 flex items-center gap-3">
-                    <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                    <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                         <Plus size={22} />
                     </div>
 
@@ -136,7 +136,7 @@ export function NewServiceTab() {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Ex: Manutenção do ar condicionado"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -148,7 +148,7 @@ export function NewServiceTab() {
                             value={providerName}
                             onChange={(e) => setProviderName(e.target.value)}
                             placeholder="Ex: João Manutenções"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -164,7 +164,7 @@ export function NewServiceTab() {
                                 value={value}
                                 onChange={(e) => setValue(e.target.value)}
                                 placeholder="0,00"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -176,7 +176,7 @@ export function NewServiceTab() {
                                 type="date"
                                 value={serviceDate}
                                 onChange={(e) => setServiceDate(e.target.value)}
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
                     </div>
@@ -189,7 +189,7 @@ export function NewServiceTab() {
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             placeholder="Detalhes do serviço"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -201,7 +201,7 @@ export function NewServiceTab() {
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="Observações internas"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                         />
                     </div>
 
@@ -213,7 +213,7 @@ export function NewServiceTab() {
                             <select
                                 value={paymentMethod}
                                 onChange={(e) => setPaymentMethod(e.target.value)}
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             >
                                 {Object.entries(PAYMENT_METHOD_LABELS).map(
                                     ([key, label]) => (
@@ -233,7 +233,7 @@ export function NewServiceTab() {
                                 <select
                                     value={pixKeyType}
                                     onChange={(e) => setPixKeyType(e.target.value)}
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                 >
                                     {Object.entries(PIX_KEY_TYPE_LABELS).map(
                                         ([key, label]) => (
@@ -256,14 +256,14 @@ export function NewServiceTab() {
                                 value={pixKey}
                                 onChange={(e) => setPixKey(e.target.value)}
                                 placeholder="CPF, e-mail, telefone ou chave aleatória"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
                     )}
 
                     <button
                         disabled={creating}
-                        className="h-12 w-full rounded-xl bg-green-500 font-semibold text-zinc-900 dark:text-white hover:bg-green-600 disabled:opacity-50"
+                        className="h-12 w-full rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
                     >
                         {creating ? 'Salvando...' : 'Cadastrar serviço'}
                     </button>

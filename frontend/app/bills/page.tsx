@@ -139,7 +139,7 @@ const billStatusLabel: Record<string, string> = {
 
 const billStatusColor: Record<string, string> = {
     OPEN: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400',
-    PAID: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+    PAID: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
     OVERDUE: 'border-red-500/30 bg-red-500/10 text-red-400',
     CANCELED: 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400',
 };
@@ -178,7 +178,7 @@ const periodCards: {
         key: 'ALL',
         label: 'Em aberto',
         icon: Wallet,
-        activeClass: 'border-emerald-500 bg-emerald-500/10 text-emerald-500',
+        activeClass: 'border-blue-500 bg-blue-500/10 text-blue-500',
     },
 ];
 
@@ -964,7 +964,7 @@ function BillsPageInner() {
                         <button
                             type="button"
                             onClick={() => router.push('/bills/new')}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
                         >
                             <Plus size={18} />
                             Nova conta
@@ -1066,7 +1066,7 @@ function BillsPageInner() {
                                     setSearch(event.target.value)
                                 }
                                 placeholder="Buscar descrição, fornecedor, PIX, boleto..."
-                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 pl-11 pr-4 outline-none focus:border-emerald-500"
+                                className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 pl-11 pr-4 outline-none focus:border-blue-500"
                             />
                         </div>
 
@@ -1090,7 +1090,7 @@ function BillsPageInner() {
                                     onChange={(event) =>
                                         setStatusFilter(event.target.value)
                                     }
-                                    className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 outline-none focus:border-emerald-500"
+                                    className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 outline-none focus:border-blue-500"
                                 >
                                     <option value="">
                                         Usar cards de vencimento acima
@@ -1108,7 +1108,7 @@ function BillsPageInner() {
                                             event.target.value,
                                         )
                                     }
-                                    className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 outline-none focus:border-emerald-500"
+                                    className="h-11 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 outline-none focus:border-blue-500"
                                 >
                                     <option value="">
                                         Todas as formas
@@ -1424,7 +1424,7 @@ function BillRow({
                                     bill.purchase!.id,
                                 )
                             }
-                            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-400 hover:bg-emerald-500/20"
+                            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm text-blue-400 hover:bg-blue-500/20"
                         >
                             <ExternalLink size={16} />
                             Abrir compra:{' '}
@@ -1478,7 +1478,7 @@ function BillRow({
                                 href={`${API_URL}${bill.paymentProofUrl}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-500/20"
+                                className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/20"
                             >
                                 <CheckCircle2 size={16} />
                                 Abrir comprovante
@@ -1493,7 +1493,7 @@ function BillRow({
                     </p>
 
                     {bill.paidAt && (
-                        <p className="mt-1 text-xs text-emerald-400">
+                        <p className="mt-1 text-xs text-blue-400">
                             Pago em {formatDate(bill.paidAt)}
                         </p>
                     )}
@@ -1504,7 +1504,7 @@ function BillRow({
                                 type="button"
                                 disabled={processing}
                                 onClick={() => onPay(bill)}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-emerald-700 disabled:opacity-50"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                             >
                                 <Check size={17} />
                                 Marcar como paga
@@ -1599,7 +1599,7 @@ function PaymentEditForm({
                     <select
                         value={paymentMethod}
                         onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                        className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                     >
                         {Object.entries(paymentMethodLabel).map(
                             ([value, label]) => (
@@ -1619,7 +1619,7 @@ function PaymentEditForm({
                         value={barcode}
                         onChange={(e) => setBarcode(e.target.value)}
                         placeholder="Cole aqui o código do boleto"
-                        className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 font-mono text-sm outline-none focus:border-emerald-500"
+                        className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 font-mono text-sm outline-none focus:border-blue-500"
                     />
                 </label>
             )}
@@ -1631,7 +1631,7 @@ function PaymentEditForm({
                         <input
                             value={pixKey}
                             onChange={(e) => setPixKey(e.target.value)}
-                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </label>
 
@@ -1640,7 +1640,7 @@ function PaymentEditForm({
                         <select
                             value={pixKeyType}
                             onChange={(e) => setPixKeyType(e.target.value)}
-                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         >
                             <option value="">Não informado</option>
                             {Object.entries(pixKeyTypeLabel).map(
@@ -1659,7 +1659,7 @@ function PaymentEditForm({
                             value={pixQrCode}
                             onChange={(e) => setPixQrCode(e.target.value)}
                             rows={2}
-                            className="mt-1 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 font-mono text-xs outline-none focus:border-emerald-500"
+                            className="mt-1 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
                         />
                     </label>
                 </div>
@@ -1672,7 +1672,7 @@ function PaymentEditForm({
                         <input
                             value={bankName}
                             onChange={(e) => setBankName(e.target.value)}
-                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </label>
 
@@ -1681,7 +1681,7 @@ function PaymentEditForm({
                         <input
                             value={bankAgency}
                             onChange={(e) => setBankAgency(e.target.value)}
-                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </label>
 
@@ -1690,7 +1690,7 @@ function PaymentEditForm({
                         <input
                             value={bankAccount}
                             onChange={(e) => setBankAccount(e.target.value)}
-                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </label>
 
@@ -1699,7 +1699,7 @@ function PaymentEditForm({
                         <input
                             value={beneficiary}
                             onChange={(e) => setBeneficiary(e.target.value)}
-                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-500"
+                            className="mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
                         />
                     </label>
                 </div>
@@ -1710,7 +1710,7 @@ function PaymentEditForm({
                     type="button"
                     disabled={saving}
                     onClick={handleSave}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                     {saving ? 'Salvando...' : 'Salvar'}
                 </button>

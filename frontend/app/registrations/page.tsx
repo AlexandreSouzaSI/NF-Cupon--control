@@ -267,7 +267,7 @@ export default function RegistrationsPage() {
                 <div className="space-y-6">
                     <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                         <div className="mb-5 flex items-center gap-3">
-                            <div className="rounded-2xl bg-green-500/10 p-3 text-green-400">
+                            <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
                                 <Building2 size={22} />
                             </div>
 
@@ -287,10 +287,10 @@ export default function RegistrationsPage() {
                                 value={storeName}
                                 onChange={(e) => setStoreName(e.target.value)}
                                 placeholder="Ex: Loja Anchieta"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
-                            <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 font-semibold text-zinc-900 dark:text-white hover:bg-green-600">
+                            <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 font-semibold text-white hover:bg-blue-600">
                                 <Plus size={18} />
                                 Cadastrar
                             </button>
@@ -344,7 +344,7 @@ export default function RegistrationsPage() {
                                 value={cardName}
                                 onChange={(e) => setCardName(e.target.value)}
                                 placeholder="Nome do cartão"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
                             <input
@@ -352,20 +352,20 @@ export default function RegistrationsPage() {
                                 onChange={(e) => setCardLastDigits(e.target.value)}
                                 placeholder="Final"
                                 maxLength={4}
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
                             <input
                                 value={cardHolderName}
                                 onChange={(e) => setCardHolderName(e.target.value)}
                                 placeholder="Titular"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
                             <select
                                 value={cardStoreId}
                                 onChange={(e) => setCardStoreId(e.target.value)}
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             >
                                 <option value="">Selecione a loja</option>
                                 {stores.map((store) => (
@@ -375,7 +375,7 @@ export default function RegistrationsPage() {
                                 ))}
                             </select>
 
-                            <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 font-semibold text-zinc-900 dark:text-white hover:bg-green-600">
+                            <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 font-semibold text-white hover:bg-blue-600">
                                 <Plus size={18} />
                                 Cadastrar
                             </button>
@@ -433,24 +433,24 @@ export default function RegistrationsPage() {
                                 value={supplierName}
                                 onChange={(e) => setSupplierName(e.target.value)}
                                 placeholder="Nome do fornecedor"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
                             <input
                                 value={supplierCnpj}
                                 onChange={(e) => setSupplierCnpj(e.target.value)}
                                 placeholder="CNPJ"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
                             <input
                                 value={supplierPhone}
                                 onChange={(e) => setSupplierPhone(e.target.value)}
                                 placeholder="Telefone"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
-                            <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 font-semibold text-zinc-900 dark:text-white hover:bg-green-600">
+                            <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 font-semibold text-white hover:bg-blue-600">
                                 <Plus size={18} />
                                 Cadastrar
                             </button>
@@ -497,14 +497,14 @@ export default function RegistrationsPage() {
                                 value={userName}
                                 onChange={(e) => setUserName(e.target.value)}
                                 placeholder="Nome"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
                             <input
                                 value={userEmail}
                                 onChange={(e) => setUserEmail(e.target.value)}
                                 placeholder="E-mail"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
                             <input
@@ -512,7 +512,7 @@ export default function RegistrationsPage() {
                                 value={userPassword}
                                 onChange={(e) => setUserPassword(e.target.value)}
                                 placeholder="Senha"
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
 
                             <select
@@ -520,7 +520,7 @@ export default function RegistrationsPage() {
                                 onChange={(e) =>
                                     setUserRole(e.target.value as any)
                                 }
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-green-500"
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             >
                                 <option value="ADMIN">Administrador</option>
                                 <option value="APPROVER">Aprovador</option>
@@ -528,7 +528,7 @@ export default function RegistrationsPage() {
                                 <option value="FINANCE">Financeiro</option>
                             </select>
 
-                            <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-green-500 px-5 font-semibold text-zinc-900 dark:text-white hover:bg-green-600">
+                            <button className="flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 font-semibold text-white hover:bg-blue-600">
                                 <Plus size={18} />
                                 Cadastrar
                             </button>
@@ -563,7 +563,7 @@ export default function RegistrationsPage() {
                                                 }
                                             }}
                                             className={`rounded-xl border px-4 py-2 text-sm ${selected
-                                                    ? 'border-green-500 bg-green-500/20 text-green-400'
+                                                    ? 'border-blue-500 bg-blue-500/20 text-blue-400'
                                                     : 'border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400'
                                                 }`}
                                         >
@@ -588,7 +588,7 @@ export default function RegistrationsPage() {
                                                 {user.email}
                                             </p>
 
-                                            <p className="mt-1 text-sm text-green-400">
+                                            <p className="mt-1 text-sm text-blue-400">
                                                 {user.role}
                                             </p>
 
