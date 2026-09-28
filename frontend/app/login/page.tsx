@@ -19,7 +19,9 @@ export default function LoginPage() {
   // página agora recebe gente de fora vinda do /demo (e é pública), campo
   // vazio é mais seguro e menos confuso (ninguém tenta entrar sem querer
   // com um login que não é o dela).
-  const [email, setEmail] = useState('');
+  // Login agora aceita e-mail OU telefone (backend recebe como
+  // "identifier") — ver LoginDto em backend/src/auth/dto/login.dto.ts.
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -31,7 +33,7 @@ export default function LoginPage() {
       setLoading(true);
 
       const response = await api.post('/auth/login', {
-        email,
+        identifier,
         password,
       });
 
@@ -73,14 +75,14 @@ export default function LoginPage() {
         >
           <div>
             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-              E-mail
+              E-mail ou telefone
             </label>
 
             <input
-              type="email"
-              value={email}
+              type="text"
+              value={identifier}
               onChange={(e) =>
-                setEmail(e.target.value)
+                setIdentifier(e.target.value)
               }
               className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-blue-500"
             />
