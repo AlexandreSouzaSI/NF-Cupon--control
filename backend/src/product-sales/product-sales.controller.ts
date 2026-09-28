@@ -339,4 +339,24 @@ export class ProductSalesController {
             periodoFim,
         });
     }
+
+    // Relatório de um item específico (aba Relatório): venda direta (se
+    // o item também é vendido como produto, ex: bebida), venda via ficha
+    // técnica (pratos que o usam como ingrediente) e perdas (casadas por
+    // nome, com evolução dia a dia e motivo mais comum) no período.
+    @Get('item-report')
+    async itemReport(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+        @Query('stockItemId') stockItemId: string,
+        @Query('periodoInicio') periodoInicio?: string,
+        @Query('periodoFim') periodoFim?: string,
+    ) {
+        return this.productSalesService.itemReport(user, {
+            storeId,
+            stockItemId,
+            periodoInicio,
+            periodoFim,
+        });
+    }
 }

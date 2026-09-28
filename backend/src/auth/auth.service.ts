@@ -14,11 +14,20 @@ export class AuthService {
         private jwtService: JwtService,
     ) { }
 
-    async login(email: string, password: string) {
-        const user = await this.usersService.findByEmail(email);
+    async login(identifier: string, password: string) {
+        const user = await this.usersService.findByIdentifier(identifier);
 
         if (!user || !user.active) {
             throw new UnauthorizedException('Usuário ou senha inválidos');
+        }
+
+        // Conta convidada por WhatsApp que ainda não criou a senha — a
+        // senha gravada é só um placeholder inutilizável, então nem
+        // adianta comparar (e a mensagem de erro seria enganosa).
+        if (!user.accountActivated) {
+            throw new UnauthorizedException(
+                'Essa conta ainda não foi ativada. Confira o link de boas-vindas enviado por WhatsApp (ou peça pra reenviar).',
+            );
         }
 
         const passwordMatch = await bcrypt.compare(

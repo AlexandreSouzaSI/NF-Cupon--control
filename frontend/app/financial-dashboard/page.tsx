@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
     AlertTriangle,
     BarChart3,
+    Calculator,
     Calendar,
     CalendarDays,
     CheckCircle2,
@@ -50,6 +52,19 @@ type Summary = {
     topPagamentos: TopPagamento[];
 };
 
+type CashReconciliationToday = {
+    id: string;
+    systemCash: string;
+    systemDebit: string;
+    systemCredit: string;
+    bankCash: string;
+    bankDebit: string;
+    bankCredit: string;
+    otherSystem: string;
+    otherBank: string;
+    withdrawalAmount: string;
+} | null;
+
 function formatCurrency(value: number) {
     return value.toLocaleString('pt-BR', {
         style: 'currency',
@@ -90,6 +105,8 @@ export default function FinancialDashboardPage() {
     const [monthYear, setMonthYear] = useState(currentMonthYear());
     const [summary, setSummary] = useState<Summary | null>(null);
     const [loading, setLoading] = useState(true);
+    const [cashToday, setCashToday] = useState<CashReconciliationToday>(null);
+    const [loadingCashToday, setLoadingCashToday] = useState(true);
 
     async function load() {
         const store = getActiveStore();
@@ -118,10 +135,36 @@ export default function FinancialDashboardPage() {
         }
     }
 
+    async function loadCashToday() {
+        const store = getActiveStore();
+
+        if (!store) {
+            setLoadingCashToday(false);
+            return;
+        }
+
+        try {
+            setLoadingCashToday(true);
+            const response = await api.get('/cash-reconciliation/today', {
+                params: { storeId: store.id },
+            });
+            setCashToday(response.data);
+        } catch {
+            // Silencioso — card só não aparece com dados se der erro.
+        } finally {
+            setLoadingCashToday(false);
+        }
+    }
+
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [monthYear]);
+
+    useEffect(() => {
+        loadCashToday();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     function goToPreviousMonth() {
         setMonthYear((current) => {
@@ -162,6 +205,27 @@ export default function FinancialDashboardPage() {
             },
         ].filter((item) => item.value > 0);
     }, [summary]);
+
+    const cashTotals = useMemo(() => {
+        if (!cashToday) return null;
+
+        const system =
+            Number(cashToday.systemCash) +
+            Number(cashToday.systemDebit) +
+            Number(cashToday.systemCredit) +
+            Number(cashToday.otherSystem || 0);
+        const bank =
+            Number(cashToday.bankCash) +
+            Number(cashToday.bankDebit) +
+            Number(cashToday.bankCredit) +
+            Number(cashToday.otherBank || 0);
+        const withdrawal = Number(cashToday.withdrawalAmount || 0);
+        // Mesma lógica ajustada da tela de Conciliação de Caixa — vale ou
+        // retirada abate do que seria esperado no banco.
+        const diff = bank - system + withdrawal;
+
+        return { system, bank, diff };
+    }, [cashToday]);
 
     if (!getActiveStore()) {
         return (
@@ -256,6 +320,122 @@ export default function FinancialDashboardPage() {
                                     </button>
                                 </div>
                             </div>
+                        </section>
+
+                        <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                            <div className="mb-4 flex items-center gap-2">
+                                <Calculator size={18} className="text-teal-500" />
+                                <h3 className="text-sm font-semibold">
+                                    Conciliação de caixa — hoje
+                                </h3>
+                            </div>
+
+                            {loadingCashToday ? (
+                                <p className="text-sm text-zinc-500">
+                                    Carregando...
+                                </p>
+                            ) : !cashToday || !cashTotals ? (
+                                <p className="text-sm text-zinc-500">
+                                    Nenhuma conciliação lançada hoje.{' '}
+                                    <Link
+                                        href="/conciliacao-caixa"
+                                        className="font-medium text-teal-600 hover:underline dark:text-teal-400"
+                                    >
+                                        Lançar agora
+                                    </Link>
+                                </p>
+                            ) : (
+                                <Link
+                                    href="/conciliacao-caixa"
+                                    className="block transition hover:opacity-90"
+                                >
+                                    <div className="flex flex-wrap items-center justify-between gap-4">
+                                        <div className="flex gap-6 text-sm">
+                                            <div>
+                                                <p className="text-xs text-zinc-500">
+                                                    Entrou no sistema
+                                                </p>
+                                                <strong className="text-lg">
+                                                    {formatCurrency(
+                                                        cashTotals.system,
+                                                    )}
+                                                </strong>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-zinc-500">
+                                                    Entrou no banco
+                                                </p>
+                                                <strong className="text-lg">
+                                                    {formatCurrency(
+                                                        cashTotals.bank,
+                                                    )}
+                                                </strong>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`flex items-center gap-2 rounded-xl px-4 py-2 ${Math.abs(cashTotals.diff) < 0.01
+                                                    ? 'bg-emerald-50 dark:bg-emerald-900/20'
+                                                    : cashTotals.diff < 0
+                                                        ? 'bg-red-50 dark:bg-red-900/20'
+                                                        : 'bg-amber-50 dark:bg-amber-900/20'
+                                                }`}
+                                        >
+                                            {Math.abs(cashTotals.diff) <
+                                                0.01 ? (
+                                                <CheckCircle2
+                                                    size={16}
+                                                    className="text-emerald-600 dark:text-emerald-400"
+                                                />
+                                            ) : (
+                                                <AlertTriangle
+                                                    size={16}
+                                                    className={
+                                                        cashTotals.diff < 0
+                                                            ? 'text-red-600 dark:text-red-400'
+                                                            : 'text-amber-600 dark:text-amber-400'
+                                                    }
+                                                />
+                                            )}
+                                            <div>
+                                                <p
+                                                    className={`text-xs font-medium ${Math.abs(cashTotals.diff) < 0.01
+                                                            ? 'text-emerald-700 dark:text-emerald-300'
+                                                            : cashTotals.diff < 0
+                                                                ? 'text-red-700 dark:text-red-300'
+                                                                : 'text-amber-700 dark:text-amber-300'
+                                                        }`}
+                                                >
+                                                    {Math.abs(
+                                                        cashTotals.diff,
+                                                    ) < 0.01
+                                                        ? 'Diferença'
+                                                        : cashTotals.diff < 0
+                                                            ? 'Faltou no banco'
+                                                            : 'Sobrou no banco'}
+                                                </p>
+                                                <strong
+                                                    className={
+                                                        Math.abs(
+                                                            cashTotals.diff,
+                                                        ) < 0.01
+                                                            ? 'text-emerald-700 dark:text-emerald-300'
+                                                            : cashTotals.diff < 0
+                                                                ? 'text-red-700 dark:text-red-300'
+                                                                : 'text-amber-700 dark:text-amber-300'
+                                                    }
+                                                >
+                                                    {formatCurrency(
+                                                        Math.abs(
+                                                            cashTotals.diff,
+                                                        ),
+                                                    )}
+                                                </strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            )}
                         </section>
 
                         <section>

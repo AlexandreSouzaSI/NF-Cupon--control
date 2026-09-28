@@ -251,6 +251,7 @@ export default function ApprovalsPage() {
 
                                             <div className="mt-4 flex gap-3">
                                                 <button
+                                                    data-tour="approval-approve-button"
                                                     onClick={() =>
                                                         approve(purchase.id)
                                                     }
@@ -261,6 +262,7 @@ export default function ApprovalsPage() {
                                                 </button>
 
                                                 <button
+                                                    data-tour="approval-reject-button"
                                                     onClick={() =>
                                                         reject(purchase.id)
                                                     }

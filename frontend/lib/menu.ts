@@ -21,6 +21,7 @@ import {
     Package,
     Warehouse,
     PieChart,
+    Calculator,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -398,6 +399,16 @@ export const menu: MenuGroup[] = [
                 icon: Wallet,
                 // Gerente fora de propósito — acesso restrito, mesmo
                 // espírito de Tributos.
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
+                color: 'teal',
+                module: 'CONTAS_A_PAGAR',
+            },
+            {
+                label: 'Conciliação de Caixa',
+                href: '/conciliacao-caixa',
+                icon: Calculator,
+                // Mesmo critério das duas linhas acima — conferência
+                // financeira do dia a dia, sem StoreModule próprio.
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
                 color: 'teal',
                 module: 'CONTAS_A_PAGAR',

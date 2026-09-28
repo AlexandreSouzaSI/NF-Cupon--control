@@ -35,6 +35,9 @@ import { FinancialDashboardModule } from './financial-dashboard/financial-dashbo
 import { FiscalDashboardModule } from './fiscal-dashboard/fiscal-dashboard.module';
 import { QuotationsModule } from './quotations/quotations.module';
 import { ProductionModule } from './production/production.module';
+import { AccountModule } from './account/account.module';
+import { EmailModule } from './email/email.module';
+import { CashReconciliationModule } from './cash-reconciliation/cash-reconciliation.module';
 
 @Module({
   imports: [
@@ -73,7 +76,10 @@ import { ProductionModule } from './production/production.module';
     FinancialDashboardModule,
     FiscalDashboardModule,
     QuotationsModule,
-    ProductionModule
+    ProductionModule,
+    AccountModule,
+    EmailModule,
+    CashReconciliationModule
   ],
   controllers: [AppController],
   providers: [AppService],

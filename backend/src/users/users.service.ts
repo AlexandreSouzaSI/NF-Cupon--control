@@ -1,15 +1,23 @@
 import {
+    BadRequestException,
     ConflictException,
     ForbiddenException,
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { normalizePhone } from '../common/phone.util';
+import { ACCOUNT_ACTIVATION_INVITE_EVENT } from '../common/events';
+
+// 7 dias — dá tempo da pessoa ver a mensagem no WhatsApp com calma antes
+// do link expirar (ver docs/BUSINESS_RULES.md).
+const ACTIVATION_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Quem pode cadastrar/editar um usuário de cada perfil-alvo. Admin Master
 // (flag isAdminMaster, só o dono do sistema) sempre pode, além de quem
@@ -39,7 +47,10 @@ const DEFAULT_ROLE_ASSIGNERS: UserRole[] = [
 
 @Injectable()
 export class UsersService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private eventEmitter: EventEmitter2,
+    ) { }
 
     private hasGlobalStoreAccess(user: any) {
         return (
@@ -171,9 +182,37 @@ export class UsersService {
             }
         }
 
-        const password = await bcrypt.hash(dto.password, 10);
+        // Sem senha informada = fluxo de convite: a pessoa recebe um link
+        // único por WhatsApp e cria a própria senha (ver módulo account/).
+        // Precisa de telefone pra isso — sem telefone não tem como mandar
+        // o convite, então exigimos os dois juntos.
+        const isInviteFlow = !dto.password;
 
-        return this.prisma.user.create({
+        if (isInviteFlow && !phone) {
+            throw new BadRequestException(
+                'Informe o telefone (com DDD) pra mandar o convite de ativação por WhatsApp, ou informe uma senha pra já criar a conta ativa.',
+            );
+        }
+
+        let password: string;
+        let activationToken: string | null = null;
+        let activationTokenExpiresAt: Date | null = null;
+
+        if (isInviteFlow) {
+            // Placeholder inutilizável — ninguém consegue logar com essa
+            // "senha" (não é exposta em lugar nenhum), só existe porque a
+            // coluna é obrigatória. accountActivated=false já bloqueia o
+            // login de qualquer forma (ver AuthService.login).
+            password = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+            activationToken = randomBytes(24).toString('hex');
+            activationTokenExpiresAt = new Date(
+                Date.now() + ACTIVATION_TOKEN_TTL_MS,
+            );
+        } else {
+            password = await bcrypt.hash(dto.password as string, 10);
+        }
+
+        const user = await this.prisma.user.create({
             data: {
                 name: dto.name,
                 email: dto.email,
@@ -181,6 +220,9 @@ export class UsersService {
                 role: dto.role,
                 phone,
                 active: true,
+                accountActivated: !isInviteFlow,
+                activationToken,
+                activationTokenExpiresAt,
                 canApprovePurchases: dto.canApprovePurchases ?? false,
                 notifyQuotationConfirmed: dto.notifyQuotationConfirmed ?? false,
                 moduleAccess: dto.moduleAccess ?? [],
@@ -200,6 +242,23 @@ export class UsersService {
                 },
             },
         });
+
+        if (isInviteFlow && phone && activationToken) {
+            const frontendUrl = (process.env.FRONTEND_URL || '').replace(
+                /\/$/,
+                '',
+            );
+            const link = `${frontendUrl}/ativar-conta/${activationToken}`;
+
+            this.eventEmitter.emit(ACCOUNT_ACTIVATION_INVITE_EVENT, {
+                userId: user.id,
+                name: user.name,
+                phone,
+                link,
+            });
+        }
+
+        return user;
     }
 
     async findAll(actingUser?: any) {
@@ -265,6 +324,33 @@ export class UsersService {
                 },
             },
         });
+    }
+
+    async findByPhone(phone: string) {
+        return this.prisma.user.findUnique({
+            where: { phone: normalizePhone(phone) },
+            include: {
+                userStores: {
+                    include: {
+                        store: true,
+                    },
+                },
+            },
+        });
+    }
+
+    // Login unificado: identifier pode ser telefone (com ou sem
+    // formatação — normalizado antes de comparar) ou e-mail (contas
+    // antigas que ainda não têm telefone cadastrado). Um "@" no meio do
+    // texto é o suficiente pra diferenciar, já que telefone nunca tem "@".
+    async findByIdentifier(identifier: string) {
+        const trimmed = identifier.trim();
+
+        if (trimmed.includes('@')) {
+            return this.findByEmail(trimmed);
+        }
+
+        return this.findByPhone(trimmed);
     }
 
     async findById(id: string) {

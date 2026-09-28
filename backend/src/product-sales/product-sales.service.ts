@@ -1471,6 +1471,262 @@ export class ProductSalesService {
         };
     }
 
+    // Relatório detalhado de UM item de estoque num período — pensado pra
+    // responder "como foi Ancho (ou Refrigerante) nesse período": quanto
+    // saiu (direto, se o item é vendido como produto — ex: bebida — e/ou
+    // via ficha técnica, se é ingrediente de prato — ex: carne), quais
+    // pratos usaram, e quanto foi perdido (Perdas), com o motivo mais
+    // comum e a evolução dia a dia. Perda não tem vínculo por FK com
+    // StockItem (ProductLoss.description é texto livre), então casamos
+    // por nome normalizado — mesmo espírito de normalizarDescricao() em
+    // losses.service.ts, só que reaproveitando normalizarProduto() daqui
+    // (mesma regra: maiúsculo, espaço único).
+    async itemReport(
+        user: any,
+        params: {
+            storeId: string;
+            stockItemId: string;
+            periodoInicio?: string;
+            periodoFim?: string;
+        },
+    ) {
+        if (!params.storeId) {
+            throw new BadRequestException(
+                'Selecione uma loja ativa no topo do sistema.',
+            );
+        }
+
+        this.ensureStoreAccess(params.storeId, user);
+
+        if (!params.stockItemId) {
+            throw new BadRequestException('Selecione um item do Estoque.');
+        }
+
+        const stockItem = await this.prisma.stockItem.findUnique({
+            where: { id: params.stockItemId },
+        });
+
+        if (!stockItem || stockItem.storeId !== params.storeId) {
+            throw new NotFoundException(
+                'Item de estoque não encontrado nesta loja.',
+            );
+        }
+
+        const nomeChaveAlvo = normalizarProduto(stockItem.nome);
+
+        const bateComAlvo = (chave: string) =>
+            chave === nomeChaveAlvo ||
+            chave.includes(nomeChaveAlvo) ||
+            nomeChaveAlvo.includes(chave);
+
+        const rangeWhere =
+            params.periodoInicio || params.periodoFim
+                ? filtroPeriodoRangeWhere(params.periodoInicio, params.periodoFim)
+                : {};
+
+        const [entries, expansion] = await Promise.all([
+            this.prisma.productSalesEntry.findMany({
+                where: {
+                    import: { storeId: params.storeId, ...rangeWhere },
+                    ...filtroExcluirAnaliseWhere(),
+                },
+                select: {
+                    produto: true,
+                    produtoChave: true,
+                    quantidade: true,
+                    valor: true,
+                },
+            }),
+            this.getStockItemRecipeExpansion(params.storeId),
+        ]);
+
+        // Venda direta — o próprio item vendido como produto (bebida,
+        // porção avulsa etc), casado pelo nome do produto na planilha do
+        // PDV.
+        const diretasMap = new Map<
+            string,
+            { produto: string; quantidade: number; valor: number }
+        >();
+
+        for (const entry of entries) {
+            if (!bateComAlvo(entry.produtoChave)) continue;
+
+            const quantidade = Number(entry.quantidade);
+            const valor = Number(entry.valor);
+            const atual = diretasMap.get(entry.produtoChave);
+
+            if (atual) {
+                atual.quantidade += quantidade;
+                atual.valor += valor;
+            } else {
+                diretasMap.set(entry.produtoChave, {
+                    produto: entry.produto,
+                    quantidade,
+                    valor,
+                });
+            }
+        }
+
+        const produtosDiretos = Array.from(diretasMap.values()).sort(
+            (a, b) => b.quantidade - a.quantidade,
+        );
+
+        const vendaDireta =
+            produtosDiretos.length > 0
+                ? {
+                    quantidade: produtosDiretos.reduce(
+                        (acc, item) => acc + item.quantidade,
+                        0,
+                    ),
+                    valor: produtosDiretos.reduce(
+                        (acc, item) => acc + item.valor,
+                        0,
+                    ),
+                    produtos: produtosDiretos,
+                }
+                : null;
+
+        // Venda via ficha técnica — pratos que levam esse item como
+        // ingrediente (direto ou via repasse de Produção).
+        const quantidadePorProduto = new Map<
+            string,
+            { produto: string; quantidade: number }
+        >();
+
+        for (const entry of entries) {
+            const atual = quantidadePorProduto.get(entry.produtoChave);
+            const quantidade = Number(entry.quantidade);
+
+            if (atual) {
+                atual.quantidade += quantidade;
+            } else {
+                quantidadePorProduto.set(entry.produtoChave, {
+                    produto: entry.produto,
+                    quantidade,
+                });
+            }
+        }
+
+        const pratos: {
+            produto: string;
+            quantidadeVendida: number;
+            quantidadeConsumida: number;
+        }[] = [];
+
+        for (const [produtoChave, linhas] of expansion.porProdutoChave.entries()) {
+            const vendido = quantidadePorProduto.get(produtoChave);
+            if (!vendido || vendido.quantidade <= 0) continue;
+
+            for (const linha of linhas) {
+                if (linha.stockItemId !== params.stockItemId) continue;
+
+                pratos.push({
+                    produto: vendido.produto,
+                    quantidadeVendida: vendido.quantidade,
+                    quantidadeConsumida: linha.factorPorDish * vendido.quantidade,
+                });
+            }
+        }
+
+        pratos.sort((a, b) => b.quantidadeConsumida - a.quantidadeConsumida);
+
+        const vendaViaReceita =
+            pratos.length > 0
+                ? {
+                    quantidadeConsumida: pratos.reduce(
+                        (acc, item) => acc + item.quantidadeConsumida,
+                        0,
+                    ),
+                    pratos,
+                }
+                : null;
+
+        // Perdas — casadas por nome normalizado (sem FK), com evolução
+        // dia a dia e motivo mais comum dentro do período pedido.
+        const inicioData = parseDateInput(params.periodoInicio);
+        const fimData = parseDateInput(params.periodoFim);
+
+        const occurredAtWhere: Prisma.DateTimeFilter = {};
+        if (inicioData) {
+            occurredAtWhere.gte = new Date(inicioData.getTime() - 12 * 3600 * 1000);
+        }
+        if (fimData) {
+            occurredAtWhere.lt = new Date(fimData.getTime() + 12 * 3600 * 1000);
+        }
+
+        const todasPerdas = await this.prisma.productLoss.findMany({
+            where: {
+                storeId: params.storeId,
+                ...(inicioData || fimData ? { occurredAt: occurredAtWhere } : {}),
+            },
+            orderBy: { occurredAt: 'asc' },
+        });
+
+        const perdasFiltradas = todasPerdas.filter((loss) =>
+            bateComAlvo(normalizarProduto(loss.description)),
+        );
+
+        const porDiaMap = new Map<string, number>();
+        const porMotivoMap = new Map<string, number>();
+        const porUnidadeMap = new Map<string, number>();
+
+        for (const loss of perdasFiltradas) {
+            const dia = loss.occurredAt.toISOString().slice(0, 10);
+            const quantidade = Number(loss.quantity);
+
+            porDiaMap.set(dia, (porDiaMap.get(dia) || 0) + quantidade);
+
+            const motivo = loss.reason?.trim() || 'Sem motivo informado';
+            porMotivoMap.set(motivo, (porMotivoMap.get(motivo) || 0) + quantidade);
+
+            const unidade = loss.unit?.trim() || '';
+            porUnidadeMap.set(unidade, (porUnidadeMap.get(unidade) || 0) + 1);
+        }
+
+        const unidadeMaisComum = Array.from(porUnidadeMap.entries()).sort(
+            (a, b) => b[1] - a[1],
+        )[0]?.[0] || null;
+
+        const perdas = {
+            total: perdasFiltradas.reduce(
+                (acc, loss) => acc + Number(loss.quantity),
+                0,
+            ),
+            unidade: unidadeMaisComum,
+            porDia: Array.from(porDiaMap.entries())
+                .map(([data, quantidade]) => ({ data, quantidade }))
+                .sort((a, b) => a.data.localeCompare(b.data)),
+            porMotivo: Array.from(porMotivoMap.entries())
+                .map(([motivo, quantidade]) => ({ motivo, quantidade }))
+                .sort((a, b) => b.quantidade - a.quantidade),
+            registros: perdasFiltradas
+                .map((loss) => ({
+                    id: loss.id,
+                    data: loss.occurredAt,
+                    quantidade: Number(loss.quantity),
+                    unit: loss.unit,
+                    reason: loss.reason,
+                }))
+                .sort((a, b) => b.data.getTime() - a.data.getTime()),
+        };
+
+        return {
+            item: {
+                id: stockItem.id,
+                nome: stockItem.nome,
+                categoria: stockItem.categoria,
+                unidadeMedida: stockItem.unidadeMedida,
+            },
+            periodo: {
+                inicio: params.periodoInicio || null,
+                fim: params.periodoFim || null,
+            },
+            vendaDireta,
+            vendaViaReceita,
+            perdas,
+        };
+    }
+
     // Importa fichas técnicas em massa a partir de uma planilha .xlsx no
     // formato padrão: coluna A = nome do prato, colunas B em diante = um
     // ingrediente por célula no formato "Ingrediente - Gramatura" (ex:

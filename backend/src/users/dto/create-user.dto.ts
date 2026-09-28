@@ -16,18 +16,29 @@ export class CreateUserDto {
     @IsNotEmpty()
     name!: string;
 
+    // E-mail continua obrigatório — vira só canal de recuperação de senha
+    // (junto com o WhatsApp), login não é mais por e-mail e senha.
     @IsEmail()
     email!: string;
 
+    // Opcional agora: se vier em branco, o cadastro entra no fluxo de
+    // convite — a pessoa recebe um link único por WhatsApp (por isso
+    // `phone` passa a ser obrigatório nesse caso, ver validação no
+    // service) pra criar a própria senha e ativar a conta. Se vier
+    // preenchida, a conta já nasce ativa com essa senha (útil pra reset
+    // rápido feito pelo admin, sem depender do WhatsApp).
+    @IsOptional()
     @IsString()
     @MinLength(6)
-    password!: string;
+    password?: string;
 
     @IsEnum(UserRole)
     role!: UserRole;
 
-    // Só usado pra mandar aviso no WhatsApp (login continua por e-mail).
-    // Aceita qualquer formato digitado — é normalizado no service antes de
+    // Usado pra mandar aviso no WhatsApp e, a partir de agora, é como a
+    // pessoa faz login (telefone + senha) — por isso passa a ser
+    // obrigatório quando `password` não é informado (ver service). Aceita
+    // qualquer formato digitado — é normalizado no service antes de
     // gravar.
     @IsOptional()
     @IsString()

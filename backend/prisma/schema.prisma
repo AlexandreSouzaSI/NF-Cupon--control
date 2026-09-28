@@ -304,11 +304,30 @@ model User {
   demoExpiresAt DateTime?
   signupIp      String?
 
-  // Só um canal a mais de notificação (WhatsApp) — login continua sendo
-  // sempre por e-mail/senha. Formato livre no cadastro, mas é normalizado
-  // (só dígitos, com DDI 55) antes de comparar/enviar. Único porque a
-  // resposta que chega no webhook precisa achar exatamente uma pessoa.
+  // Login passou a ser por TELEFONE + senha (o e-mail vira só canal de
+  // recuperação de senha). Formato livre no cadastro, mas é normalizado
+  // (só dígitos, com DDI 55) antes de comparar/enviar/logar. Único porque
+  // tanto o login quanto a resposta que chega no webhook do WhatsApp
+  // precisam achar exatamente uma pessoa.
   phone String? @unique
+
+  // Fluxo de ativação de conta: quando um usuário é cadastrado sem senha
+  // (cadastro "de verdade", pelo WhatsApp), fica accountActivated=false
+  // até a pessoa criar a própria senha pelo link único recebido no
+  // WhatsApp (ver activationToken). Contas antigas e qualquer cadastro
+  // feito já com senha nascem accountActivated=true (não passam por esse
+  // fluxo). Enquanto accountActivated=false, login é bloqueado mesmo que
+  // alguém tente adivinhar a senha-placeholder.
+  accountActivated         Boolean   @default(true)
+  activationToken          String?   @unique
+  activationTokenExpiresAt DateTime?
+
+  // Fluxo de "esqueci minha senha": token de uso único, gerado quando a
+  // pessoa pede o link (por WhatsApp ou e-mail) em /esqueci-senha. Expira
+  // em 1h (bem mais curto que o de ativação) e é limpo assim que a senha
+  // é trocada ou quando um novo link é pedido antes do antigo expirar.
+  passwordResetToken          String?   @unique
+  passwordResetTokenExpiresAt DateTime?
 
   // Quem tem essa flag marcada recebe um WhatsApp toda vez que um
   // fornecedor confirma um pedido de cotação (ver
@@ -327,14 +346,15 @@ model User {
   purchasesApproved           Purchase[] @relation("PurchaseApprovedBy")
   invoiceResponsiblePurchases Purchase[] @relation("PurchaseInvoiceResponsible")
 
-  receipts             PurchaseReceipt[]
-  approvals            Approval[]
-  purchaseHistories    PurchaseHistory[]
-  fiscalDocuments      FiscalDocument[]
-  billsLaunched        Bill[]             @relation("BillLaunchedBy")
-  notifications        Notification[]
-  servicesCreated      Service[]          @relation("ServiceCreatedBy")
-  certificatesUploaded StoreCertificate[] @relation("StoreCertificateUploadedBy")
+  receipts                    PurchaseReceipt[]
+  approvals                   Approval[]
+  purchaseHistories           PurchaseHistory[]
+  fiscalDocuments             FiscalDocument[]
+  billsLaunched               Bill[]               @relation("BillLaunchedBy")
+  cashReconciliationsLaunched CashReconciliation[] @relation("CashReconciliationLaunchedBy")
+  notifications               Notification[]
+  servicesCreated             Service[]            @relation("ServiceCreatedBy")
+  certificatesUploaded        StoreCertificate[]   @relation("StoreCertificateUploadedBy")
 
   employeesCreated        Employee[]        @relation("EmployeeCreatedBy")
   employeePaymentsCreated EmployeePayment[] @relation("EmployeePaymentCreatedBy")
@@ -429,6 +449,7 @@ model Store {
   cards                 Card[]
   approvalRules         ApprovalRule[]
   bills                 Bill[]
+  cashReconciliations   CashReconciliation[]
   bankStatementImports  BankStatementImport[]
   financialTransactions FinancialTransaction[]
   services              Service[]
@@ -1097,6 +1118,61 @@ model Bill {
   // quando alguém ordenar/paginar por data de criação em vez de vencimento.
   @@index([storeId, status])
   @@index([createdAt])
+}
+
+// Conciliação de caixa: por loja e por dia, compara o que entrou "de
+// acordo com o sistema" (lançado manualmente por forma de pagamento —
+// não existe integração com PDV/frente de caixa) com o que efetivamente
+// caiu no banco naquele dia, também quebrado por forma de pagamento (pra
+// apontar exatamente onde está a diferença, não só o total). Pensado pra
+// impressão/PDF de apoio à tomada de decisão, não é lançamento contábil.
+model CashReconciliation {
+  id String @id @default(uuid())
+
+  storeId String
+  // Data do movimento (dia do caixa), sem componente de hora relevante —
+  // mesma convenção de outros campos de data-only do projeto (horário
+  // intermediário gravado pelo backend pra nunca recuar de dia por fuso).
+  date    DateTime
+
+  systemCash   Decimal @default(0) @db.Decimal(10, 2)
+  systemDebit  Decimal @default(0) @db.Decimal(10, 2)
+  systemCredit Decimal @default(0) @db.Decimal(10, 2)
+
+  bankCash   Decimal @default(0) @db.Decimal(10, 2)
+  bankDebit  Decimal @default(0) @db.Decimal(10, 2)
+  bankCredit Decimal @default(0) @db.Decimal(10, 2)
+
+  // "Outros" — forma de recebimento que não se encaixa nas 3 fixas (ex:
+  // voucher, PIX manual, app de entrega). otherDescription é livre, pra
+  // identificar o que foi lançado ali.
+  otherSystem      Decimal @default(0) @db.Decimal(10, 2)
+  otherBank        Decimal @default(0) @db.Decimal(10, 2)
+  otherDescription String?
+
+  // Vale ou retirada de dinheiro do caixa durante o dia (ex: sangria,
+  // adiantamento, despesa paga na hora) — dinheiro que saiu do caixa antes
+  // de virar depósito, então precisa ser abatido do valor esperado no
+  // banco pra não aparecer como diferença "sem explicação". Ver
+  // cash-reconciliation.service.ts (cálculo da diferença ajustada).
+  withdrawalAmount Decimal @default(0) @db.Decimal(10, 2)
+  withdrawalReason String?
+
+  notes String?
+
+  launchedById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store      Store @relation(fields: [storeId], references: [id])
+  launchedBy User  @relation("CashReconciliationLaunchedBy", fields: [launchedById], references: [id])
+
+  // Uma conciliação por loja/dia — lançar de novo no mesmo dia atualiza
+  // (upsert), nunca duplica.
+  @@unique([storeId, date])
+  @@index([storeId])
+  @@index([date])
 }
 
 // Dados do Convênio de Pagamentos no Sicredi — usados só pra montar o
@@ -2116,6 +2192,12 @@ enum WhatsappMessageKind {
   // diferente do QUOTATION_ORDER_CONFIRMATION acima, que vai pro
   // fornecedor.
   QUOTATION_ORDER_CONFIRMED_INTERNAL
+  // Convite de boas-vindas com o link único de ativação de conta (criar a
+  // primeira senha) — ver módulo account/.
+  ACCOUNT_ACTIVATION
+  // Link único de "esqueci minha senha", quando a pessoa escolhe receber
+  // por WhatsApp em vez de e-mail.
+  PASSWORD_RESET
 }
 
 // Registro de uma mensagem de WhatsApp mandada pelo sistema, guardado pra

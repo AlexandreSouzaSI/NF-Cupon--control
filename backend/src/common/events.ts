@@ -140,3 +140,43 @@ export type QuotationOrderConfirmedEvent = {
         unitPrice: number | null;
     }[];
 };
+
+// Disparado quando um usuário é cadastrado sem senha (cadastro "de
+// verdade", pelo WhatsApp — ver módulo account/). UsersService só monta o
+// link único (User.activationToken) e dispara; quem estiver ouvindo decide
+// o texto e manda (hoje: só WhatsappService, exige phone).
+export const ACCOUNT_ACTIVATION_INVITE_EVENT = 'account.activation.invited';
+
+export type AccountActivationInviteEvent = {
+    userId: string;
+    name: string;
+    phone: string;
+    link: string;
+};
+
+// Disparado quando a pessoa pede o link de "esqueci minha senha" e escolhe
+// receber por WhatsApp. AccountService só monta o link único
+// (User.passwordResetToken) e dispara; quem estiver ouvindo decide o texto
+// e manda.
+export const PASSWORD_RESET_REQUESTED_WHATSAPP_EVENT =
+    'account.password-reset.requested.whatsapp';
+
+export type PasswordResetRequestedWhatsappEvent = {
+    userId: string;
+    name: string;
+    phone: string;
+    link: string;
+};
+
+// Mesma ideia do evento acima, mas pra quem escolhe receber por e-mail —
+// quem estiver ouvindo (EmailService) decide o texto/HTML e manda via
+// Resend.
+export const PASSWORD_RESET_REQUESTED_EMAIL_EVENT =
+    'account.password-reset.requested.email';
+
+export type PasswordResetRequestedEmailEvent = {
+    userId: string;
+    name: string;
+    email: string;
+    link: string;
+};

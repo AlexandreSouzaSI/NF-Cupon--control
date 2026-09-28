@@ -330,6 +330,82 @@ export const tours: Tour[] = [
             },
         ],
     },
+    {
+        id: 'registrar-nova-compra',
+        title: 'Como registrar uma Nova Compra',
+        description: 'Passo a passo do formulário de compra, do tipo até a confirmação.',
+        category: 'Compras',
+        href: '/purchases/new',
+        roles: [
+            'ADMINISTRATIVO',
+            'PROPRIETARIO',
+            'GERENTE',
+            'COMPRADOR',
+            'ESTOQUISTA',
+        ],
+        steps: [
+            {
+                selector: '[data-tour="purchase-simplified-toggle"]',
+                title: 'Cadastro simplificado',
+                text: 'Ligue essa opção pra pedidos com muitos itens: você lança só o fornecedor e o valor final, sem listar item a item.',
+            },
+            {
+                selector: '[data-tour="purchase-category"]',
+                title: 'Tipo da compra',
+                text: 'Escolha se é um pedido com fornecedor, uma compra avulsa ou uma compra online. O aviso logo abaixo muda pra dizer se essa compra precisa de aprovação antes de seguir.',
+            },
+            {
+                selector: '[data-tour="purchase-description"]',
+                title: 'Descrição',
+                text: 'Um resumo curto do que está sendo comprado — ajuda a identificar a compra depois, na lista.',
+            },
+            {
+                selector: '[data-tour="purchase-payment-method"]',
+                title: 'Forma de pagamento',
+                text: 'Como essa compra vai ser paga (cartão, PIX, dinheiro etc). Se for cartão, um campo extra aparece pra escolher qual.',
+            },
+            {
+                selector: '[data-tour="purchase-supplier"]',
+                title: 'Fornecedor',
+                text: 'Digite o nome do fornecedor. Se ele já existe, escolha na lista que aparece; se não existe, o sistema cria um novo cadastro automaticamente ao confirmar.',
+            },
+            {
+                selector: '[data-tour="purchase-next-step"]',
+                title: 'Continuar',
+                text: 'Com cadastro simplificado desligado, clique em Continuar pra ir pra tela de itens da compra.',
+            },
+            {
+                selector: '[data-tour="purchase-add-item"]',
+                title: 'Adicionar item',
+                text: 'Cadastre cada item pedido (produto, quantidade, unidade e valor) — isso é o que permite conferir se chegou tudo certo no recebimento.',
+            },
+            {
+                selector: '[data-tour="purchase-next-step"]',
+                title: 'Revisão e confirmação',
+                text: 'Depois de adicionar os itens, clique em Continuar pra revisar tudo e depois em Confirmar compra pra finalizar.',
+            },
+        ],
+    },
+    {
+        id: 'aprovar-compra',
+        title: 'Como aprovar ou reprovar uma compra',
+        description: 'Analisar compras pendentes e decidir se seguem ou voltam pra revisão.',
+        category: 'Compras',
+        href: '/approvals',
+        roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR'],
+        steps: [
+            {
+                selector: '[data-tour="approval-approve-button"]',
+                title: 'Aprovar',
+                text: 'Confira o valor, a loja e quem pediu antes de aprovar. Uma vez aprovada, a compra segue pro fluxo normal (recebimento, NF, conta a pagar).',
+            },
+            {
+                selector: '[data-tour="approval-reject-button"]',
+                title: 'Reprovar',
+                text: 'Se algo não bate, reprove e explique o motivo. A compra vai pra aba Reprovadas, onde ainda dá pra aprovar de novo depois.',
+            },
+        ],
+    },
 ];
 
 export function getVisibleTours(role: MenuRole, isDemo?: boolean): Tour[] {

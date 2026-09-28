@@ -808,6 +808,7 @@ export default function NewPurchasePage() {
 
                         <button
                             type="button"
+                            data-tour="purchase-simplified-toggle"
                             onClick={() => setSimplifiedMode((current) => !current)}
                             className={`mb-5 flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${simplifiedMode
                                 ? 'border-blue-500 bg-blue-500/10'
@@ -845,6 +846,7 @@ export default function NewPurchasePage() {
                                 </label>
 
                                 <select
+                                    data-tour="purchase-category"
                                     value={category}
                                     onChange={(event) =>
                                         setCategory(
@@ -886,6 +888,7 @@ export default function NewPurchasePage() {
                                 </label>
 
                                 <input
+                                    data-tour="purchase-description"
                                     value={description}
                                     onChange={(event) =>
                                         setDescription(
@@ -903,6 +906,7 @@ export default function NewPurchasePage() {
                                 </label>
 
                                 <select
+                                    data-tour="purchase-payment-method"
                                     value={method}
                                     onChange={(event) =>
                                         setMethod(
@@ -936,6 +940,7 @@ export default function NewPurchasePage() {
                                 </label>
 
                                 <input
+                                    data-tour="purchase-supplier"
                                     value={supplierQuery}
                                     onChange={(event) =>
                                         handleSupplierQueryChange(
@@ -1226,7 +1231,7 @@ export default function NewPurchasePage() {
                 )}
 
                 {step === 2 && (
-                    <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                    <section data-tour="purchase-items-section" className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div>
                                 <h3 className="text-lg font-bold">
@@ -1240,6 +1245,7 @@ export default function NewPurchasePage() {
 
                             <button
                                 type="button"
+                                data-tour="purchase-add-item"
                                 onClick={addItem}
                                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-medium hover:bg-blue-700"
                             >
@@ -1594,6 +1600,7 @@ export default function NewPurchasePage() {
                     {step < 3 ? (
                         <button
                             type="button"
+                            data-tour="purchase-next-step"
                             onClick={goToNextStep}
                             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
                         >
@@ -1603,6 +1610,7 @@ export default function NewPurchasePage() {
                     ) : (
                         <button
                             type="button"
+                            data-tour="purchase-next-step"
                             disabled={saving}
                             onClick={handleSubmit}
                             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"

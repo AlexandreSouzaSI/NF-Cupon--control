@@ -5,6 +5,8 @@ import { WhatsappMessageKind } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizePhone } from '../common/phone.util';
 import {
+    ACCOUNT_ACTIVATION_INVITE_EVENT,
+    PASSWORD_RESET_REQUESTED_WHATSAPP_EVENT,
     QUOTATION_ORDER_CONFIRM_REQUESTED_EVENT,
     QUOTATION_ORDER_CONFIRMED_EVENT,
     QUOTATION_SUPPLIER_INVITED_EVENT,
@@ -14,6 +16,8 @@ import {
     WHATSAPP_TASK_START_EVENT,
 } from '../common/events';
 import type {
+    AccountActivationInviteEvent,
+    PasswordResetRequestedWhatsappEvent,
     QuotationOrderConfirmedEvent,
     QuotationOrderConfirmRequestedEvent,
     QuotationSupplierInvitedEvent,
@@ -104,6 +108,22 @@ export class WhatsappService {
     @OnEvent(QUOTATION_ORDER_CONFIRMED_EVENT)
     async handleQuotationOrderConfirmed(payload: QuotationOrderConfirmedEvent) {
         await this.sendQuotationOrderConfirmedInternal(payload);
+    }
+
+    // Conta: convite de boas-vindas com o link único de ativação (criar a
+    // primeira senha) — ver src/account/.
+    @OnEvent(ACCOUNT_ACTIVATION_INVITE_EVENT)
+    async handleAccountActivationInvite(payload: AccountActivationInviteEvent) {
+        await this.sendAccountActivationInvite(payload);
+    }
+
+    // Conta: link único de "esqueci minha senha", quando a pessoa escolhe
+    // receber por WhatsApp em vez de e-mail.
+    @OnEvent(PASSWORD_RESET_REQUESTED_WHATSAPP_EVENT)
+    async handlePasswordResetRequestedWhatsapp(
+        payload: PasswordResetRequestedWhatsappEvent,
+    ) {
+        await this.sendPasswordResetLink(payload);
     }
 
     // Não lança erro se a pessoa não tem telefone cadastrado — só não
@@ -395,6 +415,81 @@ export class WhatsappService {
                 },
             });
         }
+    }
+
+    // Convite de boas-vindas com o link único de ativação de conta — a
+    // pessoa clica, cria a senha e já loga com telefone + senha. Mesmo
+    // padrão de link único do convite de cotação (mensagem única, link no
+    // final, WhatsApp já mostra o preview).
+    private async sendAccountActivationInvite(
+        params: AccountActivationInviteEvent,
+    ) {
+        const phone = normalizePhone(params.phone);
+
+        const text = [
+            `Olá, ${params.name}! Seja bem-vindo(a). Pra começar a usar o sistema, crie sua senha no link abaixo:`,
+            '',
+            params.link,
+        ].join('\n');
+
+        let providerMessageId: string | undefined;
+
+        try {
+            const result = await this.provider.sendText(phone, text);
+            providerMessageId = result.providerMessageId;
+        } catch (error: any) {
+            this.logger.warn(
+                `Falha ao enviar convite de ativação pra ${phone}: ${error?.message || error}`,
+            );
+        }
+
+        await this.prisma.whatsappOutboundMessage.create({
+            data: {
+                userId: params.userId,
+                phone,
+                kind: WhatsappMessageKind.ACCOUNT_ACTIVATION,
+                text,
+                providerMessageId,
+            },
+        });
+    }
+
+    // Link único de "esqueci minha senha" — expira em 1h (ver
+    // AccountService), bem mais curto que o de ativação porque é um fluxo
+    // que a pessoa pediu agora, não um convite pra usar com calma depois.
+    private async sendPasswordResetLink(
+        params: PasswordResetRequestedWhatsappEvent,
+    ) {
+        const phone = normalizePhone(params.phone);
+
+        const text = [
+            `${params.name}, aqui está o link pra criar uma nova senha (válido por 1 hora):`,
+            '',
+            params.link,
+            '',
+            'Se você não pediu isso, pode ignorar essa mensagem.',
+        ].join('\n');
+
+        let providerMessageId: string | undefined;
+
+        try {
+            const result = await this.provider.sendText(phone, text);
+            providerMessageId = result.providerMessageId;
+        } catch (error: any) {
+            this.logger.warn(
+                `Falha ao enviar link de redefinição de senha pra ${phone}: ${error?.message || error}`,
+            );
+        }
+
+        await this.prisma.whatsappOutboundMessage.create({
+            data: {
+                userId: params.userId,
+                phone,
+                kind: WhatsappMessageKind.PASSWORD_RESET,
+                text,
+                providerMessageId,
+            },
+        });
     }
 
     // Chamado pelo controller do webhook, já com o payload específico do

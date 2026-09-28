@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { getUser, type UserRole } from '@/lib/auth';
-import { Upload, Package, LayoutDashboard, ShoppingCart, Factory, ChefHat } from 'lucide-react';
+import { Upload, Package, LayoutDashboard, ShoppingCart, Factory, ChefHat, BarChart3 } from 'lucide-react';
 
 import { ImportProductSalesTab } from '../../src/components/product-sales/ImportProductSalesTab';
 import { ProductsTab } from '../../src/components/product-sales/ProductsTab';
@@ -13,6 +13,7 @@ import { ShoppingListTab } from '../../src/components/product-sales/ShoppingList
 import { PeriodFilter } from '../../src/components/product-sales/PeriodFilter';
 import { ProductionTab } from '../../src/components/product-sales/ProductionTab';
 import { FichaTecnicaTab } from '../../src/components/product-sales/FichaTecnicaTab';
+import { ReportTab } from '../../src/components/product-sales/ReportTab';
 
 type TabKey =
     | 'dashboard'
@@ -20,7 +21,8 @@ type TabKey =
     | 'produtos'
     | 'fichas-tecnicas'
     | 'producao'
-    | 'compras';
+    | 'compras'
+    | 'relatorio';
 
 const tabs: {
     key: TabKey;
@@ -62,6 +64,12 @@ const tabs: {
             key: 'importar',
             label: 'Importar',
             icon: Upload,
+            roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR', 'FINANCEIRO'],
+        },
+        {
+            key: 'relatorio',
+            label: 'Relatório',
+            icon: BarChart3,
             roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE', 'COMPRADOR', 'FINANCEIRO'],
         },
     ];
@@ -164,6 +172,7 @@ function ProductsPageInner() {
                 )}
                 {activeTab === 'producao' && <ProductionTab refreshKey={refreshKey} />}
                 {activeTab === 'compras' && <ShoppingListTab />}
+                {activeTab === 'relatorio' && <ReportTab />}
                 {activeTab === 'importar' && (
                     <ImportProductSalesTab
                         onImported={() => {

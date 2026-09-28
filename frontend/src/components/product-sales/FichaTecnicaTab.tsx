@@ -205,6 +205,35 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
         setLinhas((atual) => [...atual, linhaVazia()]);
     }
 
+    // Muda a unidade de medida do item de Estoque direto daqui — mesmo
+    // endpoint que a aba Estoque usa (PUT /product-sales/ingredients/:id).
+    // Sem isso, todo item novo nasce como KG e fica errado pra bebida
+    // (deveria ser UNIDADE — Coca-Cola, por exemplo) ou destilado
+    // (deveria ser LITRO), sem precisar sair da Ficha Técnica pra
+    // corrigir em Cadastros → Estoque.
+    async function alterarUnidade(
+        stockItemId: string,
+        unidadeMedida: 'KG' | 'LITRO' | 'UNIDADE',
+    ) {
+        setEstoqueItens((atual) =>
+            atual.map((item) =>
+                item.id === stockItemId ? { ...item, unidadeMedida } : item,
+            ),
+        );
+
+        try {
+            await api.put(`/product-sales/ingredients/${stockItemId}`, {
+                unidadeMedida,
+            });
+            toast.success('Unidade atualizada.');
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao mudar a unidade.';
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+            await load();
+        }
+    }
+
     async function salvar(prato: PratoOverview) {
         const store = getActiveStore();
         if (!store) return;
@@ -334,21 +363,38 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                                             Sem ingredientes cadastrados
                                                         </span>
                                                     ) : (
-                                                        prato.itens.map((item, idx) => (
-                                                            <span
-                                                                key={`${item.nome}-${idx}`}
-                                                                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
-                                                                    item.tipo === 'producao'
-                                                                        ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                                                                        : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
-                                                                }`}
-                                                            >
-                                                                {item.tipo === 'producao' && (
-                                                                    <Factory size={10} />
-                                                                )}
-                                                                {item.nome} ({item.gramas})
-                                                            </span>
-                                                        ))
+                                                        prato.itens.map((item, idx) => {
+                                                            const unidadeItem =
+                                                                item.tipo === 'estoque'
+                                                                    ? estoquePorNome[normalizar(item.nome)]
+                                                                          ?.unidadeMedida
+                                                                    : null;
+                                                            const sufixo =
+                                                                unidadeItem === 'LITRO'
+                                                                    ? 'ml'
+                                                                    : unidadeItem === 'UNIDADE'
+                                                                      ? 'un'
+                                                                      : unidadeItem === 'KG'
+                                                                        ? 'g'
+                                                                        : '';
+
+                                                            return (
+                                                                <span
+                                                                    key={`${item.nome}-${idx}`}
+                                                                    className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                                                                        item.tipo === 'producao'
+                                                                            ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                                                                            : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                                                                    }`}
+                                                                >
+                                                                    {item.tipo === 'producao' && (
+                                                                        <Factory size={10} />
+                                                                    )}
+                                                                    {item.nome} ({item.gramas}
+                                                                    {sufixo})
+                                                                </span>
+                                                            );
+                                                        })
                                                     )}
                                                 </div>
                                             )}
@@ -455,6 +501,27 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                                                 Produção
                                                             </button>
                                                         </div>
+
+                                                        {itemEstoque && (
+                                                            <select
+                                                                value={unidade}
+                                                                onChange={(e) =>
+                                                                    alterarUnidade(
+                                                                        itemEstoque.id,
+                                                                        e.target.value as
+                                                                            | 'KG'
+                                                                            | 'LITRO'
+                                                                            | 'UNIDADE',
+                                                                    )
+                                                                }
+                                                                title="Unidade de medida desse item no Estoque — muda pra todos os pratos que usam ele, não só este"
+                                                                className="shrink-0 rounded-lg border border-zinc-200 bg-transparent px-2 py-2 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
+                                                            >
+                                                                <option value="KG">Kg</option>
+                                                                <option value="LITRO">Litro</option>
+                                                                <option value="UNIDADE">Unidade</option>
+                                                            </select>
+                                                        )}
 
                                                         <input
                                                             type="number"
