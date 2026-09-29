@@ -19,12 +19,18 @@ export class ModuleAccessGuard implements CanActivate {
     ) { }
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
-        const requiredModule = this.reflector.getAllAndOverride<StoreModule>(
-            REQUIRES_MODULE_KEY,
-            [context.getHandler(), context.getClass()],
-        );
+        const requiredModuleMeta = this.reflector.getAllAndOverride<
+            StoreModule | StoreModule[]
+        >(REQUIRES_MODULE_KEY, [context.getHandler(), context.getClass()]);
 
-        if (!requiredModule) return true;
+        if (!requiredModuleMeta) return true;
+
+        // Normaliza pra lista — quando vem mais de um módulo, libera se a
+        // loja tiver QUALQUER um deles (ver comentário em
+        // requires-module.decorator.ts).
+        const requiredModules = Array.isArray(requiredModuleMeta)
+            ? requiredModuleMeta
+            : [requiredModuleMeta];
 
         const request = context.switchToHttp().getRequest();
 
@@ -49,9 +55,17 @@ export class ModuleAccessGuard implements CanActivate {
         // o service correspondente devolve o NotFoundException certo.
         if (!store) return true;
 
-        if (!store.enabledModules.includes(requiredModule)) {
+        const hasAnyModule = requiredModules.some((module) =>
+            store.enabledModules.includes(module),
+        );
+
+        if (!hasAnyModule) {
+            const labels = requiredModules
+                .map((module) => MODULE_LABELS[module])
+                .join(' ou ');
+
             throw new ForbiddenException(
-                `O módulo "${MODULE_LABELS[requiredModule]}" não está habilitado para esta loja.`,
+                `O módulo "${labels}" não está habilitado para esta loja.`,
             );
         }
 

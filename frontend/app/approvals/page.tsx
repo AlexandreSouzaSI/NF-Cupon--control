@@ -82,6 +82,12 @@ export default function ApprovalsPage() {
 
     const [loading, setLoading] = useState(true);
 
+    // Id da compra com uma ação (aprovar/reprovar/reverter/excluir) em
+    // andamento — trava os botões daquela linha enquanto a requisição não
+    // volta, pra um clique duplo (rede lenta, impaciência) não disparar a
+    // mesma ação duas vezes.
+    const [busyId, setBusyId] = useState<string | null>(null);
+
     async function loadPurchases() {
         try {
             setLoading(true);
@@ -101,7 +107,11 @@ export default function ApprovalsPage() {
     }
 
     async function approve(id: string) {
+        if (busyId) return;
+
         try {
+            setBusyId(id);
+
             await api.post(`/purchases/${id}/approve`, {
                 comment: '',
             });
@@ -111,10 +121,14 @@ export default function ApprovalsPage() {
             await loadPurchases();
         } catch {
             toast.error('Erro ao aprovar');
+        } finally {
+            setBusyId(null);
         }
     }
 
     async function reject(id: string) {
+        if (busyId) return;
+
         const comment = window.prompt(
             'Motivo da reprovação (opcional):',
         );
@@ -124,6 +138,8 @@ export default function ApprovalsPage() {
         }
 
         try {
+            setBusyId(id);
+
             await api.post(`/purchases/${id}/reject`, {
                 comment,
             });
@@ -133,11 +149,17 @@ export default function ApprovalsPage() {
             await loadPurchases();
         } catch {
             toast.error('Erro ao reprovar');
+        } finally {
+            setBusyId(null);
         }
     }
 
     async function unreject(id: string) {
+        if (busyId) return;
+
         try {
+            setBusyId(id);
+
             await api.post(`/purchases/${id}/unreject`, {
                 comment: '',
             });
@@ -147,10 +169,14 @@ export default function ApprovalsPage() {
             await loadPurchases();
         } catch {
             toast.error('Erro ao reverter reprovação');
+        } finally {
+            setBusyId(null);
         }
     }
 
     async function remove(purchase: Purchase) {
+        if (busyId) return;
+
         if (
             !window.confirm(
                 `Excluir definitivamente a compra "${purchase.description}"? Essa ação não pode ser desfeita.`,
@@ -160,6 +186,8 @@ export default function ApprovalsPage() {
         }
 
         try {
+            setBusyId(purchase.id);
+
             await api.post(`/purchases/${purchase.id}/delete`, {});
 
             toast.success('Compra excluída');
@@ -167,6 +195,8 @@ export default function ApprovalsPage() {
             await loadPurchases();
         } catch {
             toast.error('Erro ao excluir compra');
+        } finally {
+            setBusyId(null);
         }
     }
 
@@ -255,7 +285,8 @@ export default function ApprovalsPage() {
                                                     onClick={() =>
                                                         approve(purchase.id)
                                                     }
-                                                    className="flex h-11 items-center gap-2 rounded-2xl bg-blue-500 px-5 font-medium text-white hover:bg-blue-600"
+                                                    disabled={busyId === purchase.id}
+                                                    className="flex h-11 items-center gap-2 rounded-2xl bg-blue-500 px-5 font-medium text-white hover:bg-blue-600 disabled:opacity-50"
                                                 >
                                                     <Check size={18} />
                                                     Aprovar
@@ -266,7 +297,8 @@ export default function ApprovalsPage() {
                                                     onClick={() =>
                                                         reject(purchase.id)
                                                     }
-                                                    className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-white hover:bg-red-600"
+                                                    disabled={busyId === purchase.id}
+                                                    className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-white hover:bg-red-600 disabled:opacity-50"
                                                 >
                                                     <X size={18} />
                                                     Reprovar
@@ -359,7 +391,8 @@ export default function ApprovalsPage() {
                                                         onClick={() =>
                                                             unreject(purchase.id)
                                                         }
-                                                        className="flex h-11 items-center gap-2 rounded-2xl bg-blue-500 px-5 font-medium text-white hover:bg-blue-600"
+                                                        disabled={busyId === purchase.id}
+                                                        className="flex h-11 items-center gap-2 rounded-2xl bg-blue-500 px-5 font-medium text-white hover:bg-blue-600 disabled:opacity-50"
                                                     >
                                                         <RotateCcw size={18} />
                                                         Aprovar de novo
@@ -370,7 +403,8 @@ export default function ApprovalsPage() {
                                                             onClick={() =>
                                                                 remove(purchase)
                                                             }
-                                                            className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-white hover:bg-red-600"
+                                                            disabled={busyId === purchase.id}
+                                                            className="flex h-11 items-center gap-2 rounded-2xl bg-red-500 px-5 font-medium text-white hover:bg-red-600 disabled:opacity-50"
                                                         >
                                                             <Trash2 size={18} />
                                                             Excluir

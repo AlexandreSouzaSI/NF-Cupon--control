@@ -81,6 +81,11 @@ export function SuggestedListTab() {
         semTelefone: CandidateSupplier[];
     } | null>(null);
     const [sending, setSending] = useState(false);
+    // Fornecedores com telefone que o usuário desmarcou clicando no card —
+    // esses não entram no supplierIds mandado pro backend.
+    const [deselectedSupplierIds, setDeselectedSupplierIds] = useState<
+        Set<string>
+    >(new Set());
 
     const store = getActiveStore();
 
@@ -148,6 +153,7 @@ export function SuggestedListTab() {
             });
 
             setCandidates(response.data);
+            setDeselectedSupplierIds(new Set());
         } catch (error: any) {
             toast.error(
                 error?.response?.data?.message ||
@@ -158,8 +164,31 @@ export function SuggestedListTab() {
         }
     }
 
+    // Alterna se um fornecedor (com telefone) vai receber a cotação ou não
+    // — clicar no card marca/desmarca, sem precisar mexer em Cadastros.
+    function toggleSupplierSelected(supplierId: string) {
+        setDeselectedSupplierIds((current) => {
+            const next = new Set(current);
+            if (next.has(supplierId)) {
+                next.delete(supplierId);
+            } else {
+                next.add(supplierId);
+            }
+            return next;
+        });
+    }
+
     async function handleConfirmSend() {
-        if (!store || !selectedCategoryId) return;
+        if (!store || !selectedCategoryId || !candidates) return;
+
+        const supplierIds = candidates.comTelefone
+            .map((s) => s.id)
+            .filter((id) => !deselectedSupplierIds.has(id));
+
+        if (supplierIds.length === 0) {
+            toast.error('Selecione ao menos um fornecedor pra enviar.');
+            return;
+        }
 
         try {
             setSending(true);
@@ -167,6 +196,7 @@ export function SuggestedListTab() {
             const response = await api.post('/quotations/send', {
                 storeId: store.id,
                 categoryId: selectedCategoryId,
+                supplierIds,
             });
 
             const qtd = response.data?.convidados?.length || 0;
@@ -174,6 +204,7 @@ export function SuggestedListTab() {
                 `Cotação enviada pra ${qtd} ${qtd === 1 ? 'fornecedor' : 'fornecedores'} por WhatsApp.`,
             );
             setCandidates(null);
+            setDeselectedSupplierIds(new Set());
         } catch (error: any) {
             toast.error(
                 error?.response?.data?.message || 'Erro ao enviar cotação',
@@ -417,17 +448,40 @@ export function SuggestedListTab() {
                             ) : (
                                 <div>
                                     <p className="mb-1.5 text-xs text-zinc-500">
-                                        Vão receber o link por WhatsApp:
+                                        Vão receber o link por WhatsApp —
+                                        clique no fornecedor pra tirá-lo do
+                                        envio:
                                     </p>
                                     <div className="flex flex-wrap gap-1.5">
-                                        {candidates.comTelefone.map((s) => (
-                                            <span
-                                                key={s.id}
-                                                className="rounded-full bg-teal-500/10 px-2.5 py-1 text-xs font-medium text-teal-700 dark:text-teal-400"
-                                            >
-                                                {s.name}
-                                            </span>
-                                        ))}
+                                        {candidates.comTelefone.map((s) => {
+                                            const deselected =
+                                                deselectedSupplierIds.has(
+                                                    s.id,
+                                                );
+
+                                            return (
+                                                <button
+                                                    key={s.id}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        toggleSupplierSelected(
+                                                            s.id,
+                                                        )
+                                                    }
+                                                    title={
+                                                        deselected
+                                                            ? 'Clique pra incluir de novo'
+                                                            : 'Clique pra não enviar pra esse fornecedor'
+                                                    }
+                                                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${deselected
+                                                        ? 'border-zinc-300 bg-zinc-100 text-zinc-400 line-through dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500'
+                                                        : 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-400'
+                                                        }`}
+                                                >
+                                                    {s.name}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -456,7 +510,8 @@ export function SuggestedListTab() {
                                     type="button"
                                     disabled={
                                         sending ||
-                                        candidates.comTelefone.length === 0
+                                        candidates.comTelefone.length ===
+                                        deselectedSupplierIds.size
                                     }
                                     onClick={handleConfirmSend}
                                     className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-teal-500 px-4 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50"
@@ -469,7 +524,10 @@ export function SuggestedListTab() {
                                 <button
                                     type="button"
                                     disabled={sending}
-                                    onClick={() => setCandidates(null)}
+                                    onClick={() => {
+                                        setCandidates(null);
+                                        setDeselectedSupplierIds(new Set());
+                                    }}
                                     className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 dark:border-zinc-700 px-4 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                 >
                                     Cancelar

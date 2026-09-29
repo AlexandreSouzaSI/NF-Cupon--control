@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { CalendarRange } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { formatarNomePadraoImportacao } from './periodo-format';
 import { AutocompleteInput } from '../ui/AutocompleteInput';
@@ -49,6 +50,7 @@ export function PeriodFilter({
                 setImports(Array.isArray(result?.items) ? result.items : []);
             } catch (error) {
                 console.error(error);
+                toast.error('Erro ao carregar os períodos de importação.');
             } finally {
                 setLoading(false);
             }

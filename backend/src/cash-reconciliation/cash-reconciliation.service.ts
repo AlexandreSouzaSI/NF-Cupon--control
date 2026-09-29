@@ -124,6 +124,10 @@ export class CashReconciliationService {
         });
     }
 
+    // page/pageSize sempre vêm do frontend hoje (conciliacao-caixa/page.tsx
+    // já manda os dois em toda chamada), mas antes o fallback sem os dois
+    // parâmetros trazia a tabela inteira sem paginação nenhuma — trocado
+    // por um default fixo pra fechar essa brecha de vez.
     async findAll(
         storeId: string,
         user: any,
@@ -133,26 +137,21 @@ export class CashReconciliationService {
         this.ensureStoreAccess(storeId, user);
 
         const where = { storeId };
+        const resolvedPage = page && page > 0 ? page : 1;
+        const resolvedPageSize = pageSize && pageSize > 0 ? pageSize : 30;
 
-        if (page && pageSize) {
-            const [items, total] = await Promise.all([
-                this.prisma.cashReconciliation.findMany({
-                    where,
-                    orderBy: { date: 'desc' },
-                    skip: (page - 1) * pageSize,
-                    take: pageSize,
-                    include: { launchedBy: { select: { name: true } } },
-                }),
-                this.prisma.cashReconciliation.count({ where }),
-            ]);
-            return { items, total, page, pageSize };
-        }
+        const [items, total] = await Promise.all([
+            this.prisma.cashReconciliation.findMany({
+                where,
+                orderBy: { date: 'desc' },
+                skip: (resolvedPage - 1) * resolvedPageSize,
+                take: resolvedPageSize,
+                include: { launchedBy: { select: { name: true } } },
+            }),
+            this.prisma.cashReconciliation.count({ where }),
+        ]);
 
-        return this.prisma.cashReconciliation.findMany({
-            where,
-            orderBy: { date: 'desc' },
-            include: { launchedBy: { select: { name: true } } },
-        });
+        return { items, total, page: resolvedPage, pageSize: resolvedPageSize };
     }
 
     async findOne(id: string, user: any) {

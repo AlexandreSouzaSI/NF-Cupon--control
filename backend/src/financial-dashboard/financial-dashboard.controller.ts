@@ -10,13 +10,13 @@ import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { FinancialDashboardService } from './financial-dashboard.service';
 
-// Mesmo espírito de acesso de Contas a Pagar — é dado financeiro, então
-// reusa o mesmo módulo (CONTAS_A_PAGAR) e o mesmo trio de perfis, em vez
-// de criar um StoreModule novo só pra essa tela de visão geral.
+// Mistura dado de Contas a Pagar e Conciliação de Caixa, então libera se a
+// loja tiver QUALQUER um dos dois módulos (mesmo critério do "Dashboard
+// Financeiro" no menu do frontend — ver groupModules em lib/menu.ts).
 @Controller('financial-dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
 @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.FINANCEIRO)
-@RequiresModule(StoreModule.CONTAS_A_PAGAR)
+@RequiresModule([StoreModule.CONTAS_A_PAGAR, StoreModule.CONCILIACAO_CAIXA])
 export class FinancialDashboardController {
     constructor(
         private financialDashboardService: FinancialDashboardService,

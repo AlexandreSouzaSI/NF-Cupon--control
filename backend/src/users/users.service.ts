@@ -394,6 +394,17 @@ export class UsersService {
             if (dto.canApprovePurchases !== undefined) {
                 this.ensureCanGrantApprovalPermission(actingUser);
             }
+
+            // Mesma checagem que já existe no create() — faltava aqui
+            // (achado numa investigação: update() gravava moduleAccess/
+            // canViewPayrollBills sem checar quem podia mandar esses
+            // campos). Só o Proprietário/Admin Master edita.
+            if (
+                dto.moduleAccess !== undefined ||
+                dto.canViewPayrollBills !== undefined
+            ) {
+                this.ensureCanGrantModuleAccess(actingUser);
+            }
         }
 
         if (dto.email) {

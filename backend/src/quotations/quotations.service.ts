@@ -766,16 +766,22 @@ export class QuotationsService {
 
         this.ensureStoreAccess(storeId, user);
 
+        // Essa listagem só mostra contagens (quantos itens, quantos
+        // fornecedores responderam/recusaram), nunca o conteúdo — trazer
+        // `items`/`suppliers` completos (preços, tokens, endereços) pra
+        // cada linha era puro overfetch. `_count` cobre o total de itens;
+        // pra responder/recusar, um `select` enxuto já resolve sem puxar a
+        // linha inteira do fornecedor vinculado.
         const quotations = await this.prisma.quotation.findMany({
             where: {
                 storeId,
                 ...(status ? { status: status as QuotationStatus } : {}),
             },
             include: {
-                category: true,
-                selectedSupplier: true,
-                suppliers: true,
-                items: true,
+                category: { select: { name: true } },
+                selectedSupplier: { select: { name: true } },
+                suppliers: { select: { respondedAt: true, declinedAt: true } },
+                _count: { select: { items: true } },
             },
             orderBy: { sentAt: 'desc' },
         });
@@ -785,7 +791,7 @@ export class QuotationsService {
             categoryName: quotation.category.name,
             status: quotation.status,
             sentAt: quotation.sentAt,
-            itemsCount: quotation.items.length,
+            itemsCount: quotation._count.items,
             suppliersInvited: quotation.suppliers.length,
             suppliersResponded: quotation.suppliers.filter((s) => s.respondedAt)
                 .length,

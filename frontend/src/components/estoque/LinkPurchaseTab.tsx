@@ -74,6 +74,7 @@ export function LinkPurchaseTab({ onChanged }: { onChanged: () => void }) {
             setStockItems(itemsRes.data);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar as compras pendentes de vínculo.');
         } finally {
             setLoading(false);
         }

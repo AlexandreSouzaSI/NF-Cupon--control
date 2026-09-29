@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { Loader2, X } from 'lucide-react';
+import { SupplierAutocomplete } from './SupplierAutocomplete';
 
 type SuggestionItem = {
     id: string;
@@ -51,10 +52,7 @@ export function AcceptNfBillForm({
     const [supplierQuery, setSupplierQuery] = useState(
         initialSupplierName || '',
     );
-    const [supplierSuggestions, setSupplierSuggestions] = useState<
-        SuggestionItem[]
-    >([]);
-    const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
+    const [supplierId, setSupplierId] = useState('');
 
     const [categoryQuery, setCategoryQuery] = useState('');
     const [categorySuggestions, setCategorySuggestions] = useState<
@@ -71,28 +69,6 @@ export function AcceptNfBillForm({
     const [pixOrBoleto, setPixOrBoleto] = useState<PixOrBoleto>('NONE');
     const [pixKey, setPixKey] = useState('');
     const [barcode, setBarcode] = useState('');
-
-    // Busca fornecedores enquanto digita, mesmo padrão do formulário de
-    // Nova Compra.
-    useEffect(() => {
-        if (!supplierQuery.trim()) {
-            setSupplierSuggestions([]);
-            return;
-        }
-
-        const timeoutId = setTimeout(async () => {
-            try {
-                const response = await api.get('/suppliers', {
-                    params: { search: supplierQuery.trim() },
-                });
-                setSupplierSuggestions(response.data || []);
-            } catch {
-                // silencioso
-            }
-        }, 300);
-
-        return () => clearTimeout(timeoutId);
-    }, [supplierQuery]);
 
     // Categoria digitável, mesmo padrão do fornecedor.
     useEffect(() => {
@@ -118,16 +94,15 @@ export function AcceptNfBillForm({
     // Quando escolhe um fornecedor já cadastrado, sugere a categoria usada
     // da última vez pra esse mesmo fornecedor (só sugestão — o usuário
     // ainda pode trocar).
-    async function selectSupplier(supplier: SuggestionItem) {
-        setSupplierQuery(supplier.name);
-        setSupplierSuggestions([]);
-        setSupplierDropdownOpen(false);
+    async function handleSupplierChange(id: string, name: string) {
+        setSupplierId(id);
+        setSupplierQuery(name);
 
-        if (categoryQuery.trim()) return;
+        if (!id || categoryQuery.trim()) return;
 
         try {
             const response = await api.get('/bill-categories/suggest', {
-                params: { supplierId: supplier.id },
+                params: { supplierId: id },
             });
 
             if (response.data?.name) {
@@ -137,11 +112,6 @@ export function AcceptNfBillForm({
         } catch {
             // silencioso — sugestão é só conveniência
         }
-    }
-
-    function handleSupplierQueryChange(text: string) {
-        setSupplierQuery(text);
-        setSupplierDropdownOpen(true);
     }
 
     function selectCategory(category: SuggestionItem) {
@@ -174,50 +144,13 @@ export function AcceptNfBillForm({
     return (
         <div className="space-y-3 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
-                <div className="relative">
-                    <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                        Empresa
-                    </label>
-                    <input
-                        value={supplierQuery}
-                        onChange={(e) =>
-                            handleSupplierQueryChange(e.target.value)
-                        }
-                        onFocus={() => setSupplierDropdownOpen(true)}
-                        onBlur={() =>
-                            setTimeout(
-                                () => setSupplierDropdownOpen(false),
-                                150,
-                            )
-                        }
-                        placeholder="Nome da empresa"
-                        className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500"
-                    />
-
-                    {supplierDropdownOpen && supplierQuery.trim() && (
-                        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl">
-                            {supplierSuggestions.length > 0 ? (
-                                supplierSuggestions.map((supplier) => (
-                                    <button
-                                        type="button"
-                                        key={supplier.id}
-                                        onMouseDown={() =>
-                                            selectSupplier(supplier)
-                                        }
-                                        className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                                    >
-                                        {supplier.name}
-                                    </button>
-                                ))
-                            ) : (
-                                <p className="px-3 py-2 text-xs text-zinc-500">
-                                    Nova empresa: <strong>{supplierQuery.trim()}</strong>{' '}
-                                    será cadastrada automaticamente.
-                                </p>
-                            )}
-                        </div>
-                    )}
-                </div>
+                <SupplierAutocomplete
+                    supplierId={supplierId}
+                    supplierName={supplierQuery}
+                    onChange={handleSupplierChange}
+                    label="Empresa"
+                    placeholder="Nome da empresa"
+                />
 
                 <div className="relative">
                     <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">

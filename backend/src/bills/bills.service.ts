@@ -5,6 +5,8 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 
+import { Cron } from '@nestjs/schedule';
+
 import {
     BillStatus,
     PurchaseHistoryAction,
@@ -181,6 +183,10 @@ export class BillsService {
             }
         }
 
+        const dueDateValue = new Date(
+            `${dto.dueDate}T12:00:00.000Z`,
+        );
+
         const bill = await this.prisma.bill.create({
             data: {
                 description: dto.description,
@@ -188,11 +194,18 @@ export class BillsService {
                 type: dto.type,
                 paymentMethod: dto.paymentMethod,
 
-                dueDate: new Date(
-                    `${dto.dueDate}T12:00:00.000Z`,
-                ),
+                dueDate: dueDateValue,
 
-                status: BillStatus.OPEN,
+                // Antes toda conta nascia OPEN e "vencida" só existia como
+                // cálculo de tela (comparando dueDate com hoje no
+                // frontend). Isso deixava o status no banco errado sempre
+                // que a conta era cadastrada já com vencimento passado
+                // (ex.: lançamento atrasado de uma NF antiga) — qualquer
+                // relatório/export que lesse `status` direto do banco
+                // mostrava "aberta" mesmo já vencida. Calculando aqui já
+                // no cadastro; o cron `markOverdueBills` cobre o caso de
+                // uma conta que nasce OPEN e vence depois, sem edição.
+                status: this.computeStatusForDueDate(dueDateValue),
 
                 hasBillFile:
                     dto.hasBillFile || Boolean(dto.fileUrl),
@@ -320,12 +333,16 @@ export class BillsService {
         // inteira do intervalo pedido, então sem paginação continua
         // funcionando como sempre funcionou; quem quiser resultado
         // paginado (listas longas sem filtro de período) passa
-        // page/pageSize.
+        // page/pageSize. E a tela hoje nem sempre manda startDate/endDate
+        // (ex.: filtro por fornecedor sozinho), então sem NENHUM limite a
+        // query cresce sem fim conforme acumula contas — `take` generoso
+        // como cinto de segurança, sem mudar o formato da resposta.
         if (!filters?.page && !filters?.pageSize) {
             return this.prisma.bill.findMany({
                 where,
                 orderBy,
                 include: this.defaultInclude(),
+                take: 3000,
             });
         }
 
@@ -378,6 +395,24 @@ export class BillsService {
             this.ensureStoreAccess(dto.storeId, user);
         }
 
+        const dueDateValue = dto.dueDate
+            ? new Date(`${dto.dueDate}T12:00:00.000Z`)
+            : undefined;
+
+        // Se quem chamou não mandou `status` explícito (ex.: marcar como
+        // paga/cancelada é sempre explícito) mas mudou o vencimento de uma
+        // conta que ainda está OPEN/OVERDUE, recalcula o status aqui —
+        // senão editar o vencimento pra uma data futura deixava a conta
+        // "presa" como vencida no banco (mesmo problema do create: status
+        // nunca refletia a dueDate de verdade).
+        const statusToPersist =
+            dto.status ||
+            (dueDateValue &&
+                (currentBill.status === BillStatus.OPEN ||
+                    currentBill.status === BillStatus.OVERDUE)
+                ? this.computeStatusForDueDate(dueDateValue)
+                : undefined);
+
         const bill = await this.prisma.bill.update({
             where: { id },
 
@@ -387,17 +422,13 @@ export class BillsService {
                 type: dto.type,
                 paymentMethod: dto.paymentMethod,
 
-                dueDate: dto.dueDate
-                    ? new Date(
-                        `${dto.dueDate}T12:00:00.000Z`,
-                    )
-                    : undefined,
+                dueDate: dueDateValue,
 
                 paidAt: dto.paidAt
                     ? new Date(dto.paidAt)
                     : undefined,
 
-                status: dto.status,
+                status: statusToPersist,
 
                 queuedForPaymentAt:
                     dto.status === BillStatus.PAID ? null : undefined,
@@ -589,6 +620,46 @@ export class BillsService {
         return start;
     }
 
+    // Único lugar que decide "essa conta está vencida?" a partir da
+    // dueDate — usado no cadastro, na edição e no cron diário, pra não
+    // reimplementar a mesma regra em três lugares de formas levemente
+    // diferentes.
+    private computeStatusForDueDate(dueDate: Date): BillStatus {
+        return dueDate < this.startOfToday()
+            ? BillStatus.OVERDUE
+            : BillStatus.OPEN;
+    }
+
+    // Persiste "vencida" no banco de verdade — antes disso, bill.status só
+    // saía de OPEN quando alguém marcava como paga/cancelada manualmente;
+    // "vencida" existia apenas como cálculo feito na hora (no frontend, e
+    // duplicado em 3 pontos deste service). Isso é inofensivo pra quem só
+    // usa a tela, mas deixa o dado errado pra qualquer consulta/relatório
+    // que leia `status` direto do banco (SQL, export, integração futura).
+    // Roda 1x por dia de madrugada: marca OVERDUE quem venceu e reverte
+    // pra OPEN quem foi editado de volta pra uma data futura enquanto
+    // ainda estava OVERDUE (evita ficar "vencida" presa após correção).
+    @Cron('10 0 * * *', { timeZone: 'America/Sao_Paulo' })
+    async markOverdueBills() {
+        const today = this.startOfToday();
+
+        await this.prisma.bill.updateMany({
+            where: {
+                status: BillStatus.OPEN,
+                dueDate: { lt: today },
+            },
+            data: { status: BillStatus.OVERDUE },
+        });
+
+        await this.prisma.bill.updateMany({
+            where: {
+                status: BillStatus.OVERDUE,
+                dueDate: { gte: today },
+            },
+            data: { status: BillStatus.OPEN },
+        });
+    }
+
     // "Incluir nos pagamentos de hoje" — só pra contas em aberto/vencidas
     // (pagar/cancelada não faz sentido entrar numa fila de pagamento).
     // Alterna: se já estava marcada, desmarca. Não muda dueDate nem status
@@ -630,11 +701,12 @@ export class BillsService {
 
     // "Colocar todas as vencidas em pagamentos de hoje" — mesma regra do
     // botão individual (toggleQueueToday), só que em massa: pega toda
-    // conta OPEN com dueDate no passado e ainda não marcada, e marca de
-    // uma vez. Não mexe em quem já estava marcada (fica como estava) nem
-    // em conta paga/cancelada. "Vencida" aqui é sempre calculado pela
-    // dueDate (não existe um cron que grava status=OVERDUE no banco — o
-    // enum existe mas hoje bill.status só vira OPEN/PAID/CANCELED).
+    // conta OPEN/OVERDUE com dueDate no passado e ainda não marcada, e
+    // marca de uma vez. Não mexe em quem já estava marcada (fica como
+    // estava) nem em conta paga/cancelada. Aceita OPEN também porque o
+    // cron `markOverdueBills` roda 1x por dia — uma conta pode ter vencido
+    // hoje e ainda não ter sido promovida a OVERDUE no banco quando esse
+    // botão for clicado.
     async queueAllOverdueToday(user: any, storeId?: string) {
         if (!this.canManageBills(user)) {
             throw new ForbiddenException(
@@ -650,7 +722,7 @@ export class BillsService {
 
         const vencidas = await this.prisma.bill.findMany({
             where: {
-                status: BillStatus.OPEN,
+                status: { in: [BillStatus.OPEN, BillStatus.OVERDUE] },
                 queuedForPaymentAt: null,
                 dueDate: { lt: this.startOfToday() },
                 storeId:

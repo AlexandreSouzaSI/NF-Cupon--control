@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaClient, UserRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
+import { seedCatalogoPadrao } from './seed-catalogo-padrao';
 
 const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL!,
@@ -53,12 +54,12 @@ async function main() {
         },
     });
 
-    const lojaEldorado = await prisma.store.upsert({
-        where: { id: 'loja-eldorado' },
+    const lojaRaiz = await prisma.store.upsert({
+        where: { id: 'loja-raiz' },
         update: {},
         create: {
-            id: 'loja-eldorado',
-            name: 'Loja Eldorado',
+            id: 'loja-raiz',
+            name: 'Loja Raiz',
         },
     });
 
@@ -87,7 +88,7 @@ async function main() {
         },
     });
 
-    const stores = [lojaAnchieta, lojaEldorado, lojaContagem];
+    const stores = [lojaAnchieta, lojaRaiz, lojaContagem];
 
     for (const store of stores) {
         await prisma.userStore.upsert({
@@ -143,6 +144,15 @@ async function main() {
             `Corrigido ${stuckDemoUsers.length} conta(s) de teste travada(s) — e-mail liberado pra cadastro novo.`,
         );
     }
+
+    // Recria Estoque + Ficha Técnica de Anchieta/Contagem a partir do
+    // catálogo padrão exportado antes do último zero-a-zero do banco (ver
+    // prisma/scripts/export-catalogo-padrao.ts) — Raiz não tem catálogo
+    // padrão ainda, nasce vazia.
+    await seedCatalogoPadrao(prisma, {
+        ANCHIETA: lojaAnchieta.id,
+        CONTAGEM: lojaContagem.id,
+    });
 
     console.log('Seed executado com sucesso.');
     console.log('Login: alemourasouza33@gmail.com');

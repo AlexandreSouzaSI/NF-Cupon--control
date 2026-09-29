@@ -90,6 +90,7 @@ export function StoresTab() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingStore, setEditingStore] = useState<Store | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
 
     const [form, setForm] = useState({
         name: '',
@@ -389,6 +390,16 @@ export function StoresTab() {
         setShowFiscalFields(false);
     }
 
+    function openNewModal() {
+        resetForm();
+        setModalOpen(true);
+    }
+
+    function closeModal() {
+        resetForm();
+        setModalOpen(false);
+    }
+
     function startEdit(store: Store) {
         setEditingStore(store);
         setForm({
@@ -407,6 +418,7 @@ export function StoresTab() {
             inscricaoEstadual: store.inscricaoEstadual || '',
             isDemo: !!store.isDemo,
         });
+        setModalOpen(true);
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -428,7 +440,7 @@ export function StoresTab() {
                 toast.success('Loja cadastrada.');
             }
 
-            resetForm();
+            closeModal();
             await loadStores();
         } catch (error: any) {
             const message =
@@ -485,32 +497,64 @@ export function StoresTab() {
     }
 
     return (
-        <div
-            className={`grid grid-cols-1 gap-5 ${isAdmin ? 'xl:grid-cols-[420px_1fr]' : ''
-                }`}
-        >
-            {isAdmin && (
-                <form
-                    onSubmit={handleSubmit}
-                    autoComplete="off"
-                    className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
+        <div className="space-y-5">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <h2 className="text-lg font-bold">Lojas</h2>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                        Cada loja tem seu próprio fluxo de compras
+                    </p>
+                </div>
+
+                {isAdmin && (
+                    <button
+                        onClick={openNewModal}
+                        className="inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600"
+                    >
+                        <Building2 size={18} />
+                        Nova Loja
+                    </button>
+                )}
+            </div>
+
+            {modalOpen && isAdmin && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                    onClick={(event) => {
+                        if (event.target === event.currentTarget) closeModal();
+                    }}
                 >
-                    <div className="mb-5 flex items-center gap-3">
-                        <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
-                            <Building2 size={22} />
+                    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl">
+                        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-2xl bg-blue-500/10 p-2.5 text-blue-400">
+                                    <Building2 size={20} />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold">
+                                        {editingStore ? 'Editar loja' : 'Nova loja'}
+                                    </h2>
+                                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                                        Cada loja tem seu próprio fluxo de compras
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={closeModal}
+                                className="rounded-xl p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            >
+                                <XCircle size={18} />
+                            </button>
                         </div>
 
-                        <div>
-                            <h2 className="text-lg font-bold">
-                                {editingStore ? 'Editar loja' : 'Nova loja'}
-                            </h2>
-                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                Cada loja tem seu próprio fluxo de compras
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
+                        <form
+                            onSubmit={handleSubmit}
+                            autoComplete="off"
+                            className="p-5"
+                        >
+                            <div className="space-y-4">
                         <div>
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                                 Nome
@@ -758,18 +802,18 @@ export function StoresTab() {
                                         : 'Criar loja'}
                             </button>
 
-                            {editingStore && (
-                                <button
-                                    type="button"
-                                    onClick={resetForm}
-                                    className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                                >
-                                    Cancelar
-                                </button>
-                            )}
+                            <button
+                                type="button"
+                                onClick={closeModal}
+                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            >
+                                Cancelar
+                            </button>
                         </div>
                     </div>
-                </form>
+                    </form>
+                    </div>
+                </div>
             )}
 
             <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">

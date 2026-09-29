@@ -43,12 +43,21 @@ export class AlertsService {
             orderBy: {
                 createdAt: 'desc',
             },
+            // Teto de segurança — alerta não resolvido tende a ficar pouco
+            // tempo aberto, mas sem limite aqui uma base grande (ou um bug
+            // que pare de resolver alertas) faria essa lista crescer sem
+            // fim. 200 é bem acima de qualquer uso real hoje.
+            take: 200,
             include: {
                 purchase: {
                     include: {
-                        store: true,
-                        supplier: true,
-                        createdBy: true,
+                        // select em vez de include completo: a tela só
+                        // precisa de nome/identificador de cada relação,
+                        // não do registro inteiro (endereço de loja,
+                        // categorias de fornecedor etc).
+                        store: { select: { id: true, name: true } },
+                        supplier: { select: { id: true, name: true } },
+                        createdBy: { select: { id: true, name: true } },
                     },
                 },
             },

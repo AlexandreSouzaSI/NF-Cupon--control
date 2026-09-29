@@ -115,6 +115,7 @@ export function ImportProductSalesTab({
             setTotal(result?.total ?? 0);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar as importações.');
         } finally {
             setLoading(false);
         }
@@ -137,6 +138,10 @@ export function ImportProductSalesTab({
                 setUndoDisponivel(!!response.data?.disponivel);
             } catch (error) {
                 console.error(error);
+                // Silencioso mesmo (sem toast): isso só afeta se o botão
+                // "Desfazer" aparece ou não — não é dado essencial da tela,
+                // e um toast aqui pipocaria sempre que a checagem falhasse
+                // sem o usuário ter pedido nada.
             }
         }
 

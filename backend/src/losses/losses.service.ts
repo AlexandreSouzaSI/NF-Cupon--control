@@ -313,10 +313,16 @@ export class LossesService {
         });
     }
 
-    // Intervalo do mês (1º dia 00:00 até 1º dia do mês seguinte) — só
-    // aplica o filtro se vier mês e ano; senão volta tudo.
+    // Intervalo do mês (1º dia 00:00 até 1º dia do mês seguinte). O
+    // frontend sempre manda mês/ano (o mês atual por padrão), mas sem esse
+    // fallback qualquer chamada sem os dois parâmetros (um teste manual,
+    // uma integração futura) devolvia o histórico inteiro de perdas —
+    // trocado por "mês atual" como default seguro.
     private monthRange(month?: number, year?: number) {
-        if (!month || !year) return undefined;
+        if (!month || !year) {
+            const now = new Date();
+            return this.monthRange(now.getUTCMonth() + 1, now.getUTCFullYear());
+        }
 
         const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
         const end = new Date(Date.UTC(year, month, 1, 0, 0, 0));
@@ -483,14 +489,16 @@ export class LossesService {
             authTag: certificate.passwordAuthTag,
         });
 
-        // Sem série configurada ainda, usa 1 como padrão. NÃO usar
+        // Série 1 fixada nas 3 lojas (combinado com o contador) — NÃO usar
         // qualquer valor >= 900: a Sefaz reserva essa faixa pra processos
         // de emissão em contingência (SCAN/SVC), e como aqui sempre
         // declaramos tpEmis=1 (emissão normal), série nessa faixa causa
         // rejeição 244 "Processo de Emissão do Contribuinte incompatível
         // com a Série da NF" — foi exatamente isso que aconteceu com 900.
         // dto.serie deixa o usuário CONFIRMAR (ou trocar) na tela antes de
-        // gerar — se não vier, cai no valor salvo na loja, igual antes.
+        // gerar — se não vier, cai no valor salvo na loja, e por fim no
+        // padrão 1. A série já está decidida (1); o que ainda está em
+        // aberto é só o ambiente (ver tpAmb logo abaixo).
         const serie = dto.serie ?? store.lossNfeSerie ?? 1;
         const numero = (store.lossNfeNextNumber ?? 0) + 1;
 
@@ -516,9 +524,9 @@ export class LossesService {
                 store: storeData,
                 serie,
                 numero,
-                // Sempre homologação por enquanto — emitir em produção
-                // exige decidir a série real com o contador primeiro
-                // (combinado com o usuário).
+                // Continua em homologação por enquanto — usuário pediu pra
+                // deixar assim até confirmar de vez o ambiente de produção
+                // (a Série 1 já está fixada nas 3 lojas, isso não muda).
                 tpAmb: 2,
                 justificativa: dto.justificativa.trim(),
                 // CFOP depende de orientação do contador e varia por caso —

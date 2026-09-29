@@ -32,6 +32,9 @@ type CardReport = {
     purchases: CardPurchase[];
 };
 
+// Estágio OPERACIONAL (Purchase.status). Os 4 valores marcados "(legado)"
+// não são mais escritos pelo backend — o estágio fiscal de verdade agora
+// é Purchase.fiscalStatus (PENDING/COUPON_ONLY/INVOICE), separado deste.
 const statusLabel: Record<string, string> = {
     DRAFT: 'Rascunho',
     WAITING_APPROVAL: 'Aguardando aprovação',
@@ -40,10 +43,10 @@ const statusLabel: Record<string, string> = {
     WAITING_RECEIPT: 'Aguardando recebimento',
     RECEIVED_OK: 'Recebida OK',
     RECEIVED_WITH_DIFFERENCE: 'Recebida com diferença',
-    WAITING_INVOICE: 'Aguardando NF',
-    HAS_COUPON_ONLY: 'Apenas com cupom',
-    HAS_INVOICE: 'Com NF',
-    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar',
+    WAITING_INVOICE: 'Aguardando NF (legado)',
+    HAS_COUPON_ONLY: 'Apenas com cupom (legado)',
+    HAS_INVOICE: 'Com NF (legado)',
+    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar (legado)',
     CLOSED: 'Fechada',
     CANCELED: 'Cancelada',
 };

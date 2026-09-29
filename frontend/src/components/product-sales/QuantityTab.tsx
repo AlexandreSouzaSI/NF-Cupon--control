@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Hash, Package, Scale } from 'lucide-react';
+import { toast } from 'sonner';
 
 type UnidadeMedida = 'KG' | 'LITRO' | 'UNIDADE';
 
@@ -79,6 +80,7 @@ export function QuantityTab({
                 setDados(response.data);
             } catch (error) {
                 console.error(error);
+                toast.error('Erro ao carregar as quantidades por ingrediente.');
             } finally {
                 setLoading(false);
             }

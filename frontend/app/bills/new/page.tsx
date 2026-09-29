@@ -24,7 +24,10 @@ import {
 import { toast } from 'sonner';
 
 import { AppLayout } from '../../../src/components/app-layout';
-import { AutocompleteInput } from '../../../src/components/ui/AutocompleteInput';
+import {
+    SupplierAutocomplete,
+    findOrCreateSupplier,
+} from '../../../src/components/ui/SupplierAutocomplete';
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { parseBoletoCode } from '@/lib/boleto';
@@ -178,6 +181,7 @@ type BillForm = {
 
     storeId: string;
     supplierId: string;
+    supplierName: string;
     purchaseId: string;
 
     barcode: string;
@@ -207,6 +211,7 @@ function createEmptyForm(): BillForm {
 
         storeId: '',
         supplierId: '',
+        supplierName: '',
         purchaseId: '',
 
         barcode: '',
@@ -283,9 +288,6 @@ function NewBillPageInner() {
         useState<Purchase | null>(null);
 
     const activeStore = getActiveStore();
-
-    const [suppliers, setSuppliers] =
-        useState<Supplier[]>([]);
 
     const [loading, setLoading] =
         useState(true);
@@ -394,15 +396,6 @@ function NewBillPageInner() {
 
         const { data } = result;
 
-        setForm((current) => ({
-            ...current,
-            dueDate: data.dueDate || current.dueDate,
-            value:
-                data.value !== null
-                    ? data.value.toFixed(2).replace('.', ',')
-                    : current.value,
-        }));
-
         const parts: string[] = [];
 
         if (data.value !== null) {
@@ -417,13 +410,28 @@ function NewBillPageInner() {
             );
         }
 
+        // Dígito verificador não confere — o código foi digitado errado,
+        // corrompido ou é lixo (ex: dígitos aleatórios digitados por
+        // engano). NÃO preenche valor/vencimento nesse caso: preencher
+        // um valor "lido" que na verdade não é confiável é pior do que
+        // não preencher nada (já causou lançamento de conta com valor
+        // fantasioso). Usuário confere/digita o valor certo na mão.
         if (!data.checkDigitsOk) {
-            toast(
-                `Boleto lido (${parts.join(' — ') || 'sem valor/vencimento identificado'
-                }), mas o dígito verificador não confere — confira os dados antes de salvar.`,
+            toast.error(
+                `Código lido (${parts.join(' — ') || 'sem valor/vencimento identificado'
+                }), mas o dígito verificador não confere — não preenchi automaticamente. Confira o código e digite o valor/vencimento manualmente.`,
             );
             return;
         }
+
+        setForm((current) => ({
+            ...current,
+            dueDate: data.dueDate || current.dueDate,
+            value:
+                data.value !== null
+                    ? data.value.toFixed(2).replace('.', ',')
+                    : current.value,
+        }));
 
         toast.success(
             parts.length > 0
@@ -440,19 +448,11 @@ function NewBillPageInner() {
         try {
             setLoading(true);
 
-            const suppliersResponse =
-                await api.get('/suppliers');
+            const purchaseResponse = purchaseIdFromUrl
+                ? await api.get(`/purchases/${purchaseIdFromUrl}`)
+                : null;
 
-            setSuppliers(
-                suppliersResponse.data || [],
-            );
-
-            if (purchaseIdFromUrl) {
-                const purchaseResponse =
-                    await api.get(
-                        `/purchases/${purchaseIdFromUrl}`,
-                    );
-
+            if (purchaseResponse) {
                 const loadedPurchase: Purchase =
                     purchaseResponse.data;
 
@@ -480,9 +480,21 @@ function NewBillPageInner() {
                         ? `${loadedPurchase.description} — ${itemsSummary}`
                         : loadedPurchase.description,
 
-                    value: String(
+                    // BUG corrigido: loadedPurchase.value vem do backend em
+                    // formato "cru" (ex.: "150.00", ponto decimal). O campo
+                    // Valor é editado em formato pt-BR (vírgula decimal) e
+                    // parseDecimal() no submit assume esse formato — ele
+                    // trata ponto como separador de milhar e REMOVE, então
+                    // "150.00" virava 15000 (100x o valor real) se o usuário
+                    // não reeditasse o campo manualmente antes de salvar.
+                    // Convertendo aqui pro mesmo formato que o autopreenchimento
+                    // de boleto já usa (toFixed(2) + vírgula), o valor pré-
+                    // preenchido fica correto mesmo sem edição manual.
+                    value: Number(
                         loadedPurchase.value,
-                    ),
+                    )
+                        .toFixed(2)
+                        .replace('.', ','),
 
                     type: 'BOLETO',
                     paymentMethod: 'BANK_SLIP',
@@ -501,6 +513,10 @@ function NewBillPageInner() {
                     supplierId:
                         loadedPurchase.supplier
                             ?.id || '',
+
+                    supplierName:
+                        loadedPurchase.supplier
+                            ?.name || '',
 
                     purchaseId:
                         loadedPurchase.id,
@@ -546,16 +562,6 @@ function NewBillPageInner() {
     const selectedStore = useMemo(
         () => purchase?.store || activeStore || undefined,
         [purchase, activeStore],
-    );
-
-    const selectedSupplier = useMemo(
-        () =>
-            suppliers.find(
-                (supplier) =>
-                    supplier.id ===
-                    form.supplierId,
-            ),
-        [suppliers, form.supplierId],
     );
 
     function handleBillTypeChange(
@@ -700,6 +706,19 @@ function NewBillPageInner() {
         try {
             setSaving(true);
 
+            // Garante um supplierId de verdade antes de enviar: usa o
+            // fornecedor escolhido na lista, ou cria/reaproveita um pelo
+            // nome digitado (mesmo padrão de Nova Compra).
+            let resolvedSupplierId = form.supplierId;
+
+            if (!resolvedSupplierId && form.supplierName.trim()) {
+                const supplier = await findOrCreateSupplier(
+                    form.supplierName,
+                );
+
+                resolvedSupplierId = supplier.id;
+            }
+
             await api.post('/bills', {
                 description:
                     form.description.trim(),
@@ -718,7 +737,7 @@ function NewBillPageInner() {
                 storeId: form.storeId,
 
                 supplierId:
-                    form.supplierId ||
+                    resolvedSupplierId ||
                     undefined,
 
                 purchaseId:
@@ -1010,6 +1029,25 @@ function NewBillPageInner() {
 
                 <form
                     onSubmit={handleSubmit}
+                    onKeyDown={(event) => {
+                        // Leitora de código de barras funciona como um
+                        // teclado e manda um Enter no final da leitura. Se
+                        // o foco não estiver exatamente no campo do
+                        // código (ex: leitura caiu em "Descrição" ou
+                        // "Valor" por engano), esse Enter dispararia o
+                        // submit implícito do form — salvando a conta sem
+                        // o usuário clicar em nada e sem conferir os
+                        // dados. Bloqueia Enter em qualquer <input> do
+                        // form (textarea do código de barras já trata o
+                        // próprio Enter à parte, então fica de fora).
+                        const target = event.target as HTMLElement;
+                        if (
+                            event.key === 'Enter' &&
+                            target.tagName === 'INPUT'
+                        ) {
+                            event.preventDefault();
+                        }
+                    }}
                     className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
                 >
                     <div className="mb-5">
@@ -1521,33 +1559,20 @@ function NewBillPageInner() {
                             </strong>
                         </div>
 
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                Fornecedor
-                            </label>
-
-                            <div className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4">
-                                <AutocompleteInput
-                                    options={suppliers.map(
-                                        (supplier) => ({
-                                            id: supplier.id,
-                                            nome: supplier.name,
-                                        }),
-                                    )}
-                                    value={form.supplierId}
-                                    onChange={(id) =>
-                                        setForm(
-                                            (current) => ({
-                                                ...current,
-                                                supplierId: id,
-                                            }),
-                                        )
-                                    }
-                                    placeholder="Não informado"
-                                    className="h-full w-full bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
-                                />
-                            </div>
-                        </div>
+                        <SupplierAutocomplete
+                            supplierId={form.supplierId}
+                            supplierName={form.supplierName}
+                            onChange={(id, name) =>
+                                setForm((current) => ({
+                                    ...current,
+                                    supplierId: id,
+                                    supplierName: name,
+                                }))
+                            }
+                            label="Fornecedor"
+                            placeholder="Não informado"
+                            inputClassName="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 text-sm outline-none focus:border-blue-500 dark:text-zinc-100"
+                        />
 
                         <div className="md:col-span-2">
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
@@ -1661,8 +1686,8 @@ function NewBillPageInner() {
                         Loja selecionada:{' '}
                         {selectedStore.name}
 
-                        {selectedSupplier
-                            ? ` • Fornecedor: ${selectedSupplier.name}`
+                        {form.supplierName.trim()
+                            ? ` • Fornecedor: ${form.supplierName.trim()}`
                             : ''}
                     </p>
                 )}

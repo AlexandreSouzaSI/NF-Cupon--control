@@ -87,6 +87,7 @@ export function LinkNfTab({
             }
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar as NFs pendentes de vínculo.');
         } finally {
             setLoading(false);
         }

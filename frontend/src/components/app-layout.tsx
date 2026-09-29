@@ -115,7 +115,15 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                 notifications: response.data.notifications || 0,
             });
         } catch {
-            // não quebra layout
+            // Não quebra o layout (os badges somem, mas o resto da tela
+            // continua funcionando) — mas antes isso ficava 100% mudo, e
+            // approvals/alerts são justamente o aviso "tem algo pendente
+            // pra você" no topo. Sem toast, uma falha aqui passava
+            // despercebida e dava a impressão de "nada pendente" quando na
+            // verdade só não carregou.
+            toast.error(
+                'Não consegui atualizar os avisos do topo (aprovações/alertas/notificações).',
+            );
         }
     }
 
@@ -377,7 +385,22 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                 (item) =>
                     (user.isDemo || item.roles.includes(user.role)) &&
                     !item.hidden &&
-                    isModuleEnabled(item, activeStore?.enabledModules, user.moduleAccess),
+                    isModuleEnabled(item, activeStore?.enabledModules, user.moduleAccess) &&
+                    // Caso especial "Aprovações": o item de menu libera pra
+                    // GERENTE (roles inclui GERENTE), mas o backend só deixa
+                    // um Gerente aprovar de verdade se ele tiver a permissão
+                    // extra canApprovePurchases marcada em Cadastros →
+                    // Usuários. Sem esse filtro, um Gerente sem a flag via o
+                    // item, clicava e caía num erro de permissão do
+                    // backend — mostrando um caminho que não leva a lugar
+                    // nenhum. Demo sempre vê (mesmo raciocínio do restante
+                    // do menu).
+                    !(
+                        item.href === '/approvals' &&
+                        user.role === 'GERENTE' &&
+                        !user.isDemo &&
+                        !user.canApprovePurchases
+                    ),
             ),
         }))
         .filter((group) => group.items.length > 0);
@@ -499,7 +522,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             </div>
 
             <div className="flex">
-                <aside className="hidden min-h-[calc(100vh-73px)] w-72 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 md:block">
+                <aside className="hidden sticky top-[73px] h-[calc(100vh-73px)] w-72 overflow-y-auto border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 md:block">
                     <div className="mb-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
                         <div className="mb-2 flex items-center gap-2">
                             <FileText size={18} className="text-blue-400" />

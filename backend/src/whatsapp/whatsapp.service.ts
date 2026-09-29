@@ -307,6 +307,8 @@ export class WhatsappService {
 
         const greetingLines = [
             `Olá! Você ganhou a cotação de *${params.categoryName}* pra ${params.storeName}. Valor total do pedido: ${totalLabel}. Confirme no link abaixo. Obrigado!`,
+            '',
+            `⏰ *Horário de Recebimento: Segunda a Sexta, das 08h às 17h*`,
         ];
 
         if (dadosFaturamento.length > 0) {

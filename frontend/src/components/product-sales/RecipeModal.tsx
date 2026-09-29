@@ -99,6 +99,7 @@ export function RecipeModal({
                 setItensProducao(producaoOpts);
             } catch (error) {
                 console.error(error);
+                toast.error('Erro ao carregar a ficha técnica desse prato.');
                 setLinhas([linhaVazia()]);
             } finally {
                 setLoading(false);

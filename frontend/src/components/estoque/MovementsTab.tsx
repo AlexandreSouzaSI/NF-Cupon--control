@@ -45,8 +45,13 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
         const store = getActiveStore();
         if (!store) return;
 
-        const response = await api.get('/estoque/itens', { params: { storeId: store.id } });
-        setItems(response.data);
+        try {
+            const response = await api.get('/estoque/itens', { params: { storeId: store.id } });
+            setItems(response.data);
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao carregar os itens de estoque.');
+        }
     }
 
     async function loadMovements() {
@@ -61,6 +66,7 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
             setMovements(response.data.items);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar as movimentações.');
         } finally {
             setLoadingList(false);
         }

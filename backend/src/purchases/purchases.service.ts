@@ -14,6 +14,7 @@ import {
     PurchaseAlertLevel,
     PurchaseAlertType,
     PurchaseCategory,
+    PurchaseFiscalStatus,
     PurchaseHistoryAction,
     PurchasePaymentStatus,
     PurchaseStatus,
@@ -23,7 +24,7 @@ import {
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { PrismaService } from 'prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { BillsService } from '../bills/bills.service';
@@ -221,8 +222,14 @@ export class PurchasesService {
             return PurchaseStatus.WAITING_APPROVAL;
         }
 
+        // Na prática esse branch é inalcançável hoje: shouldRequireApproval
+        // só devolve false pra SUPPLIER_ORDER, então uma AVULSA_CARD sempre
+        // cai no WAITING_APPROVAL acima. Mantido por segurança, com o mesmo
+        // valor usado em approve()/unreject() pra AVULSA_CARD — ver
+        // comentário lá: cartão não tem etapa de "receber", vai direto pra
+        // RECEIVED_OK e só falta o documento fiscal (fiscalStatus).
         if (dto.category === PurchaseCategory.AVULSA_CARD) {
-            return PurchaseStatus.WAITING_INVOICE;
+            return PurchaseStatus.RECEIVED_OK;
         }
 
         return PurchaseStatus.WAITING_RECEIPT;
@@ -360,13 +367,19 @@ export class PurchasesService {
         // Paginado (mesmo padrão de findIncomingGoodsNf) — sem page/pageSize
         // informados, mantém o comportamento antigo de trazer tudo, pra não
         // quebrar quem já chama esse método sem paginação (relatórios,
-        // exportações internas etc.). A tela de Compras no frontend sempre
-        // manda page/pageSize.
+        // exportações internas etc.). A tela de Compras no frontend hoje
+        // conta e filtra as abas (Chegaram/Não chegaram) no client sobre a
+        // lista inteira, então não dá pra simplesmente forçar page/pageSize
+        // aqui sem quebrar essa contagem — mas sem NENHUM limite, a query
+        // cresce sem fim conforme a loja acumula compras. `take` generoso
+        // como cinto de segurança: cobre qualquer volume real de uso sem
+        // mudar o formato da resposta pra quem não pagina.
         if (!filters?.page && !filters?.pageSize) {
             return this.prisma.purchase.findMany({
                 where,
                 orderBy: { createdAt: 'desc' },
                 include: this.defaultInclude(),
+                take: 2000,
             });
         }
 
@@ -464,12 +477,15 @@ export class PurchasesService {
             PurchaseStatus.DRAFT,
         ];
 
+        // WAITING_INVOICE/HAS_COUPON_ONLY/HAS_INVOICE/WAITING_PAYMENT_REGISTER
+        // são os 4 valores deprecated do enum (ver comentário no
+        // schema.prisma) — desde a correção de addFiscalDocument()/
+        // approve()/unreject(), o código não escreve mais nenhum deles,
+        // então não precisam mais entrar nessa lista. O estágio fiscal
+        // (nota/cupom) agora é assunto de Purchase.fiscalStatus, não
+        // interfere no pipeline operacional daqui.
         const RECEIVED_STATUSES: PurchaseStatus[] = [
             PurchaseStatus.RECEIVED_OK,
-            PurchaseStatus.WAITING_INVOICE,
-            PurchaseStatus.HAS_COUPON_ONLY,
-            PurchaseStatus.HAS_INVOICE,
-            PurchaseStatus.WAITING_PAYMENT_REGISTER,
             PurchaseStatus.CLOSED,
         ];
 
@@ -661,9 +677,14 @@ export class PurchasesService {
         return this.prisma.purchase.update({
             where: { id: purchaseId },
             data: {
+                // Avulsa (cartão) não passa por "aguardando recebimento" —
+                // não tem mercadoria física chegando, já foi comprada na
+                // hora. Operacionalmente já está "recebida"; o que falta é
+                // só o documento fiscal, e isso vive em fiscalStatus (ver
+                // addFiscalDocument), não aqui.
                 status:
                     updated.category === PurchaseCategory.AVULSA_CARD
-                        ? PurchaseStatus.WAITING_INVOICE
+                        ? PurchaseStatus.RECEIVED_OK
                         : PurchaseStatus.WAITING_RECEIPT,
             },
             include: this.defaultInclude(),
@@ -742,9 +763,10 @@ export class PurchasesService {
         const updated = await this.prisma.purchase.update({
             where: { id: purchaseId },
             data: {
+                // Mesmo critério do approve() acima.
                 status:
                     purchase.category === PurchaseCategory.AVULSA_CARD
-                        ? PurchaseStatus.WAITING_INVOICE
+                        ? PurchaseStatus.RECEIVED_OK
                         : PurchaseStatus.WAITING_RECEIPT,
                 approvedById: user.id,
                 approvedAt: new Date(),
@@ -896,15 +918,23 @@ export class PurchasesService {
             },
         });
 
-        const newStatus =
+        // Grava só no estágio FISCAL (fiscalStatus) — nunca mais em
+        // `status` (operacional). Antes esse método sobrescrevia
+        // Purchase.status direto com HAS_COUPON_ONLY/HAS_INVOICE, o que
+        // "perdia" o RECEIVED_OK assim que uma nota era anexada (bug:
+        // botão "Fechar compra" ficava inalcançável, já que exigia
+        // status === RECEIVED_OK e o segundo write sobrescrevia o
+        // primeiro). Ver comentário do enum PurchaseFiscalStatus no
+        // schema.prisma.
+        const newFiscalStatus =
             dto.type === FiscalDocumentType.COUPON
-                ? PurchaseStatus.HAS_COUPON_ONLY
-                : PurchaseStatus.HAS_INVOICE;
+                ? PurchaseFiscalStatus.COUPON_ONLY
+                : PurchaseFiscalStatus.INVOICE;
 
         const updatedPurchase = await this.prisma.purchase.update({
             where: { id: purchaseId },
             data: {
-                status: newStatus,
+                fiscalStatus: newFiscalStatus,
             },
         });
 
@@ -947,12 +977,27 @@ export class PurchasesService {
     async findWaitingInvoices(user?: any) {
         const allowedStoreIds = user ? this.getAllowedStoreIds(user) : undefined;
 
+        // Estágio fiscal (nota/cupom) agora vive em fiscalStatus, separado
+        // do operacional — ver comentário do enum PurchaseFiscalStatus no
+        // schema.prisma. PENDING = nada anexado ainda; COUPON_ONLY = só
+        // cupom, ainda esperando a NF de verdade. Só entra aqui quem já
+        // passou da etapa operacional (recebida/fechada) — não faz
+        // sentido cobrar nota fiscal de uma compra que ainda nem foi
+        // aprovada ou recebida.
         return this.prisma.purchase.findMany({
             where: {
-                OR: [
-                    { status: PurchaseStatus.WAITING_INVOICE },
-                    { status: PurchaseStatus.HAS_COUPON_ONLY },
-                ],
+                status: {
+                    in: [
+                        PurchaseStatus.RECEIVED_OK,
+                        PurchaseStatus.RECEIVED_WITH_DIFFERENCE,
+                    ],
+                },
+                fiscalStatus: {
+                    in: [
+                        PurchaseFiscalStatus.PENDING,
+                        PurchaseFiscalStatus.COUPON_ONLY,
+                    ],
+                },
                 storeId: allowedStoreIds
                     ? {
                         in: allowedStoreIds,
@@ -964,37 +1009,6 @@ export class PurchasesService {
             },
             include: this.defaultInclude(),
         });
-    }
-
-    async check(id: string, user?: any) {
-        if (user) {
-            if (!this.canReceivePurchase(user)) {
-                throw new ForbiddenException(
-                    'Seu perfil não tem permissão para conferir compras.',
-                );
-            }
-
-            await this.ensurePurchaseAccess(id, user);
-        }
-
-        const purchase = await this.prisma.purchase.update({
-            where: { id },
-            data: {
-                status: PurchaseStatus.RECEIVED_OK,
-                checkedById: user?.id,
-                checkedAt: new Date(),
-            },
-            include: this.defaultInclude(),
-        });
-
-        await this.createHistory(
-            id,
-            user?.id,
-            PurchaseHistoryAction.RECEIVED,
-            'Compra conferida e marcada como recebida.',
-        );
-
-        return purchase;
     }
 
     // Marcação manual "A pagar" / "Pago" (ver comentário no schema) — quem

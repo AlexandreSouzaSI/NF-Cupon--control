@@ -69,6 +69,11 @@ export class OutgoingSalesNfService {
             this.ensureStoreAccess(filters.storeId, user);
         }
 
+        // O frontend agrupa por mês e pagina por mês (não por linha), então
+        // não dá pra paginar a query como nas outras listas de NF sem
+        // reescrever essa tela — mas sem nenhum teto, uma loja com anos de
+        // histórico acabaria trazendo a tabela inteira a cada abertura da
+        // aba. 3000 notas é folga de sobra pra qualquer volume real hoje.
         return this.prisma.outgoingSalesNf.findMany({
             where: {
                 storeId:
@@ -77,6 +82,7 @@ export class OutgoingSalesNfService {
                 ignored: false,
             },
             orderBy: { issueDate: 'desc' },
+            take: 3000,
         });
     }
 

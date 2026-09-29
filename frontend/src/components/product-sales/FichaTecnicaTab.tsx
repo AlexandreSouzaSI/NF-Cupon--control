@@ -102,6 +102,7 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
             setEstoquePorNome(mapaEstoque);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar as fichas técnicas.');
         } finally {
             setLoading(false);
         }

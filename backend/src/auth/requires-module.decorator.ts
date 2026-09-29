@@ -10,5 +10,11 @@ export const REQUIRES_MODULE_KEY = 'requiresModule';
 // pra marcar um controller inteiro com um módulo e só as rotas que fogem
 // da regra (ex: PurchasesController mistura Compras e Notas Fiscais)
 // recebem seu próprio @RequiresModule por cima.
-export const RequiresModule = (module: StoreModule) =>
+//
+// Aceita um único módulo ou uma lista — nesse caso o guard libera se a
+// loja tiver QUALQUER um deles habilitado (mesmo espírito do groupModules
+// do menu no frontend, ver lib/menu.ts). Usado por telas "resumo" que
+// dependem de mais de um módulo de verdade, como o Dashboard Financeiro
+// (Contas a Pagar OU Conciliação de Caixa).
+export const RequiresModule = (module: StoreModule | StoreModule[]) =>
     SetMetadata(REQUIRES_MODULE_KEY, module);

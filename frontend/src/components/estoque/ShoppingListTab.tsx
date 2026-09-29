@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { AlertTriangle, ShoppingCart } from 'lucide-react';
+import { toast } from 'sonner';
 
 type UnidadeMedida = 'KG' | 'LITRO' | 'UNIDADE';
 
@@ -44,6 +45,7 @@ export function ShoppingListTab({ refreshKey }: { refreshKey?: number }) {
             setItens(response.data);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar a lista de compra.');
         } finally {
             setLoading(false);
         }

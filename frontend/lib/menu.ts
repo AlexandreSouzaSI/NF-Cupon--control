@@ -45,7 +45,8 @@ export type StoreModuleKey =
     | 'FREELANCERS'
     | 'PRODUTOS'
     | 'ESTOQUE'
-    | 'COTACAO';
+    | 'COTACAO'
+    | 'CONCILIACAO_CAIXA';
 
 // Nome amigável de cada módulo — espelha MODULE_LABELS no backend
 // (common/store-module-labels.ts). Usado no painel /admin/modules e nas
@@ -64,6 +65,7 @@ export const moduleLabels: Record<StoreModuleKey, string> = {
     PRODUTOS: 'Produtos',
     ESTOQUE: 'Estoque',
     COTACAO: 'Cotação',
+    CONCILIACAO_CAIXA: 'Conciliação de Caixa',
 };
 
 export const ALL_STORE_MODULES: StoreModuleKey[] = Object.keys(
@@ -122,6 +124,14 @@ export type MenuItem = {
     // "module" é estrutura do sistema (Início, Cadastros, Ajuda...) e
     // aparece sempre, independente da loja.
     module?: StoreModuleKey;
+    // "Dashboard de grupo" (Dashboard de Estoque, Dashboard de Compras,
+    // Dashboard Fiscal, Dashboard Financeiro...) — não tem checkbox
+    // próprio em Cadastros → Colaboradores. Aparece sozinho, liberado
+    // automaticamente quando a pessoa tem acesso a QUALQUER módulo listado
+    // aqui (ver isModuleEnabled). Sem isso, cada dashboard teria que ser
+    // marcado à parte mesmo já liberando pelos módulos "de verdade" do
+    // grupo.
+    groupModules?: StoreModuleKey[];
 };
 
 export type MenuGroup = {
@@ -184,6 +194,7 @@ export const menu: MenuGroup[] = [
                 ],
                 color: 'blue',
                 module: 'ESTOQUE',
+                groupModules: ['ESTOQUE', 'COTACAO', 'PRODUTOS'],
             },
             {
                 label: 'Estoque',
@@ -246,6 +257,7 @@ export const menu: MenuGroup[] = [
                 ],
                 color: 'blue',
                 module: 'COMPRAS',
+                groupModules: ['COMPRAS'],
             },
             {
                 label: 'Nova Compra',
@@ -300,6 +312,7 @@ export const menu: MenuGroup[] = [
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
                 color: 'purple',
                 module: 'NOTAS_FISCAIS',
+                groupModules: ['NOTAS_FISCAIS', 'SERVICOS', 'TRIBUTOS', 'PERDAS'],
             },
             {
                 label: 'Cupons e NF',
@@ -386,12 +399,14 @@ export const menu: MenuGroup[] = [
                 label: 'Dashboard Financeiro',
                 href: '/financial-dashboard',
                 icon: PieChart,
-                // Mesmo acesso de Contas a Pagar — é a visão geral de tudo
-                // que é financeiro (NF, perdas, pagamentos), então segue o
-                // mesmo módulo/perfis em vez de um StoreModule novo.
+                // Dashboard de grupo — visível automaticamente pra quem
+                // acessa Contas a Pagar OU Conciliação de Caixa (ver
+                // groupModules/isModuleEnabled), sem checkbox próprio em
+                // Cadastros → Colaboradores.
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
                 color: 'teal',
                 module: 'CONTAS_A_PAGAR',
+                groupModules: ['CONTAS_A_PAGAR', 'CONCILIACAO_CAIXA'],
             },
             {
                 label: 'Contas a Pagar',
@@ -407,11 +422,12 @@ export const menu: MenuGroup[] = [
                 label: 'Conciliação de Caixa',
                 href: '/conciliacao-caixa',
                 icon: Calculator,
-                // Mesmo critério das duas linhas acima — conferência
-                // financeira do dia a dia, sem StoreModule próprio.
+                // Módulo próprio (CONCILIACAO_CAIXA) — antes reaproveitava
+                // CONTAS_A_PAGAR, separado pra dar um quadradinho
+                // independente em Cadastros → Colaboradores.
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
                 color: 'teal',
-                module: 'CONTAS_A_PAGAR',
+                module: 'CONCILIACAO_CAIXA',
             },
         ],
     },
@@ -545,16 +561,27 @@ export const menu: MenuGroup[] = [
 // vazia/ausente = sem restrição extra (comportamento de sempre, só perfil +
 // loja). Quando vem preenchida, o módulo só libera se estiver nas duas
 // listas: habilitado na loja E liberado pra essa pessoa.
+// groupModules (Dashboard de Estoque, Dashboard Financeiro etc — ver
+// comentário em MenuItem): em vez de exigir UM módulo específico, libera se
+// a loja/pessoa tiver QUALQUER módulo da lista — é o "resumo" automático do
+// grupo, sem checkbox próprio em Cadastros → Colaboradores.
 export function isModuleEnabled(
-    item: Pick<MenuItem, 'module'>,
+    item: Pick<MenuItem, 'module' | 'groupModules'>,
     enabledModules?: StoreModuleKey[] | null,
     userModuleAccess?: StoreModuleKey[] | string[] | null,
 ): boolean {
-    if (!item.module) return true;
-    if (enabledModules && !enabledModules.includes(item.module)) return false;
+    const candidates = item.groupModules ?? (item.module ? [item.module] : []);
+
+    if (candidates.length === 0) return true;
+
+    const passesStore = !enabledModules
+        ? true
+        : candidates.some((module) => enabledModules.includes(module));
+
+    if (!passesStore) return false;
 
     if (userModuleAccess && userModuleAccess.length > 0) {
-        return userModuleAccess.includes(item.module);
+        return candidates.some((module) => userModuleAccess.includes(module));
     }
 
     return true;

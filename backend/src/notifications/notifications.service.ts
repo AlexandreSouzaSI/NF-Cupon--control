@@ -150,6 +150,9 @@ export class NotificationsService {
         return users;
     }
 
+    // Sem `take` aqui, um usuário antigo com milhares de notificações
+    // acumuladas (nunca limpas) traria a base inteira toda vez que abre o
+    // sino — 100 mais recentes é de sobra pra qualquer uso real da tela.
     async findAll(user: any) {
         return this.prisma.notification.findMany({
             where: {
@@ -158,6 +161,7 @@ export class NotificationsService {
             orderBy: {
                 createdAt: 'desc',
             },
+            take: 100,
         });
     }
 
@@ -170,6 +174,7 @@ export class NotificationsService {
             orderBy: {
                 createdAt: 'desc',
             },
+            take: 100,
         });
     }
 

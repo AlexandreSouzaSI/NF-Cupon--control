@@ -507,7 +507,7 @@ export function QuotationsTab() {
                                                             key={s.id}
                                                             className="px-4 py-2.5"
                                                         >
-                                                            <div className="flex items-center gap-1.5">
+                                                            <div className="flex items-center gap-1">
                                                                 <button
                                                                     type="button"
                                                                     disabled={
@@ -536,17 +536,15 @@ export function QuotationsTab() {
                                                                         preco.effectivePrice,
                                                                     )}
                                                                 </button>
-                                                                {preco.editedUnitPrice !=
-                                                                    null && (
-                                                                    <span
-                                                                        className="text-[10px] text-zinc-400 line-through"
-                                                                        title="Preço original do fornecedor"
-                                                                    >
-                                                                        {formatMoney(
-                                                                            preco.unitPrice,
-                                                                        )}
-                                                                    </span>
-                                                                )}
+                                                                {/* Lápis logo depois do botão de preço, sempre na
+                                                                    mesma posição — antes só vinha depois do texto
+                                                                    riscado (preço original), o que deslocava o
+                                                                    lápis pra um lugar diferente em toda linha já
+                                                                    editada e fazia o clique cair no vazio. Padding
+                                                                    (p-1.5, -m-1.5) aumenta a área clicável sem
+                                                                    mudar o tamanho visual do ícone — o ícone de
+                                                                    12px sozinho era pequeno demais pra acertar de
+                                                                    primeira. */}
                                                                 {podeEditar && (
                                                                     <button
                                                                         type="button"
@@ -557,11 +555,23 @@ export function QuotationsTab() {
                                                                                 preco.effectivePrice,
                                                                             )
                                                                         }
-                                                                        className="text-zinc-400 hover:text-teal-600 dark:hover:text-teal-400"
+                                                                        className="-m-1.5 shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800 dark:hover:text-teal-400"
                                                                         title="Editar preço na mão"
+                                                                        aria-label="Editar preço na mão"
                                                                     >
-                                                                        <Pencil size={12} />
+                                                                        <Pencil size={13} />
                                                                     </button>
+                                                                )}
+                                                                {preco.editedUnitPrice !=
+                                                                    null && (
+                                                                    <span
+                                                                        className="text-[10px] text-zinc-400 line-through"
+                                                                        title="Preço original do fornecedor"
+                                                                    >
+                                                                        {formatMoney(
+                                                                            preco.unitPrice,
+                                                                        )}
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                         </td>

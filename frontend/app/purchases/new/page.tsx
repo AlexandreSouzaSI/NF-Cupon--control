@@ -18,17 +18,16 @@ import { toast } from 'sonner';
 
 import { AppLayout } from '../../../src/components/app-layout';
 import { AutocompleteInput } from '../../../src/components/ui/AutocompleteInput';
+import {
+    SupplierAutocomplete,
+    findOrCreateSupplier,
+} from '../../../src/components/ui/SupplierAutocomplete';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import {
     VoicePurchaseButton,
     type VoicePurchaseDraft,
 } from '../../../src/components/purchases/VoicePurchaseButton';
-
-type Supplier = {
-    id: string;
-    name: string;
-};
 
 type Card = {
     id: string;
@@ -184,11 +183,6 @@ export default function NewPurchasePage() {
     const storeId = activeStore?.id || '';
     const [supplierId, setSupplierId] = useState('');
     const [supplierQuery, setSupplierQuery] = useState('');
-    const [supplierSuggestions, setSupplierSuggestions] = useState<
-        Supplier[]
-    >([]);
-    const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
-    const [searchingSuppliers, setSearchingSuppliers] = useState(false);
     const [resolvingSupplier, setResolvingSupplier] = useState(false);
     const [cardId, setCardId] = useState('');
 
@@ -239,33 +233,6 @@ export default function NewPurchasePage() {
         }
     }, [method]);
 
-    // Busca fornecedores enquanto digita (com debounce), pra sugerir os que
-    // já existem antes de criar um novo.
-    useEffect(() => {
-        if (!supplierQuery.trim()) {
-            setSupplierSuggestions([]);
-            return;
-        }
-
-        const timeoutId = setTimeout(async () => {
-            try {
-                setSearchingSuppliers(true);
-
-                const response = await api.get('/suppliers', {
-                    params: { search: supplierQuery.trim() },
-                });
-
-                setSupplierSuggestions(response.data || []);
-            } catch {
-                // silencioso: não trava a digitação por causa da busca
-            } finally {
-                setSearchingSuppliers(false);
-            }
-        }, 300);
-
-        return () => clearTimeout(timeoutId);
-    }, [supplierQuery]);
-
     async function loadBaseData() {
         try {
             setLoadingData(true);
@@ -280,19 +247,9 @@ export default function NewPurchasePage() {
         }
     }
 
-    function selectSupplier(supplier: Supplier) {
-        setSupplierId(supplier.id);
-        setSupplierQuery(supplier.name);
-        setSupplierSuggestions([]);
-        setSupplierDropdownOpen(false);
-    }
-
-    function handleSupplierQueryChange(value: string) {
-        setSupplierQuery(value);
-        // Editou o texto depois de já ter escolhido um fornecedor: precisa
-        // resolver de novo (pode ser outro fornecedor ou um novo).
-        setSupplierId('');
-        setSupplierDropdownOpen(true);
+    function handleSupplierChange(id: string, name: string) {
+        setSupplierId(id);
+        setSupplierQuery(name);
     }
 
     // Garante que existe um supplierId de verdade antes de enviar a compra:
@@ -310,13 +267,11 @@ export default function NewPurchasePage() {
         try {
             setResolvingSupplier(true);
 
-            const response = await api.post('/suppliers/find-or-create', {
-                name: supplierQuery.trim(),
-            });
+            const supplier = await findOrCreateSupplier(supplierQuery);
 
-            setSupplierId(response.data.id);
+            setSupplierId(supplier.id);
 
-            return response.data.id as string;
+            return supplier.id;
         } finally {
             setResolvingSupplier(false);
         }
@@ -934,74 +889,15 @@ export default function NewPurchasePage() {
                                 </select>
                             </div>
 
-                            <div className="relative">
-                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                    Fornecedor
-                                </label>
-
-                                <input
-                                    data-tour="purchase-supplier"
-                                    value={supplierQuery}
-                                    onChange={(event) =>
-                                        handleSupplierQueryChange(
-                                            event.target.value,
-                                        )
-                                    }
-                                    onFocus={() =>
-                                        setSupplierDropdownOpen(true)
-                                    }
-                                    onBlur={() =>
-                                        setTimeout(
-                                            () =>
-                                                setSupplierDropdownOpen(
-                                                    false,
-                                                ),
-                                            150,
-                                        )
-                                    }
-                                    placeholder="Digite o nome do fornecedor"
-                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                                />
-
-                                {supplierDropdownOpen &&
-                                    supplierQuery.trim() && (
-                                        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl">
-                                            {searchingSuppliers ? (
-                                                <p className="px-4 py-3 text-sm text-zinc-500">
-                                                    Buscando...
-                                                </p>
-                                            ) : supplierSuggestions.length >
-                                              0 ? (
-                                                supplierSuggestions.map(
-                                                    (supplier) => (
-                                                        <button
-                                                            type="button"
-                                                            key={supplier.id}
-                                                            onMouseDown={() =>
-                                                                selectSupplier(
-                                                                    supplier,
-                                                                )
-                                                            }
-                                                            className="block w-full px-4 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                                                        >
-                                                            {supplier.name}
-                                                        </button>
-                                                    ),
-                                                )
-                                            ) : (
-                                                <p className="px-4 py-3 text-sm text-zinc-500">
-                                                    Nenhum fornecedor
-                                                    encontrado. Ao salvar,{' '}
-                                                    <strong>
-                                                        {supplierQuery.trim()}
-                                                    </strong>{' '}
-                                                    será cadastrado
-                                                    automaticamente.
-                                                </p>
-                                            )}
-                                        </div>
-                                    )}
-                            </div>
+                            <SupplierAutocomplete
+                                dataTour="purchase-supplier"
+                                supplierId={supplierId}
+                                supplierName={supplierQuery}
+                                onChange={handleSupplierChange}
+                                label="Fornecedor"
+                                placeholder="Digite o nome do fornecedor"
+                                inputClassName="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                            />
 
                             {simplifiedMode && (
                                 <div>

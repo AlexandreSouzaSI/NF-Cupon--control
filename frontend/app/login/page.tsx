@@ -47,8 +47,10 @@ export default function LoginPage() {
       toast.success('Login realizado');
 
       router.push('/home');
-    } catch {
-      toast.error('Login inválido');
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message || 'Login inválido',
+      );
     } finally {
       setLoading(false);
     }
@@ -101,6 +103,16 @@ export default function LoginPage() {
               }
               className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none transition focus:border-blue-500"
             />
+          </div>
+
+          <div className="text-right">
+            <button
+              type="button"
+              onClick={() => router.push('/esqueci-senha')}
+              className="text-sm font-medium text-blue-500 hover:underline"
+            >
+              Esqueci minha senha
+            </button>
           </div>
 
           <button

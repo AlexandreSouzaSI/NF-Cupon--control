@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
-import { Flame, Pencil, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
+import {
+    Flame,
+    Pencil,
+    ShieldCheck,
+    UserPlus,
+    Users,
+    UserX,
+    X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import {
     canAssignRole,
@@ -11,7 +19,7 @@ import {
     canGrantModuleAccess,
     getUser,
 } from '@/lib/auth';
-import { ALL_STORE_MODULES, moduleLabels, type StoreModuleKey } from '@/lib/menu';
+import { menu, moduleLabels, type StoreModuleKey } from '@/lib/menu';
 
 type Store = {
     id: string;
@@ -33,6 +41,25 @@ type User = {
         store: Store;
     }[];
 };
+
+// Árvore de checkboxes por grupo do menu (Estoque, Compras, Fiscal,
+// Financeiro, Tarefas, Relatórios, RH...) — pra cada grupo, pega os módulos
+// "de verdade" (itens com `module` e sem `groupModules`, já que os
+// Dashboards com `groupModules` são automáticos e não têm checkbox próprio,
+// ver comentário em lib/menu.ts). Grupos sem nenhum módulo (Principal,
+// Cadastros, Ajuda, Sistema) somem da lista.
+const permissionGroups = menu
+    .map((group) => ({
+        group: group.group,
+        modules: Array.from(
+            new Set(
+                group.items
+                    .filter((item) => item.module && !item.groupModules)
+                    .map((item) => item.module as StoreModuleKey),
+            ),
+        ),
+    }))
+    .filter((group) => group.modules.length > 0);
 
 // Só pra exibir na listagem — mostra como a pessoa digitou, sem o "55" na
 // frente que o backend guarda por baixo dos panos.
@@ -104,28 +131,31 @@ const roles = [
     },
 ];
 
+const emptyForm = {
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    role: 'FUNCIONARIO',
+    active: true,
+    storeIds: [] as string[],
+    canApprovePurchases: false,
+    notifyQuotationConfirmed: false,
+    moduleAccess: [] as StoreModuleKey[],
+    canViewPayrollBills: true,
+};
+
 export function UsersTab() {
     const [users, setUsers] = useState<User[]>([]);
     const [stores, setStores] = useState<Store[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
     const [showInactive, setShowInactive] = useState(false);
     const formRef = useRef<HTMLFormElement>(null);
 
-    const [form, setForm] = useState({
-        name: '',
-        email: '',
-        phone: '',
-        password: '',
-        role: 'FUNCIONARIO',
-        active: true,
-        storeIds: [] as string[],
-        canApprovePurchases: false,
-        notifyQuotationConfirmed: false,
-        moduleAccess: [] as StoreModuleKey[],
-        canViewPayrollBills: true,
-    });
+    const [form, setForm] = useState(emptyForm);
 
     const loggedUser = getUser();
 
@@ -197,21 +227,16 @@ export function UsersTab() {
         loadData();
     }, []);
 
-    function resetForm() {
+    function openNewModal() {
         setEditingUser(null);
-        setForm({
-            name: '',
-            email: '',
-            phone: '',
-            password: '',
-            role: 'FUNCIONARIO',
-            active: true,
-            storeIds: [],
-            canApprovePurchases: false,
-            notifyQuotationConfirmed: false,
-            moduleAccess: [],
-            canViewPayrollBills: true,
-        });
+        setForm(emptyForm);
+        setModalOpen(true);
+    }
+
+    function closeModal() {
+        setModalOpen(false);
+        setEditingUser(null);
+        setForm(emptyForm);
     }
 
     function startEdit(user: User) {
@@ -231,16 +256,7 @@ export function UsersTab() {
             canViewPayrollBills: user.canViewPayrollBills ?? true,
         });
 
-        // O form fica acima da lista (ou antes dela, empilhado no
-        // celular) — sem isso, clicar em "Editar" num usuário lá embaixo
-        // da lista muda o form mas ele fica fora da tela, parecendo que
-        // nada aconteceu.
-        requestAnimationFrame(() => {
-            formRef.current?.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start',
-            });
-        });
+        setModalOpen(true);
     }
 
     function toggleStore(storeId: string) {
@@ -254,6 +270,7 @@ export function UsersTab() {
         });
     }
 
+    // Liga/desliga um módulo específico pra essa pessoa.
     function toggleModuleAccess(module: StoreModuleKey) {
         const exists = form.moduleAccess.includes(module);
 
@@ -262,6 +279,23 @@ export function UsersTab() {
             moduleAccess: exists
                 ? form.moduleAccess.filter((item) => item !== module)
                 : [...form.moduleAccess, module],
+        });
+    }
+
+    // Atalho do checkbox "mestre" de cada grupo (Estoque, Financeiro...):
+    // se já está tudo marcado, desmarca tudo do grupo; senão, marca tudo.
+    // Não existe um campo separado de "módulo do grupo habilitado" — é só
+    // um jeito rápido de marcar/desmarcar os checkboxes de verdade.
+    function toggleGroupModules(modules: StoreModuleKey[]) {
+        const allSelected = modules.every((module) =>
+            form.moduleAccess.includes(module),
+        );
+
+        setForm({
+            ...form,
+            moduleAccess: allSelected
+                ? form.moduleAccess.filter((module) => !modules.includes(module))
+                : Array.from(new Set([...form.moduleAccess, ...modules])),
         });
     }
 
@@ -278,8 +312,13 @@ export function UsersTab() {
             return;
         }
 
-        if (!editingUser && !form.password.trim()) {
-            toast.error('Informe a senha.');
+        // Senha em branco (num cadastro novo) manda pro fluxo de convite —
+        // ver comentário do DTO no backend (create-user.dto.ts). Nesse
+        // caso o telefone é obrigatório, é por onde o link é enviado.
+        if (!editingUser && !form.password.trim() && !form.phone.trim()) {
+            toast.error(
+                'Informe uma senha ou um telefone (pra mandar o convite por WhatsApp).',
+            );
             return;
         }
 
@@ -324,7 +363,7 @@ export function UsersTab() {
                 toast.success('Usuário cadastrado.');
             }
 
-            resetForm();
+            closeModal();
             await loadData();
         } catch (error: any) {
             const message =
@@ -384,310 +423,40 @@ export function UsersTab() {
     }
 
     return (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[420px_1fr]">
-            <form
-                ref={formRef}
-                onSubmit={handleSubmit}
-                className={`rounded-3xl border bg-white dark:bg-zinc-900 p-5 transition ${editingUser
-                    ? 'border-blue-400 ring-2 ring-blue-400/30'
-                    : 'border-zinc-200 dark:border-zinc-800'
-                    }`}
-            >
-                <div className="mb-5 flex items-center gap-3">
-                    <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
-                        <UserPlus size={22} />
-                    </div>
-
-                    <div>
-                        <h2 className="text-lg font-bold">
-                            {editingUser ? 'Editar usuário' : 'Novo usuário'}
-                        </h2>
-                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                            Perfil e lojas que a pessoa pode acessar
-                        </p>
-                    </div>
+        <div className="space-y-5">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <h2 className="text-lg font-bold">Colaboradores</h2>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                        Quem tem acesso ao sistema, em qual loja e com qual
+                        permissão em cada módulo
+                    </p>
                 </div>
 
-                <div className="space-y-4">
-                    <div>
-                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            Nome
-                        </label>
-                        <input
-                            data-tour="user-form-name"
-                            value={form.name}
-                            onChange={(e) =>
-                                setForm({ ...form, name: e.target.value })
-                            }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            E-mail
-                        </label>
-                        <input
-                            data-tour="user-form-email"
-                            value={form.email}
-                            onChange={(e) =>
-                                setForm({ ...form, email: e.target.value })
-                            }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            Telefone (WhatsApp)
-                        </label>
-                        <input
-                            value={form.phone}
-                            onChange={(e) =>
-                                setForm({ ...form, phone: e.target.value })
-                            }
-                            placeholder="(31) 99999-8888"
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                        />
-                        <p className="mt-1 text-xs text-zinc-500">
-                            Opcional — usado só pra mandar aviso de tarefa no
-                            WhatsApp. Login continua sendo por e-mail.
-                        </p>
-                    </div>
-
-                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
-                        <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                            <input
-                                type="checkbox"
-                                checked={form.notifyQuotationConfirmed}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        notifyQuotationConfirmed: e.target.checked,
-                                    })
-                                }
-                            />
-                            Avisar quando fornecedor confirmar pedido de cotação
-                        </label>
-                        <p className="mt-1 text-xs text-zinc-500">
-                            Manda um WhatsApp pra essa pessoa toda vez que um
-                            fornecedor aceitar um pedido de cotação. Pode marcar
-                            mais de uma pessoa. Precisa de telefone cadastrado
-                            acima pra funcionar.
-                        </p>
-                    </div>
-
-                    <div>
-                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            Senha {editingUser && '(deixe vazio para manter)'}
-                        </label>
-                        <input
-                            data-tour="user-form-password"
-                            type="password"
-                            value={form.password}
-                            onChange={(e) =>
-                                setForm({ ...form, password: e.target.value })
-                            }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            Perfil (permissões de acesso)
-                        </label>
-                        <select
-                            data-tour="user-form-role"
-                            value={form.role}
-                            onChange={(e) =>
-                                setForm({ ...form, role: e.target.value })
-                            }
-                            className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                        >
-                            {selectableRoles.map((role) => (
-                                <option key={role.value} value={role.value}>
-                                    {role.label}
-                                </option>
-                            ))}
-                        </select>
-
-                        <div className="mt-2 flex items-start gap-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 p-3 text-xs text-zinc-600 dark:text-zinc-400">
-                            <ShieldCheck
-                                size={14}
-                                className="mt-0.5 shrink-0 text-blue-500"
-                            />
-                            <span>
-                                {
-                                    roles.find(
-                                        (role) => role.value === form.role,
-                                    )?.permissions
-                                }
-                            </span>
-                        </div>
-                    </div>
-
-                    {canEditApprovalPermission && (
-                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
-                            <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                                <input
-                                    type="checkbox"
-                                    checked={form.canApprovePurchases}
-                                    onChange={(e) =>
-                                        setForm({
-                                            ...form,
-                                            canApprovePurchases: e.target.checked,
-                                        })
-                                    }
-                                />
-                                Pode aprovar compras (permissão extra)
-                            </label>
-                            <p className="mt-1 text-xs text-zinc-500">
-                                Comprador, Proprietário e Admin Master já aprovam
-                                por padrão. Marque aqui só pra liberar aprovação
-                                pra um usuário de outro perfil (ex.: Administrativo,
-                                Gerente).
-                            </p>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                            Lojas
-                        </label>
-
-                        <div
-                            data-tour="user-form-stores"
-                            className="grid grid-cols-2 gap-2"
-                        >
-                            {stores.map((store) => (
-                                <label
-                                    key={store.id}
-                                    className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={form.storeIds.includes(store.id)}
-                                        onChange={() => toggleStore(store.id)}
-                                    />
-                                    <span>{store.name}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-
-                    {canEditModuleAccess && (
-                        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
-                            <p className="mb-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                                Módulos liberados pra essa pessoa
-                            </p>
-                            <p className="mb-3 text-xs text-zinc-500">
-                                Sem nada marcado, vale o que o perfil já
-                                libera normalmente (comportamento de
-                                sempre). Marque só pra restringir essa
-                                pessoa a alguns módulos específicos, além
-                                do que o perfil e a loja já permitem.
-                            </p>
-
-                            <div className="grid grid-cols-2 gap-2">
-                                {ALL_STORE_MODULES.map((module) => (
-                                    <label
-                                        key={module}
-                                        className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-sm"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={form.moduleAccess.includes(module)}
-                                            onChange={() => toggleModuleAccess(module)}
-                                        />
-                                        <span>{moduleLabels[module]}</span>
-                                    </label>
-                                ))}
-                            </div>
-
-                            <div className="mt-3 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-                                <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.canViewPayrollBills}
-                                        onChange={(e) =>
-                                            setForm({
-                                                ...form,
-                                                canViewPayrollBills: e.target.checked,
-                                            })
-                                        }
-                                    />
-                                    Ver contas a pagar de Funcionários/Freelancer
-                                </label>
-                                <p className="mt-1 text-xs text-zinc-500">
-                                    Dentro de Contas a Pagar, contas com
-                                    categoria "Funcionários" ou "Freelancer"
-                                    só aparecem pra quem tem isso marcado —
-                                    quem não tem, nem vê a conta na lista.
-                                    Só importa pra quem já acessa Contas a
-                                    Pagar (perfil ou módulo liberado acima).
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                    <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                        <input
-                            type="checkbox"
-                            checked={form.active}
-                            onChange={(e) =>
-                                setForm({ ...form, active: e.target.checked })
-                            }
-                        />
-                        Usuário ativo
-                    </label>
-
-                    <div className="flex gap-3">
-                        <button
-                            data-tour="user-form-submit"
-                            disabled={saving}
-                            className="h-12 flex-1 rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
-                        >
-                            {saving
-                                ? 'Salvando...'
-                                : editingUser
-                                    ? 'Salvar alterações'
-                                    : 'Criar usuário'}
-                        </button>
-
-                        {editingUser && (
-                            <button
-                                type="button"
-                                onClick={resetForm}
-                                className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                            >
-                                Cancelar
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </form>
+                <button
+                    data-tour="user-form-submit"
+                    onClick={openNewModal}
+                    className="inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600"
+                >
+                    <UserPlus size={18} />
+                    Novo Colaborador
+                </button>
+            </div>
 
             <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
-                <div className="mb-5 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-lg font-bold">Usuários cadastrados</h2>
-                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                            Quem tem acesso ao sistema e em qual loja
-                        </p>
-                    </div>
+                <div className="mb-4 flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                        <input
+                            type="checkbox"
+                            checked={showInactive}
+                            onChange={(e) => setShowInactive(e.target.checked)}
+                            className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                        />
+                        Mostrar desativados
+                    </label>
 
                     <Users className="text-zinc-500" />
                 </div>
-
-                <label className="mb-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                    <input
-                        type="checkbox"
-                        checked={showInactive}
-                        onChange={(e) => setShowInactive(e.target.checked)}
-                        className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
-                    />
-                    Mostrar desativados
-                </label>
 
                 {loading ? (
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -708,7 +477,7 @@ export function UsersTab() {
                             >
                                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
                                             <p className="font-semibold">{user.name}</p>
 
                                             <span
@@ -718,6 +487,11 @@ export function UsersTab() {
                                                     }`}
                                             >
                                                 {user.active ? 'Ativo' : 'Inativo'}
+                                            </span>
+
+                                            <span className="rounded-full bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                                                {roles.find((role) => role.value === user.role)
+                                                    ?.label || user.role}
                                             </span>
 
                                             {user.canApprovePurchases && (
@@ -735,7 +509,10 @@ export function UsersTab() {
                                             {user.moduleAccess &&
                                                 user.moduleAccess.length > 0 && (
                                                     <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
-                                                        Módulos restritos
+                                                        {user.moduleAccess.length}{' '}
+                                                        {user.moduleAccess.length === 1
+                                                            ? 'módulo com acesso restrito'
+                                                            : 'módulos com acesso restrito'}
                                                     </span>
                                                 )}
 
@@ -747,9 +524,7 @@ export function UsersTab() {
                                         </div>
 
                                         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                                            {user.email} •{' '}
-                                            {roles.find((role) => role.value === user.role)
-                                                ?.label || user.role}
+                                            {user.email}
                                             {user.phone &&
                                                 ` • ${formatPhoneDisplay(user.phone)}`}
                                         </p>
@@ -804,6 +579,356 @@ export function UsersTab() {
                     </div>
                 )}
             </section>
+
+            {modalOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                    onClick={(event) => {
+                        if (event.target === event.currentTarget) closeModal();
+                    }}
+                >
+                    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl">
+                        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-2xl bg-blue-500/10 p-2.5 text-blue-400">
+                                    <UserPlus size={20} />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold">
+                                        {editingUser ? 'Editar colaborador' : 'Novo colaborador'}
+                                    </h2>
+                                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                                        Perfil, lojas e permissão por módulo
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={closeModal}
+                                className="rounded-xl p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form
+                            ref={formRef}
+                            onSubmit={handleSubmit}
+                            className="space-y-4 p-5"
+                        >
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    Nome
+                                </label>
+                                <input
+                                    data-tour="user-form-name"
+                                    value={form.name}
+                                    onChange={(e) =>
+                                        setForm({ ...form, name: e.target.value })
+                                    }
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    E-mail
+                                </label>
+                                <input
+                                    data-tour="user-form-email"
+                                    value={form.email}
+                                    onChange={(e) =>
+                                        setForm({ ...form, email: e.target.value })
+                                    }
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    Telefone (WhatsApp)
+                                </label>
+                                <input
+                                    value={form.phone}
+                                    onChange={(e) =>
+                                        setForm({ ...form, phone: e.target.value })
+                                    }
+                                    placeholder="(31) 99999-8888"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                />
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    Usado pra mandar aviso de tarefa no WhatsApp e
+                                    também serve de login (telefone + senha), além
+                                    do e-mail. Obrigatório se você deixar a senha em
+                                    branco abaixo — é por onde o convite de ativação
+                                    é enviado.
+                                </p>
+                            </div>
+
+                            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
+                                <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.notifyQuotationConfirmed}
+                                        onChange={(e) =>
+                                            setForm({
+                                                ...form,
+                                                notifyQuotationConfirmed: e.target.checked,
+                                            })
+                                        }
+                                    />
+                                    Avisar quando fornecedor confirmar pedido de cotação
+                                </label>
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    Manda um WhatsApp pra essa pessoa toda vez que um
+                                    fornecedor aceitar um pedido de cotação. Pode marcar
+                                    mais de uma pessoa. Precisa de telefone cadastrado
+                                    acima pra funcionar.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    Senha{' '}
+                                    {editingUser
+                                        ? '(deixe vazio para manter)'
+                                        : '(opcional)'}
+                                </label>
+                                <input
+                                    data-tour="user-form-password"
+                                    type="password"
+                                    value={form.password}
+                                    onChange={(e) =>
+                                        setForm({ ...form, password: e.target.value })
+                                    }
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                />
+                                {!editingUser && (
+                                    <p className="mt-1 text-xs text-zinc-500">
+                                        Deixe em branco pra mandar um convite por
+                                        WhatsApp — a pessoa cria a própria senha ao
+                                        clicar no link. Preencha aqui só se quiser
+                                        definir a senha você mesmo agora.
+                                    </p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    Perfil (permissões de acesso)
+                                </label>
+                                <select
+                                    data-tour="user-form-role"
+                                    value={form.role}
+                                    onChange={(e) =>
+                                        setForm({ ...form, role: e.target.value })
+                                    }
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                >
+                                    {selectableRoles.map((role) => (
+                                        <option key={role.value} value={role.value}>
+                                            {role.label}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <div className="mt-2 flex items-start gap-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 p-3 text-xs text-zinc-600 dark:text-zinc-400">
+                                    <ShieldCheck
+                                        size={14}
+                                        className="mt-0.5 shrink-0 text-blue-500"
+                                    />
+                                    <span>
+                                        {
+                                            roles.find(
+                                                (role) => role.value === form.role,
+                                            )?.permissions
+                                        }
+                                    </span>
+                                </div>
+                            </div>
+
+                            {canEditApprovalPermission && (
+                                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
+                                    <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.canApprovePurchases}
+                                            onChange={(e) =>
+                                                setForm({
+                                                    ...form,
+                                                    canApprovePurchases: e.target.checked,
+                                                })
+                                            }
+                                        />
+                                        Pode aprovar compras (permissão extra)
+                                    </label>
+                                    <p className="mt-1 text-xs text-zinc-500">
+                                        Comprador, Proprietário e Admin Master já aprovam
+                                        por padrão. Marque aqui só pra liberar aprovação
+                                        pra um usuário de outro perfil (ex.: Administrativo,
+                                        Gerente).
+                                    </p>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    Lojas
+                                </label>
+
+                                <div
+                                    data-tour="user-form-stores"
+                                    className="grid grid-cols-2 gap-2"
+                                >
+                                    {stores.map((store) => (
+                                        <label
+                                            key={store.id}
+                                            className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={form.storeIds.includes(store.id)}
+                                                onChange={() => toggleStore(store.id)}
+                                            />
+                                            <span>{store.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {canEditModuleAccess && (
+                                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3">
+                                    <p className="mb-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                        Permissão por módulo
+                                    </p>
+                                    <p className="mb-3 text-xs text-zinc-500">
+                                        Sem nada marcado, vale o que o perfil já
+                                        libera normalmente (comportamento de
+                                        sempre). Marque as telas que essa
+                                        pessoa pode acessar dentro de cada
+                                        grupo — o quadrado do grupo é só um
+                                        atalho pra marcar/desmarcar tudo de
+                                        uma vez. Telas de "Dashboard" não têm
+                                        quadrado próprio: elas aparecem
+                                        sozinhas quando a pessoa já tem acesso
+                                        a algum item do grupo.
+                                    </p>
+
+                                    <div className="space-y-3">
+                                        {permissionGroups.map(({ group, modules }) => {
+                                            const allSelected = modules.every((module) =>
+                                                form.moduleAccess.includes(module),
+                                            );
+                                            const someSelected = modules.some((module) =>
+                                                form.moduleAccess.includes(module),
+                                            );
+
+                                            return (
+                                                <div
+                                                    key={group}
+                                                    className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3"
+                                                >
+                                                    <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={allSelected}
+                                                            ref={(el) => {
+                                                                if (el) {
+                                                                    el.indeterminate =
+                                                                        someSelected && !allSelected;
+                                                                }
+                                                            }}
+                                                            onChange={() => toggleGroupModules(modules)}
+                                                        />
+                                                        <span>{group}</span>
+                                                    </label>
+
+                                                    <div className="mt-2 ml-6 space-y-1.5">
+                                                        {modules.map((module) => (
+                                                            <label
+                                                                key={module}
+                                                                className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={form.moduleAccess.includes(
+                                                                        module,
+                                                                    )}
+                                                                    onChange={() =>
+                                                                        toggleModuleAccess(module)
+                                                                    }
+                                                                />
+                                                                <span>{moduleLabels[module]}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="mt-3 border-t border-zinc-200 dark:border-zinc-800 pt-3">
+                                        <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.canViewPayrollBills}
+                                                onChange={(e) =>
+                                                    setForm({
+                                                        ...form,
+                                                        canViewPayrollBills: e.target.checked,
+                                                    })
+                                                }
+                                            />
+                                            Ver contas a pagar de Funcionários/Freelancer
+                                        </label>
+                                        <p className="mt-1 text-xs text-zinc-500">
+                                            Dentro de Contas a Pagar, contas com
+                                            categoria "Funcionários" ou "Freelancer"
+                                            só aparecem pra quem tem isso marcado —
+                                            quem não tem, nem vê a conta na lista.
+                                            Só importa pra quem já acessa Contas a
+                                            Pagar (perfil ou módulo liberado acima).
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                <input
+                                    type="checkbox"
+                                    checked={form.active}
+                                    onChange={(e) =>
+                                        setForm({ ...form, active: e.target.checked })
+                                    }
+                                />
+                                Usuário ativo
+                            </label>
+
+                            <div className="flex gap-3 pb-1">
+                                <button
+                                    disabled={saving}
+                                    className="h-12 flex-1 rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
+                                >
+                                    {saving
+                                        ? 'Salvando...'
+                                        : editingUser
+                                            ? 'Salvar alterações'
+                                            : 'Criar usuário'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={closeModal}
+                                    className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

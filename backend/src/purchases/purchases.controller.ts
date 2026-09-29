@@ -453,14 +453,6 @@ export class PurchasesController {
         return this.purchasesService.remove(id, user);
     }
 
-    @Post(':id/check')
-    async check(
-        @Param('id') id: string,
-        @CurrentUser() user: any,
-    ) {
-        return this.purchasesService.check(id, user);
-    }
-
     @Post(':id/close')
     async close(
         @Param('id') id: string,

@@ -10,6 +10,7 @@ import {
     TrendingDown,
     TrendingUp,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { ColumnChart } from './charts/ColumnChart';
 import { DonutChart } from './charts/DonutChart';
@@ -89,6 +90,7 @@ export function DashboardTab({
             setSummary(response.data);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar o dashboard de produtos.');
         } finally {
             setLoading(false);
         }

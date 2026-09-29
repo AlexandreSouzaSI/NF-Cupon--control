@@ -151,6 +151,7 @@ export function ItemsTab({ refreshKey }: { refreshKey?: number }) {
             setCategoriasFixas(categoriasFixasRes.data);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar os itens de estoque.');
         } finally {
             setLoading(false);
         }

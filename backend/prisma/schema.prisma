@@ -20,6 +20,19 @@ enum UserRole {
   FUNCIONARIO
 }
 
+// ATENÇÃO — migração em andamento (separação do estágio fiscal):
+// WAITING_INVOICE, HAS_COUPON_ONLY, HAS_INVOICE e WAITING_PAYMENT_REGISTER
+// estão DESCONTINUADOS. O código novo não escreve mais nenhum deles — o
+// estágio fiscal (nota/cupom) agora vive em Purchase.fiscalStatus (enum
+// PurchaseFiscalStatus, abaixo). Eles continuam existindo aqui só porque o
+// banco ainda tem linhas antigas gravadas com esses valores; o script
+// backend/scripts/backfill-purchase-fiscal-status.ts migra essas linhas
+// pra fiscalStatus + recalcula o status operacional correto. Só depois
+// que ele rodar (e confirmarmos que não sobrou nenhuma linha com esses 4
+// valores) é que dá pra removê-los do enum de verdade numa migração futura
+// — remover agora, com linhas ainda usando esses valores, quebra a
+// migração (Postgres não deixa trocar o tipo de uma coluna pra um enum
+// que não cobre o valor que já está gravado).
 enum PurchaseStatus {
   DRAFT
   WAITING_APPROVAL
@@ -28,12 +41,30 @@ enum PurchaseStatus {
   WAITING_RECEIPT
   RECEIVED_OK
   RECEIVED_WITH_DIFFERENCE
+  /// @deprecated use fiscalStatus — mantido só pra linhas antigas ainda não migradas
   WAITING_INVOICE
+  /// @deprecated use fiscalStatus — mantido só pra linhas antigas ainda não migradas
   HAS_COUPON_ONLY
+  /// @deprecated use fiscalStatus — mantido só pra linhas antigas ainda não migradas
   HAS_INVOICE
+  /// @deprecated nunca foi escrito pelo código — mantido só por segurança
   WAITING_PAYMENT_REGISTER
   CLOSED
   CANCELED
+}
+
+// Estágio fiscal (nota/cupom) da compra — separado de PurchaseStatus
+// (estágio operacional) porque os dois são independentes: uma compra pode
+// estar RECEIVED_OK (operacional) e ainda não ter nota (fiscal = PENDING)
+// ao mesmo tempo. Antes disso, addFiscalDocument() sobrescrevia
+// Purchase.status direto, o que "perdia" o RECEIVED_OK assim que uma nota
+// era anexada (bug: botão "Fechar compra" ficava inalcançável depois de
+// anexar NF, porque exigia status RECEIVED_OK e hasInvoice juntos, e o
+// segundo sobrescrevia o primeiro).
+enum PurchaseFiscalStatus {
+  PENDING
+  COUPON_ONLY
+  INVOICE
 }
 
 enum PurchaseCategory {
@@ -523,6 +554,12 @@ enum StoreModule {
   PRODUTOS
   ESTOQUE
   COTACAO
+  // Antes dividia o mesmo controle de CONTAS_A_PAGAR (Contas a Pagar e
+  // Conciliação de Caixa liberavam juntas) — separado pra dar um
+  // quadradinho próprio pra Conciliação de Caixa em Cadastros →
+  // Colaboradores. Ver comentário do grupo "Financeiro" em
+  // frontend/lib/menu.ts.
+  CONCILIACAO_CAIXA
 }
 
 model UserStore {
@@ -851,13 +888,19 @@ model Card {
 }
 
 model Purchase {
-  id          String           @id @default(uuid())
+  id          String         @id @default(uuid())
   description String
-  value       Decimal          @db.Decimal(10, 2)
-  status      PurchaseStatus   @default(WAITING_RECEIPT)
-  category    PurchaseCategory @default(SUPPLIER_ORDER)
-  origin      PurchaseOrigin   @default(NORMAL)
-  method      PaymentMethod
+  value       Decimal        @db.Decimal(10, 2)
+  status      PurchaseStatus @default(WAITING_RECEIPT)
+
+  // Estágio fiscal (nota/cupom), separado do operacional acima — ver
+  // comentário no enum PurchaseFiscalStatus. Linhas criadas antes dessa
+  // migração começam todas em PENDING até o script de backfill rodar.
+  fiscalStatus PurchaseFiscalStatus @default(PENDING)
+
+  category PurchaseCategory @default(SUPPLIER_ORDER)
+  origin   PurchaseOrigin   @default(NORMAL)
+  method   PaymentMethod
 
   // "A pagar" (padrão) ou "Pago" — ver comentário no enum. Quem mexe em
   // Conciliar NF/Conta a Pagar (canManagePurchaseBilling) marca como Pago
@@ -950,6 +993,7 @@ model Purchase {
   @@index([storeId])
   @@index([supplierId])
   @@index([status])
+  @@index([fiscalStatus])
   @@index([category])
   @@index([origin])
   @@index([method])

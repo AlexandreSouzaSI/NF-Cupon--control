@@ -92,6 +92,10 @@ type Purchase = {
     // passar pelo módulo financeiro (ex: pago na hora com dinheiro do
     // caixa). Não confundir com `method` (como foi/será pago).
     paymentStatus?: 'TO_PAY' | 'PAID';
+    // Estágio FISCAL (nota/cupom) — independente do `status` operacional
+    // acima (ver comentário do enum PurchaseFiscalStatus no
+    // schema.prisma). PENDING = nada anexado ainda.
+    fiscalStatus?: 'PENDING' | 'COUPON_ONLY' | 'INVOICE';
 };
 
 // Uma compra "resolvida" no financeiro tem NF anexada (documento fiscal do
@@ -129,6 +133,11 @@ function needsBillAlert(purchase: Purchase) {
 // gente olha o recebimento real (receipts) e não só o status atual.
 type FlowStage = 'ARRIVING' | 'OK' | 'DIFFERENCE' | 'OTHER';
 
+// WAITING_INVOICE/HAS_COUPON_ONLY/HAS_INVOICE/WAITING_PAYMENT_REGISTER são
+// os 4 valores deprecated do enum (ver comentário no schema.prisma) — o
+// backend não escreve mais nenhum deles em `status`, o estágio fiscal
+// agora é `fiscalStatus`. Mantidos aqui só pra não quebrar alguma linha
+// antiga que ainda tenha um desses valores gravado.
 const RECEIVED_STATUSES = [
     'RECEIVED_OK',
     'WAITING_INVOICE',
@@ -204,6 +213,11 @@ const acceptTabs: {
     },
 ];
 
+// Estágio OPERACIONAL (Purchase.status). Os 4 valores marcados "(legado)"
+// não são mais escritos pelo backend (o estágio fiscal de verdade agora
+// é fiscalStatus, ver fiscalStatusLabel acima) — ficam aqui só pra não
+// quebrar a exibição de alguma linha antiga que ainda tenha um desses
+// valores gravados.
 const statusLabel: Record<string, string> = {
     DRAFT: 'Rascunho',
     WAITING_APPROVAL: 'Aguardando aprovação',
@@ -212,10 +226,10 @@ const statusLabel: Record<string, string> = {
     WAITING_RECEIPT: 'Aguardando recebimento',
     RECEIVED_OK: 'Recebida OK',
     RECEIVED_WITH_DIFFERENCE: 'Recebida com diferença',
-    WAITING_INVOICE: 'Aguardando NF',
-    HAS_COUPON_ONLY: 'Apenas com cupom',
-    HAS_INVOICE: 'Com NF',
-    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar',
+    WAITING_INVOICE: 'Aguardando NF (legado)',
+    HAS_COUPON_ONLY: 'Apenas com cupom (legado)',
+    HAS_INVOICE: 'Com NF (legado)',
+    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar (legado)',
     CLOSED: 'Fechada',
     CANCELED: 'Cancelada',
 };
@@ -234,6 +248,20 @@ const statusColor: Record<string, string> = {
     WAITING_PAYMENT_REGISTER: 'bg-cyan-500/10 text-cyan-400',
     CLOSED: 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200',
     CANCELED: 'bg-red-500/10 text-red-400',
+};
+
+// Estágio FISCAL (nota/cupom) — independente do status operacional acima
+// (Purchase.fiscalStatus, ver comentário do enum no schema.prisma).
+const fiscalStatusLabel: Record<string, string> = {
+    PENDING: 'Sem NF',
+    COUPON_ONLY: 'Apenas com cupom',
+    INVOICE: 'Com NF',
+};
+
+const fiscalStatusColor: Record<string, string> = {
+    PENDING: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400',
+    COUPON_ONLY: 'bg-yellow-500/10 text-yellow-400',
+    INVOICE: 'bg-purple-500/10 text-purple-400',
 };
 
 const categoryLabel: Record<string, string> = {
@@ -691,6 +719,15 @@ function PurchasesPageInner() {
                                                         NF vinculada
                                                     </span>
                                                 )}
+
+                                                {!hasInvoiceDoc(purchase) &&
+                                                    purchase.fiscalStatus === 'COUPON_ONLY' && (
+                                                        <span
+                                                            className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${fiscalStatusColor.COUPON_ONLY}`}
+                                                        >
+                                                            {fiscalStatusLabel.COUPON_ONLY}
+                                                        </span>
+                                                    )}
 
                                                 {hasBill(purchase) && (
                                                     <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-400">

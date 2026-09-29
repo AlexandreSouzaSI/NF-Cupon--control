@@ -120,6 +120,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
             );
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar os itens de produção.');
         } finally {
             setLoading(false);
         }
@@ -301,6 +302,7 @@ export function ProductionTab({ refreshKey }: { refreshKey?: number }) {
             setHistorico(response.data?.items || []);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar o histórico de produção.');
         } finally {
             setCarregandoHistorico(false);
         }

@@ -24,15 +24,16 @@ import { ModuleAccessGuard } from '../auth/module-access.guard';
 import { CashReconciliationService } from './cash-reconciliation.service';
 import { UpsertCashReconciliationDto } from './dto/upsert-cash-reconciliation.dto';
 
-// Reaproveita o módulo CONTAS_A_PAGAR (mesmo critério do Dashboard
-// Financeiro em menu.ts) — é conferência financeira do dia a dia, não
-// justifica um StoreModule próprio. Gerente fica de fora de propósito,
-// mesmo critério já usado em Contas a Pagar/Tributos (acesso financeiro
+// Módulo próprio CONCILIACAO_CAIXA — antes reaproveitava CONTAS_A_PAGAR,
+// separado pra dar um quadradinho independente em Cadastros →
+// Colaboradores (ver comentário do grupo "Financeiro" em
+// frontend/lib/menu.ts). Gerente fica de fora de propósito, mesmo
+// critério já usado em Contas a Pagar/Tributos (acesso financeiro
 // restrito ao time administrativo).
 @Controller('cash-reconciliation')
 @UseGuards(JwtAuthGuard, RolesGuard, ModuleAccessGuard)
 @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.FINANCEIRO)
-@RequiresModule(StoreModule.CONTAS_A_PAGAR)
+@RequiresModule(StoreModule.CONCILIACAO_CAIXA)
 export class CashReconciliationController {
     constructor(
         private cashReconciliationService: CashReconciliationService,

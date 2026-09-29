@@ -167,6 +167,10 @@ type PurchaseDetail = {
         name: string;
     } | null;
 
+    // Estágio fiscal (nota/cupom), independente do status operacional
+    // acima (ver comentário do enum PurchaseFiscalStatus no schema.prisma).
+    fiscalStatus?: 'PENDING' | 'COUPON_ONLY' | 'INVOICE';
+
     items: PurchaseItem[];
     receipts: PurchaseReceipt[];
     approvals: PurchaseApproval[];
@@ -182,6 +186,10 @@ type ReceiptItemForm = {
     notes: string;
 };
 
+// Estágio OPERACIONAL (Purchase.status). Os 4 valores marcados "(legado)"
+// não são mais escritos pelo backend — o estágio fiscal de verdade agora
+// é purchaseFiscalStatusLabel, abaixo. Ficam aqui só pra não quebrar a
+// exibição de alguma linha antiga que ainda tenha um desses valores.
 const purchaseStatusLabel: Record<string, string> = {
     DRAFT: 'Rascunho',
     WAITING_APPROVAL: 'Aguardando aprovação',
@@ -190,12 +198,27 @@ const purchaseStatusLabel: Record<string, string> = {
     WAITING_RECEIPT: 'Aguardando recebimento',
     RECEIVED_OK: 'Recebida corretamente',
     RECEIVED_WITH_DIFFERENCE: 'Recebida com divergência',
-    WAITING_INVOICE: 'Aguardando nota fiscal',
-    HAS_COUPON_ONLY: 'Apenas com cupom',
-    HAS_INVOICE: 'Nota fiscal anexada',
-    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar',
+    WAITING_INVOICE: 'Aguardando nota fiscal (legado)',
+    HAS_COUPON_ONLY: 'Apenas com cupom (legado)',
+    HAS_INVOICE: 'Nota fiscal anexada (legado)',
+    WAITING_PAYMENT_REGISTER: 'Aguardando conta a pagar (legado)',
     CLOSED: 'Fechada',
     CANCELED: 'Cancelada',
+};
+
+// Estágio FISCAL (Purchase.fiscalStatus) — nota/cupom, independente do
+// status operacional acima.
+const purchaseFiscalStatusLabel: Record<string, string> = {
+    PENDING: 'Sem documento fiscal',
+    COUPON_ONLY: 'Apenas com cupom',
+    INVOICE: 'Com nota fiscal',
+};
+
+const purchaseFiscalStatusColor: Record<string, string> = {
+    PENDING:
+        'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
+    COUPON_ONLY: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400',
+    INVOICE: 'border-purple-500/30 bg-purple-500/10 text-purple-400',
 };
 
 const purchaseStatusColor: Record<string, string> = {
@@ -714,6 +737,21 @@ function PurchaseDetailPageInner() {
                                 purchase.status
                             ] || purchase.status}
                         </span>
+
+                        {purchase.fiscalStatus &&
+                            purchase.fiscalStatus !== 'PENDING' && (
+                                <span
+                                    className={`rounded-full border px-4 py-2 text-sm font-medium ${purchaseFiscalStatusColor[
+                                        purchase.fiscalStatus
+                                    ] ||
+                                        'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                                        }`}
+                                >
+                                    {purchaseFiscalStatusLabel[
+                                        purchase.fiscalStatus
+                                    ] || purchase.fiscalStatus}
+                                </span>
+                            )}
 
                         <strong className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-xl text-blue-400">
                             {formatCurrency(purchase.value)}

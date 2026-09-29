@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { ArrowLeft, ChefHat, Package, Search, TrendingUp } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { RecipeModal } from './RecipeModal';
 
@@ -86,6 +87,7 @@ export function ProductsTab({
             setProdutosLocal(response.data?.produtos ?? []);
         } catch (error) {
             console.error(error);
+            toast.error('Erro ao carregar os produtos.');
         } finally {
             setLoading(false);
         }

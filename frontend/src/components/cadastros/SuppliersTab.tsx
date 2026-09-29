@@ -34,6 +34,7 @@ export function SuppliersTab() {
     const [stores, setStores] = useState<Store[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
+    const [createModalOpen, setCreateModalOpen] = useState(false);
 
     const [name, setName] = useState('');
     const [cnpj, setCnpj] = useState('');
@@ -122,6 +123,7 @@ export function SuppliersTab() {
             setName('');
             setCnpj('');
             setPhone('');
+            setCreateModalOpen(false);
 
             await loadSuppliers();
         } catch (error: any) {
@@ -314,88 +316,38 @@ export function SuppliersTab() {
 
     return (
         <div className="space-y-5">
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[420px_1fr]">
-                <form
-                    onSubmit={handleCreateSupplier}
-                    className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5"
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <h2 className="text-lg font-bold">Fornecedores</h2>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                        Empresas e locais de compra usados nas compras e NFs
+                    </p>
+                </div>
+
+                <button
+                    onClick={() => setCreateModalOpen(true)}
+                    className="inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-xl bg-blue-500 px-4 text-sm font-semibold text-white hover:bg-blue-600"
                 >
-                    <div className="mb-5 flex items-center gap-3">
-                        <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-400">
-                            <Plus size={22} />
-                        </div>
+                    <Plus size={18} />
+                    Novo Fornecedor
+                </button>
+            </div>
 
-                        <div>
-                            <h2 className="text-lg font-bold">Novo fornecedor</h2>
-                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                Cadastre empresas e locais de compra
-                            </p>
-                        </div>
+            <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                <div className="mb-5 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-lg font-bold">
+                            Fornecedores cadastrados
+                        </h2>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                            Locais usados nas compras e NFs
+                        </p>
                     </div>
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                Nome
-                            </label>
-                            <input
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="Ex: Distribuidora Souza"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                            />
-                        </div>
+                    <Truck className="text-zinc-500" />
+                </div>
 
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                CNPJ
-                            </label>
-                            <input
-                                value={cnpj}
-                                onChange={(e) => setCnpj(e.target.value)}
-                                placeholder="00.000.000/0001-00"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
-                                Telefone (WhatsApp)
-                            </label>
-                            <input
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                                placeholder="(31) 99999-9999"
-                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
-                            />
-                            <p className="mt-1 text-xs text-zinc-500">
-                                Usado pra mandar o link de Cotação.
-                            </p>
-                        </div>
-
-                        <button
-                            disabled={creating}
-                            className="h-12 w-full rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
-                        >
-                            {creating ? 'Salvando...' : 'Cadastrar fornecedor'}
-                        </button>
-                    </div>
-                </form>
-
-                <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
-                    <div className="mb-5 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-lg font-bold">
-                                Fornecedores cadastrados
-                            </h2>
-                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                                Locais usados nas compras e NFs
-                            </p>
-                        </div>
-
-                        <Truck className="text-zinc-500" />
-                    </div>
-
-                    {loading ? (
+                {loading ? (
                         <p className="text-sm text-zinc-600 dark:text-zinc-400">Carregando...</p>
                     ) : suppliers.length === 0 ? (
                         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -628,7 +580,6 @@ export function SuppliersTab() {
                         </div>
                     )}
                 </section>
-            </div>
 
             <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
                 <div className="mb-4 flex items-center gap-3">
@@ -695,6 +646,104 @@ export function SuppliersTab() {
                     </div>
                 )}
             </section>
+
+            {createModalOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                    onClick={(event) => {
+                        if (event.target === event.currentTarget) {
+                            setCreateModalOpen(false);
+                        }
+                    }}
+                >
+                    <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl">
+                        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-2xl bg-blue-500/10 p-2.5 text-blue-400">
+                                    <Plus size={20} />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold">
+                                        Novo fornecedor
+                                    </h2>
+                                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                                        Cadastre empresas e locais de compra
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setCreateModalOpen(false)}
+                                className="rounded-xl p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form
+                            onSubmit={handleCreateSupplier}
+                            className="space-y-4 p-5"
+                        >
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    Nome
+                                </label>
+                                <input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="Ex: Distribuidora Souza"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    CNPJ
+                                </label>
+                                <input
+                                    value={cnpj}
+                                    onChange={(e) => setCnpj(e.target.value)}
+                                    placeholder="00.000.000/0001-00"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                    Telefone (WhatsApp)
+                                </label>
+                                <input
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    placeholder="(31) 99999-9999"
+                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                />
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    Usado pra mandar o link de Cotação.
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3 pb-1">
+                                <button
+                                    disabled={creating}
+                                    className="h-12 flex-1 rounded-xl bg-blue-500 font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
+                                >
+                                    {creating ? 'Salvando...' : 'Cadastrar fornecedor'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setCreateModalOpen(false)}
+                                    className="h-12 rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

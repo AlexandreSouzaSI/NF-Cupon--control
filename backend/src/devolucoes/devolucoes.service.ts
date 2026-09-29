@@ -565,11 +565,17 @@ export class DevolucoesService {
             this.ensureStoreAccess(storeId, user);
         }
 
+        // `itens` precisa vir completo mesmo na listagem — o card de cada
+        // devolução soma quantidade/valor na hora (ver DevolucaoTab.tsx),
+        // não dá pra trocar por _count sem perder esse total. Mas sem teto
+        // nenhum, essa lista cresceria pra sempre junto com o histórico —
+        // 500 é folga de sobra pro volume real de devoluções.
         return this.prisma.devolucaoNfe.findMany({
             where: {
                 storeId: storeId || (allowedStoreIds ? { in: allowedStoreIds } : undefined),
             },
             orderBy: { createdAt: 'desc' },
+            take: 500,
             include: {
                 store: { select: { id: true, name: true } },
                 createdBy: { select: { id: true, name: true } },
