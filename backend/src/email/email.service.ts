@@ -1,8 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
-import { PASSWORD_RESET_REQUESTED_EMAIL_EVENT } from '../common/events';
-import type { PasswordResetRequestedEmailEvent } from '../common/events';
+import {
+    PASSWORD_RESET_REQUESTED_EMAIL_EVENT,
+    ACCOUNT_ACTIVATION_INVITE_EMAIL_EVENT,
+} from '../common/events';
+import type {
+    PasswordResetRequestedEmailEvent,
+    AccountActivationInviteEmailEvent,
+} from '../common/events';
 import { EMAIL_PROVIDER } from './email-provider.interface';
 import type { EmailProvider } from './email-provider.interface';
 
@@ -38,6 +44,37 @@ export class EmailService {
         } catch (error: any) {
             this.logger.warn(
                 `Falha ao enviar e-mail de redefinição de senha pra ${payload.email}: ${error?.message || error}`,
+            );
+        }
+    }
+
+    // Conta: convite de boas-vindas (criar a primeira senha) por e-mail —
+    // manda sempre que um usuário é criado sem senha, além do WhatsApp
+    // (quando tem telefone), pra garantir que o convite chegue em algum
+    // canal mesmo sem Evolution API configurada. Ver
+    // src/users/users.service.ts#create.
+    @OnEvent(ACCOUNT_ACTIVATION_INVITE_EMAIL_EVENT)
+    async handleAccountActivationInviteEmail(
+        payload: AccountActivationInviteEmailEvent,
+    ) {
+        const text = [
+            `${payload.name}, sua conta no Galho Hub foi criada.`,
+            '',
+            `Crie sua senha por aqui (link válido por 7 dias):`,
+            payload.link,
+            '',
+            'Se você não esperava esse e-mail, pode ignorá-lo.',
+        ].join('\n');
+
+        try {
+            await this.provider.sendEmail({
+                to: payload.email,
+                subject: 'Crie sua senha — Galho Hub',
+                text,
+            });
+        } catch (error: any) {
+            this.logger.warn(
+                `Falha ao enviar e-mail de convite de ativação pra ${payload.email}: ${error?.message || error}`,
             );
         }
     }

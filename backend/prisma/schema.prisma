@@ -368,6 +368,17 @@ model User {
   // realmente receber (sem telefone, fica marcado mas não manda nada).
   notifyQuotationConfirmed Boolean @default(false)
 
+  // Multi-tenant (venda pra outras empresas): qual empresa esse usuário
+  // pertence. Fica opcional DE PROPÓSITO, pra sempre (não é um "nasce nulo,
+  // depois preenche" como Store.empresaId abaixo) — toda conta comum tem
+  // isso preenchido (rodou o backfill, ver
+  // prisma/scripts/backfill-empresa-nugalho.ts), mas Admin Master
+  // (isAdminMaster=true) continua com empresaId nulo indefinidamente: ele
+  // não é "de" nenhuma empresa específica, gerencia todas pelo painel
+  // /admin. Por isso esse campo não pode virar NOT NULL como Store.empresaId.
+  empresaId String?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
+
   userStores UserStore[]
 
   purchasesCreated            Purchase[] @relation("PurchaseCreatedBy")
@@ -382,7 +393,9 @@ model User {
   purchaseHistories           PurchaseHistory[]
   fiscalDocuments             FiscalDocument[]
   billsLaunched               Bill[]               @relation("BillLaunchedBy")
+  billRecorrenciasCreated     BillRecorrencia[]    @relation("BillRecorrenciaCreatedBy")
   cashReconciliationsLaunched CashReconciliation[] @relation("CashReconciliationLaunchedBy")
+  meepCashExtrasUpdated       MeepCashExtra[]      @relation("MeepCashExtraUpdatedBy")
   notifications               Notification[]
   servicesCreated             Service[]            @relation("ServiceCreatedBy")
   certificatesUploaded        StoreCertificate[]   @relation("StoreCertificateUploadedBy")
@@ -393,9 +406,8 @@ model User {
   deletionRequestsCreated  DeletionRequest[] @relation("DeletionRequestedBy")
   deletionRequestsReviewed DeletionRequest[] @relation("DeletionReviewedBy")
 
-  bankStatementImports       BankStatementImport[]
   paymentBatchConfigsUpdated PaymentBatchConfig[]
-  quotationsCreated          Quotation[]           @relation("QuotationCreatedBy")
+  quotationsCreated          Quotation[]          @relation("QuotationCreatedBy")
 
   taxRegimeConfigsCreated  TaxRegimeConfig[] @relation("TaxRegimeConfigCreatedBy")
   revenueEntriesCreated    RevenueEntry[]    @relation("RevenueEntryCreatedBy")
@@ -440,6 +452,51 @@ model PushSubscription {
   @@index([userId])
 }
 
+// Multi-tenant: cada Empresa é um cliente diferente do sistema (ex.: hoje só
+// existe a "Nugalho", mas o sistema pode ser vendido pra outro dono com o
+// próprio conjunto de lojas, fornecedores e usuários). Adicionado depois de
+// o sistema já rodar com dados reais, então:
+// - Store.empresaId e User.empresaId nasceram opcionais (migração 1, sem
+//   quebrar nada) — prisma/scripts/backfill-empresa-nugalho.ts preencheu
+//   todo mundo com a empresa "Nugalho" (a única que existia até então).
+// - Confirmado que o backfill rodou certo, a migração 2 tornou
+//   Store.empresaId obrigatório (toda loja tem que ter uma empresa dona).
+//   User.empresaId continua opcional de propósito — ver comentário no
+//   campo, no model User (é o Admin Master que fica sem empresa).
+// - Isolamento de dado entre empresas hoje só está garantido pra Lojas e
+//   Usuários (única e exclusivamente o que essa fase resolve) — cadastros
+//   compartilhados como Fornecedor/Categoria de Fornecedor ainda são
+//   globais (mesma lista pra todo mundo) até uma fase seguinte cuidar
+//   deles. Ver docs/KNOWN_ISSUES.md.
+model Empresa {
+  id        String   @id @default(uuid())
+  name      String
+  cnpj      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Observação livre do Admin Master sobre essa empresa-cliente (situação
+  // de pagamento, combinado comercial, etc.) — não aparece pra ninguém da
+  // própria empresa, só no painel /admin.
+  adminNotes String?
+
+  stores Store[]
+  users  User[]
+
+  // Fase de isolamento multi-tenant que faltava (fornecedor, categoria de
+  // fornecedor, categoria de conta a pagar e config de lote bancário eram
+  // globais — qualquer empresa via/editava dado de outra). Ver comentário
+  // em cada model. Nascem opcionais (mesmo esquema de 2 migrações usado em
+  // Store.empresaId): 1ª migração adiciona a coluna nullable + roda
+  // backfill pra empresa "Nugalho"; só depois, confirmado o backfill, uma
+  // 2ª migração torna obrigatório.
+  suppliers           Supplier[]
+  supplierCategories  SupplierCategory[]
+  billCategories      BillCategory[]
+  paymentBatchConfigs PaymentBatchConfig[]
+}
+
 model Store {
   id      String  @id @default(uuid())
   name    String
@@ -447,6 +504,26 @@ model Store {
   address String?
   phone   String?
   active  Boolean @default(true)
+
+  // Loja "pessoal" do proprietário — não é uma empresa-cliente separada,
+  // continua dentro da mesma Empresa (empresaId abaixo), só que marcada
+  // como Física: controla as contas do próprio proprietário (ex: contas
+  // de casa), não do negócio. Nasce com enabledModules restrito só a
+  // CONTAS_A_PAGAR e o frontend colapsa o menu dela pra Dashboard +
+  // Contas a Pagar, igual fizemos no Controle Rota.
+  tipoPessoa TipoPessoaStore @default(JURIDICA)
+  cpf        String?
+
+  // Telefone (E.164 só dígitos, DDI 55) que recebe aviso diário via
+  // WhatsApp das contas com vencimento hoje dessa loja. Em branco = não
+  // manda aviso automático. Reaproveita o módulo WhatsApp já existente.
+  telefoneAvisoDiario String?
+
+  // Multi-tenant: de qual empresa-cliente essa loja é. Obrigatório — toda
+  // loja tem uma empresa dona (rodou o backfill antes dessa migração
+  // tornar o campo NOT NULL, ver comentário em cima do model Empresa).
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
 
   // Loja de demonstração pública (ex: AMS) — usada como destino do
   // autocadastro de teste (/demo/signup). Só pode existir uma marcada
@@ -475,29 +552,27 @@ model Store {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  purchases             Purchase[]
-  userStores            UserStore[]
-  cards                 Card[]
-  approvalRules         ApprovalRule[]
-  bills                 Bill[]
-  cashReconciliations   CashReconciliation[]
-  bankStatementImports  BankStatementImport[]
-  financialTransactions FinancialTransaction[]
-  services              Service[]
-  certificate           StoreCertificate?
-  incomingServiceNfs    IncomingServiceNf[]
-  incomingGoodsNfs      IncomingGoodsNf[]
-  outgoingSalesNfs      OutgoingSalesNf[]
-  employees             Employee[]
-  taxRegimeConfigs      TaxRegimeConfig[]
-  revenueEntries        RevenueEntry[]
-  freelancers           Freelancer[]
-  freelancerPayments    FreelancerPayment[]
-  tasks                 Task[]
-  productLosses         ProductLoss[]
-  sefazSyncLogs         SefazSyncLog[]
-  lossNfes              LossNfe[]
-  devolucaoNfes         DevolucaoNfe[]
+  purchases           Purchase[]
+  userStores          UserStore[]
+  cards               Card[]
+  approvalRules       ApprovalRule[]
+  bills               Bill[]
+  cashReconciliations CashReconciliation[]
+  services            Service[]
+  certificate         StoreCertificate?
+  incomingServiceNfs  IncomingServiceNf[]
+  incomingGoodsNfs    IncomingGoodsNf[]
+  outgoingSalesNfs    OutgoingSalesNf[]
+  employees           Employee[]
+  taxRegimeConfigs    TaxRegimeConfig[]
+  revenueEntries      RevenueEntry[]
+  freelancers         Freelancer[]
+  freelancerPayments  FreelancerPayment[]
+  tasks               Task[]
+  productLosses       ProductLoss[]
+  sefazSyncLogs       SefazSyncLog[]
+  lossNfes            LossNfe[]
+  devolucaoNfes       DevolucaoNfe[]
 
   // Numeração própria da série de NF-e de baixa por perda (Nota de
   // Débito, finNFe=6/tpNFDebito=07 — Ajuste SINIEF 49/2025), separada da
@@ -533,6 +608,23 @@ model Store {
   quotations               Quotation[]
   supplierStores           SupplierStore[]
   quotationCategoryItems   QuotationCategoryItem[]
+
+  meepCredential               MeepCredential?
+  meepOrders                   MeepOrder[]
+  meepConciliationTransactions MeepConciliationTransaction[]
+  meepSyncLogs                 MeepSyncLog[]
+  meepCashExtras               MeepCashExtra[]
+
+  billRecorrencias BillRecorrencia[]
+}
+
+// JURIDICA = loja normal de negócio (padrão). FISICA = loja pessoal do
+// próprio proprietário dentro da mesma Empresa (ver comentário em
+// Store.tipoPessoa) — usa CPF em vez de CNPJ e tem o menu restrito a
+// Dashboard + Contas a Pagar.
+enum TipoPessoaStore {
+  JURIDICA
+  FISICA
 }
 
 // Módulos que podem ser ligados/desligados por loja (painel restrito ao
@@ -560,6 +652,13 @@ enum StoreModule {
   // Colaboradores. Ver comentário do grupo "Financeiro" em
   // frontend/lib/menu.ts.
   CONCILIACAO_CAIXA
+
+  // Integração com a API de vendas da Meep (itens vendidos, CFOP/impostos
+  // e conciliação de caixa por pagamento). Não entra no @default abaixo
+  // de propósito — só a loja Contagem tem isso hoje; Anchieta e Raiz
+  // ficam prontas no cadastro, mas só passam a ver a tela quando o Admin
+  // Master ligar o módulo delas em /admin/modules.
+  MEEP
 }
 
 model UserStore {
@@ -576,15 +675,27 @@ model UserStore {
 model Supplier {
   id             String   @id @default(uuid())
   name           String
-  nameNormalized String   @unique
+  // Deixou de ser @unique global: dois clientes-empresa diferentes podem
+  // cadastrar um fornecedor com o mesmo nome (ex: "Ambev" em duas
+  // empresas) sem colidir — a unicidade agora é por empresa, ver
+  // @@unique abaixo.
+  nameNormalized String
   cnpj           String?
   phone          String?
   active         Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  purchases Purchase[]
-  bills     Bill[]
+  // Multi-tenant: fornecedor era global (visível/editável por qualquer
+  // empresa-cliente) — falha de isolamento real, corrigida aqui.
+  // Obrigatório — rodou o backfill antes dessa migração tornar o campo
+  // NOT NULL (mesmo esquema em 2 passos do Store.empresaId).
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  purchases        Purchase[]
+  bills            Bill[]
+  billRecorrencias BillRecorrencia[]
 
   categories         SupplierCategoryLink[]
   quotationSuppliers QuotationSupplier[]
@@ -597,6 +708,8 @@ model Supplier {
   // fornecedor de bebida que só entrega na Contagem) — usado pela
   // Cotação pra não convidar fornecedor errado pra loja errada.
   stores SupplierStore[]
+
+  @@unique([nameNormalized, empresaId])
 }
 
 model SupplierStore {
@@ -620,15 +733,24 @@ model SupplierStore {
 model SupplierCategory {
   id             String @id @default(uuid())
   name           String
-  nameNormalized String @unique
+  // Idem Supplier.nameNormalized: deixou de ser @unique global — unicidade
+  // agora é por empresa (@@unique abaixo).
+  nameNormalized String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Multi-tenant: mesma correção do Supplier — categoria de fornecedor
+  // era global. Obrigatório — rodou o backfill antes dessa migração.
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
 
   suppliers       SupplierCategoryLink[]
   scheduleEntries QuotationScheduleEntry[]
   quotations      Quotation[]
   listItems       QuotationCategoryItem[]
+
+  @@unique([nameNormalized, empresaId])
 }
 
 // Lista curada de itens de uma categoria de cotação — o que decide o
@@ -1121,11 +1243,15 @@ model Bill {
   bankAccount String?
   beneficiary String?
 
-  storeId      String
-  purchaseId   String?
-  supplierId   String?
-  categoryId   String?
-  launchedById String
+  storeId       String
+  purchaseId    String?
+  supplierId    String?
+  categoryId    String?
+  launchedById  String
+  // Preenchido quando esse Bill foi gerado automaticamente a partir de uma
+  // BillRecorrencia (ver modelo abaixo) — editar/excluir esse Bill depois
+  // não afeta a recorrência nem as outras ocorrências já geradas.
+  recorrenciaId String?
 
   fileUrl         String?
   imageUrl        String?
@@ -1135,17 +1261,22 @@ model Bill {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  store      Store         @relation(fields: [storeId], references: [id])
-  purchase   Purchase?     @relation(fields: [purchaseId], references: [id])
-  supplier   Supplier?     @relation(fields: [supplierId], references: [id])
-  category   BillCategory? @relation(fields: [categoryId], references: [id])
-  launchedBy User          @relation("BillLaunchedBy", fields: [launchedById], references: [id])
+  store       Store            @relation(fields: [storeId], references: [id])
+  purchase    Purchase?        @relation(fields: [purchaseId], references: [id])
+  supplier    Supplier?        @relation(fields: [supplierId], references: [id])
+  category    BillCategory?    @relation(fields: [categoryId], references: [id])
+  launchedBy  User             @relation("BillLaunchedBy", fields: [launchedById], references: [id])
+  recorrencia BillRecorrencia? @relation(fields: [recorrenciaId], references: [id])
 
   // NF que deram origem a essa conta ao serem aceitas direto (sem passar
   // por Compra/Serviço já cadastrado) — ver IncomingGoodsNf/IncomingServiceNf.
   incomingGoodsNfs   IncomingGoodsNf[]   @relation("IncomingGoodsNfBill")
   incomingServiceNfs IncomingServiceNf[] @relation("IncomingServiceNfBill")
 
+  // Garante que gerar ocorrências duas vezes (cron rodando de novo, ou
+  // criação + cron no mesmo dia) nunca duplica o Bill da mesma data —
+  // mesmo raciocínio do @@unique equivalente no Controle Rota.
+  @@unique([recorrenciaId, dueDate])
   @@index([storeId])
   @@index([purchaseId])
   @@index([supplierId])
@@ -1162,6 +1293,55 @@ model Bill {
   // quando alguém ordenar/paginar por data de criação em vez de vencimento.
   @@index([storeId, status])
   @@index([createdAt])
+}
+
+// Definição de uma conta recorrente (ex: aluguel, internet, condomínio da
+// Loja Física do proprietário). Não guarda o Bill em si — a cada ciclo o
+// job de geração cria um Bill novo apontando pra essa recorrência (campo
+// Bill.recorrenciaId), sempre MESES_GERACAO meses à frente, do mesmo jeito
+// que o Controle Rota já faz pra ContaPagarRecorrencia.
+model BillRecorrencia {
+  id          String             @id @default(uuid())
+  description String
+  value       Decimal            @db.Decimal(10, 2)
+  recurrence  BillRecurrenceType
+
+  // Só usado quando recurrence = WEEKLY. 0=domingo ... 6=sábado.
+  weekday Int?
+
+  // Só usado quando recurrence = MONTHLY. 1-30 (se o mês não tiver esse
+  // dia, cai no último dia do mês).
+  dayOfMonth Int?
+
+  type          PayableType       @default(BOLETO)
+  paymentMethod BillPaymentMethod @default(BANK_SLIP)
+
+  storeId     String
+  categoryId  String?
+  supplierId  String?
+  createdById String
+  active      Boolean @default(true)
+
+  // Até quando já foram geradas ocorrências (Bill) — o cron/criação
+  // sempre estende até MESES_GERACAO meses a partir de hoje.
+  generatedUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store         @relation(fields: [storeId], references: [id])
+  category  BillCategory? @relation(fields: [categoryId], references: [id])
+  supplier  Supplier?     @relation(fields: [supplierId], references: [id])
+  createdBy User          @relation("BillRecorrenciaCreatedBy", fields: [createdById], references: [id])
+  bills     Bill[]
+
+  @@index([storeId])
+  @@index([active])
+}
+
+enum BillRecurrenceType {
+  WEEKLY
+  MONTHLY
 }
 
 // Conciliação de caixa: por loja e por dia, compara o que entrou "de
@@ -1187,21 +1367,10 @@ model CashReconciliation {
   bankDebit  Decimal @default(0) @db.Decimal(10, 2)
   bankCredit Decimal @default(0) @db.Decimal(10, 2)
 
-  // "Outros" — forma de recebimento que não se encaixa nas 3 fixas (ex:
-  // voucher, PIX manual, app de entrega). otherDescription é livre, pra
-  // identificar o que foi lançado ali.
-  otherSystem      Decimal @default(0) @db.Decimal(10, 2)
-  otherBank        Decimal @default(0) @db.Decimal(10, 2)
-  otherDescription String?
-
-  // Vale ou retirada de dinheiro do caixa durante o dia (ex: sangria,
-  // adiantamento, despesa paga na hora) — dinheiro que saiu do caixa antes
-  // de virar depósito, então precisa ser abatido do valor esperado no
-  // banco pra não aparecer como diferença "sem explicação". Ver
-  // cash-reconciliation.service.ts (cálculo da diferença ajustada).
-  withdrawalAmount Decimal @default(0) @db.Decimal(10, 2)
-  withdrawalReason String?
-
+  // "Outros" e "Vale/retirada" saíram daqui — agora vivem na aba
+  // Conciliação de Caixa de Vendas Meep (MeepCashExtra, por loja+dia,
+  // junto com Freelancer/Descontos), que é onde o usuário realmente
+  // preenche isso no dia a dia.
   notes String?
 
   launchedById String
@@ -1242,6 +1411,13 @@ model PaymentBatchConfig {
   updatedAt   DateTime @updatedAt
   updatedById String?
   updatedBy   User?    @relation(fields: [updatedById], references: [id])
+
+  // Multi-tenant: era "o único registro da empresa toda" — literalmente
+  // 1 linha global no banco, com dado bancário sensível (agência/conta)
+  // compartilhado entre TODAS as empresas-cliente. Agora é 1 registro
+  // obrigatório POR empresa (@@unique garante só um por empresa).
+  empresaId String  @unique
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
 }
 
 // Categoria livre da conta a pagar (ex.: Revenda, Matéria-prima,
@@ -1251,12 +1427,21 @@ model PaymentBatchConfig {
 model BillCategory {
   id             String   @id @default(uuid())
   name           String
-  nameNormalized String   @unique
+  // Idem Supplier/SupplierCategory: deixou de ser @unique global.
+  nameNormalized String
   active         Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  bills Bill[]
+  // Multi-tenant: categoria de conta a pagar também era global.
+  // Obrigatório — rodou o backfill antes dessa migração.
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  bills            Bill[]
+  billRecorrencias BillRecorrencia[]
+
+  @@unique([nameNormalized, empresaId])
 }
 
 model Service {
@@ -1522,6 +1707,15 @@ model ProductSalesImport {
   storeId String
   store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  // MANUAL = planilha subida por alguém (fluxo original). MEEP = gerado
+  // automaticamente a partir das vendas sincronizadas da API Meep (ver
+  // MeepProductSalesSyncService) — nesse caso meepBusinessDay guarda o
+  // dia comercial (YYYY-MM-DD, 08h-04h Brasília) que esse import
+  // representa, e o registro é reaproveitado (upsert) a cada
+  // sincronização daquele dia em vez de criar um novo a cada hora.
+  origem          ProductSalesImportOrigem @default(MANUAL)
+  meepBusinessDay String?
+
   nomeLocal    String?
   exportadoPor String?
   exportadoEm  DateTime?
@@ -1544,7 +1738,13 @@ model ProductSalesImport {
 
   entries ProductSalesEntry[]
 
+  @@unique([storeId, meepBusinessDay])
   @@index([storeId])
+}
+
+enum ProductSalesImportOrigem {
+  MANUAL
+  MEEP
 }
 
 // Uma linha (um produto) de uma importação — categoria/produto exatamente
@@ -2608,122 +2808,6 @@ model DeletionRequest {
   @@index([reviewedById])
 }
 
-enum FinancialTransactionDirection {
-  IN
-  OUT
-}
-
-enum FinancialTransactionStatus {
-  PENDING_CLASSIFICATION
-  CLASSIFIED
-  IGNORED
-}
-
-model Truck {
-  id        String   @id @default(uuid())
-  plate     String   @unique
-  name      String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  financialTransactions FinancialTransaction[]
-  classificationRules   FinancialClassificationRule[]
-}
-
-model FinancialCategory {
-  id        String   @id @default(uuid())
-  name      String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  transactions        FinancialTransaction[]
-  classificationRules FinancialClassificationRule[]
-
-  @@unique([name])
-}
-
-model BankStatementImport {
-  id           String  @id @default(uuid())
-  fileName     String
-  originalName String?
-  totalRows    Int     @default(0)
-  importedRows Int     @default(0)
-  ignoredRows  Int     @default(0)
-
-  storeId String?
-  store   Store?  @relation(fields: [storeId], references: [id])
-
-  createdById String?
-  createdBy   User?   @relation(fields: [createdById], references: [id])
-
-  createdAt DateTime @default(now())
-
-  transactions FinancialTransaction[]
-
-  @@index([storeId])
-  @@index([createdById])
-}
-
-model FinancialTransaction {
-  id String @id @default(uuid())
-
-  date        DateTime
-  launch      String
-  companyName String?
-  document    String?
-  description String?
-  value       Decimal  @db.Decimal(10, 2)
-
-  direction FinancialTransactionDirection
-  status    FinancialTransactionStatus    @default(PENDING_CLASSIFICATION)
-
-  storeId String?
-  store   Store?  @relation(fields: [storeId], references: [id])
-
-  truckId String?
-  truck   Truck?  @relation(fields: [truckId], references: [id])
-
-  categoryId String?
-  category   FinancialCategory? @relation(fields: [categoryId], references: [id])
-
-  importId String?
-  import   BankStatementImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
-
-  notes String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([date])
-  @@index([direction])
-  @@index([truckId])
-  @@index([categoryId])
-  @@index([storeId])
-  @@index([status])
-}
-
-model FinancialClassificationRule {
-  id      String @id @default(uuid())
-  keyword String
-
-  categoryId String?
-  category   FinancialCategory? @relation(fields: [categoryId], references: [id])
-
-  truckId String?
-  truck   Truck?  @relation(fields: [truckId], references: [id])
-
-  active   Boolean @default(true)
-  priority Int     @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([keyword])
-  @@index([active])
-}
-
 enum TaxRegimeType {
   SIMPLES
   PRESUMIDO
@@ -2802,5 +2886,283 @@ model RevenueEntry {
   createdBy User  @relation("RevenueEntryCreatedBy", fields: [createdById], references: [id])
 
   @@unique([storeId, referenceMonth])
+  @@index([storeId])
+}
+
+// ============================================================
+// Integração Meep (API Sales API Third) — puxa vendas, itens, CFOP/NCM
+// e transações de pagamento pra conciliação de caixa, loja por loja.
+//
+// Hoje só a loja Contagem tem credencial preenchida, mas o cadastro já
+// existe (vazio) pra Anchieta e Raiz poderem ser ligadas depois sem
+// precisar de mudança de schema — é só a tela em Cadastros → Lojas
+// preencher a credencial daquela loja quando chegar a hora.
+//
+// Tudo que a Meep devolve é gravado localmente (incluindo o JSON bruto de
+// cada pedido/transação, em rawJson) antes de qualquer tela ser montada
+// em cima — segue a própria recomendação da Meep de nunca rebuscar a
+// mesma venda duas vezes, e garante que a gente nunca perde um dado só
+// porque decidiu exibir a tela de um jeito diferente depois.
+// ============================================================
+
+// Credencial da API Meep por loja. Subscription key e senha nunca ficam em
+// texto puro — mesmo padrão AES-256-GCM já usado pro certificado digital
+// (certificate-crypto.util.ts, chave CERT_ENCRYPTION_KEY no .env).
+model MeepCredential {
+  id      String @id @default(uuid())
+  storeId String @unique
+
+  // Primary key (ou secondary key) da assinatura criada pelo administrador
+  // Meep pro seu usuário, vista na aba "Profile" do developer portal.
+  subscriptionKeyCipher  String
+  subscriptionKeyIv      String
+  subscriptionKeyAuthTag String
+
+  // Login do portal https://portal.meep-app.com/ (não é o e-mail/senha do
+  // Developer Portal, que só serve pra gerenciar a assinatura).
+  username String
+
+  passwordCipher  String
+  passwordIv      String
+  passwordAuthTag String
+
+  // storeId que a MEEP usa pra identificar esse ponto de venda — é
+  // diferente do id interno da nossa tabela Store, por isso fica gravado
+  // à parte (o usuário já recebe esse valor pronto da Meep).
+  meepStoreId String
+
+  // Liga/desliga a sincronização automática sem precisar apagar a
+  // credencial — útil pra pausar uma loja (ex: problema na Meep) sem
+  // perder a configuração já feita.
+  active Boolean @default(true)
+
+  // Cursor de até onde já sincronizamos cada rota (fim da última janela
+  // processada com sucesso) — o cron sempre continua daqui, nunca
+  // reconsulta um período já trazido. Nulo = nunca sincronizado ainda.
+  lastSalesSyncedUntil        DateTime?
+  lastConciliationSyncedUntil DateTime?
+
+  // Dia comercial (YYYY-MM-DD) mais recente já "confirmado" pela rotina de
+  // D+1 (ver dailyConfirmSync em meep-sync.service.ts) — a Meep só fecha os
+  // dados de um dia por completo algum tempo depois da virada, então o dia
+  // anterior fica marcado como "Aguardando informação" no Venda/Lista até
+  // essa confirmação rodar (algumas vezes, de manhã) e preencher este
+  // campo. Comparação lexicográfica funciona direto (formato YYYY-MM-DD).
+  lastDailyConfirmedBusinessDay String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+// Histórico de cada tentativa de sincronização (sucesso ou erro) — mesmo
+// padrão do SefazSyncLog, dá visibilidade de quando algo falhou sem
+// ninguém precisar ficar olhando toda hora.
+model MeepSyncLog {
+  id      String @id @default(uuid())
+  storeId String
+
+  // 'SALES' | 'SIMPLE_SALES' | 'CONCILIATION'
+  endpoint String
+
+  rangeStart DateTime
+  rangeEnd   DateTime
+
+  success             Boolean
+  message             String
+  ordersFetched       Int     @default(0)
+  transactionsFetched Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, endpoint, createdAt])
+}
+
+// Pedido de venda trazido da Meep (GetSales, enriquecido por
+// GetSimpleSales quando disponível) — é o header; itens e pagamentos ficam
+// em tabelas próprias. rawJson guarda a resposta bruta desse pedido
+// específico, pra nunca perder nada mesmo que a gente ainda não tenha
+// mapeado algum campo novo pra coluna própria.
+model MeepOrder {
+  id      String @id @default(uuid())
+  storeId String
+
+  meepOrderId   String
+  meepAccountId String?
+  orderType     Int?
+  orderDateUtc  DateTime
+
+  statusCode Int?
+  status     String?
+
+  customerDocument    String?
+  customerName        String?
+  customerEmail       String?
+  customerPhoneNumber String?
+  customerIdentifier  String?
+
+  paymentType   Int?
+  posCode       String?
+  posMacAddress String?
+  cashierId     String?
+
+  discount Decimal @default(0) @db.Decimal(12, 2)
+  value    Decimal @db.Decimal(12, 2)
+
+  // De qual rota esse pedido veio da última vez que foi atualizado —
+  // 'SALES' (tem CFOP/NCM) ou 'SIMPLE_SALES' (tem pagamentos detalhados).
+  lastSyncedFrom String
+
+  rawJson Json
+
+  syncedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store    Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  items    MeepOrderItem[]
+  payments MeepOrderPayment[]
+
+  @@unique([storeId, meepOrderId])
+  @@index([storeId, orderDateUtc])
+}
+
+// Item vendido dentro de um pedido Meep — inclui CFOP/NCM quando veio da
+// rota GetSales (é a única que traz esses dois campos fiscais).
+model MeepOrderItem {
+  id      String @id @default(uuid())
+  orderId String
+
+  meepItemId  String?
+  productId   String
+  productType Int?
+  productName String
+
+  quantity  Decimal  @db.Decimal(12, 3)
+  unitValue Decimal  @db.Decimal(12, 2)
+  discount  Decimal  @default(0) @db.Decimal(12, 2)
+  addition  Decimal  @default(0) @db.Decimal(12, 2)
+  insurance Decimal  @default(0) @db.Decimal(12, 2)
+  total     Decimal? @db.Decimal(12, 2)
+
+  ncm  String?
+  cfop String?
+
+  order MeepOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// Pagamento associado a um pedido Meep (crédito/débito/dinheiro/PIX/etc.),
+// vindo da rota GetSimpleSales — é a única que detalha NSU, autorização e
+// bandeira por pagamento dentro do próprio pedido.
+model MeepOrderPayment {
+  id      String @id @default(uuid())
+  orderId String
+
+  meepPaymentId       String?
+  typeId              Int?
+  type                String?
+  value               Decimal   @db.Decimal(12, 2)
+  receiptDate         DateTime?
+  nsu                 String?
+  authorizationNumber String?
+  cardBannerName      String?
+
+  order MeepOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// Transação de pagamento pra conciliação de caixa (rota
+// GetTransactionsForConciliation) — traz valor bruto, taxa e valor
+// líquido por transação, além do tipo de pagamento e bandeira. Não tem
+// FK direta pra MeepOrder porque a Meep nem sempre garante que o
+// OrderId bate 1:1 (ex: split de pagamento); o vínculo por meepOrderId
+// é feito na hora de exibir, não estruturalmente.
+model MeepConciliationTransaction {
+  id      String @id @default(uuid())
+  storeId String
+
+  meepTransactionId String  @unique
+  meepOrderId       String?
+
+  createdOn   DateTime
+  createdOnBr String?
+
+  authorizationNumber String?
+  grossValue          Decimal   @db.Decimal(12, 2)
+  ratePercentage      Decimal?  @db.Decimal(7, 4)
+  rateValue           Decimal?  @db.Decimal(12, 2)
+  rateValueAdvance    Decimal?  @db.Decimal(12, 2)
+  netValue            Decimal   @db.Decimal(12, 2)
+  dueDate             DateTime?
+  installments        Int?
+
+  paymentTypeId   Int?
+  paymentTypeName String?
+  cardFlagId      Int?
+  cardFlagName    String?
+  pointOfSaleName String?
+
+  rawJson Json
+
+  syncedAt DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdOn])
+}
+
+// Lançamento manual por dia comercial pra complementar a conciliação de
+// caixa automática da Meep (Credito/Debito/PIX/Dinheiro, que já vem da
+// MeepConciliationTransaction) — ver meep-query.service.ts/
+// CashConciliationTab.tsx. businessDay usa o mesmo formato "AAAA-MM-DD"
+// do resto da ponte Meep (ver business-day.util.ts), não DateTime, pra
+// bater exatamente com o agrupamento por dia comercial (08h-04h) que a
+// tela já usa.
+model MeepCashExtra {
+  id      String @id @default(uuid())
+  storeId String
+
+  businessDay String
+
+  freelancer Decimal @default(0) @db.Decimal(10, 2)
+  descontos  Decimal @default(0) @db.Decimal(10, 2)
+  outros     Decimal @default(0) @db.Decimal(10, 2)
+  vale       Decimal @default(0) @db.Decimal(10, 2)
+
+  // Linha "editável" da grade de Conciliação de Caixa: vem pré-preenchida
+  // com o valor que a Meep calculou (Credito/Debito/Pix/Dinheiro), mas o
+  // usuário pode corrigir se encontrar um valor diferente — o que for
+  // salvo aqui passa a ser o valor "oficial" do sistema pra aquele dia.
+  // Null = usuário nunca editou esse dia ainda (tela mostra o valor
+  // calculado da Meep como default, sem gravar nada até o primeiro Salvar).
+  sistemaCredito  Decimal? @db.Decimal(10, 2)
+  sistemaDebito   Decimal? @db.Decimal(10, 2)
+  sistemaPix      Decimal? @db.Decimal(10, 2)
+  sistemaDinheiro Decimal? @db.Decimal(10, 2)
+
+  // Linha "Banco": o que de fato caiu na conta, por forma de pagamento —
+  // sempre digitado manualmente (não existe fonte automática pra isso).
+  // Null = ainda não preenchido.
+  bancoCredito  Decimal? @db.Decimal(10, 2)
+  bancoDebito   Decimal? @db.Decimal(10, 2)
+  bancoPix      Decimal? @db.Decimal(10, 2)
+  bancoDinheiro Decimal? @db.Decimal(10, 2)
+
+  observacao String?
+
+  updatedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("MeepCashExtraUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([storeId, businessDay])
   @@index([storeId])
 }

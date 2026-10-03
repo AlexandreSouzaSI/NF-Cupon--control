@@ -14,11 +14,6 @@ export type CashReconciliationReportData = {
     bankCash: number;
     bankDebit: number;
     bankCredit: number;
-    otherSystem: number;
-    otherBank: number;
-    otherDescription: string | null;
-    withdrawalAmount: number;
-    withdrawalReason: string | null;
     notes: string | null;
     launchedByName: string;
 };
@@ -55,27 +50,12 @@ export function buildCashReconciliationPdf(
             doc.fillColor('#000');
             doc.moveDown(1.2);
 
-            const hasOther =
-                Math.abs(data.otherSystem) > 0.001 ||
-                Math.abs(data.otherBank) > 0.001 ||
-                !!data.otherDescription;
-            const hasWithdrawal = Math.abs(data.withdrawalAmount) > 0.001;
-
             const totalSystem =
-                data.systemCash +
-                data.systemDebit +
-                data.systemCredit +
-                data.otherSystem;
+                data.systemCash + data.systemDebit + data.systemCredit;
             const totalBank =
-                data.bankCash + data.bankDebit + data.bankCredit +
-                data.otherBank;
+                data.bankCash + data.bankDebit + data.bankCredit;
 
-            // Diferença bruta (banco - sistema) e diferença ajustada, que
-            // soma de volta o vale/retirada — dinheiro que saiu do caixa
-            // antes de virar depósito não é "sumiço", então ele explica
-            // parte (ou tudo) de um banco menor que o sistema.
             const rawDiff = totalBank - totalSystem;
-            const adjustedDiff = rawDiff + data.withdrawalAmount;
 
             const colX = { label: 40, sistema: 300, banco: 400, diff: 480 };
             const tableTop = doc.y;
@@ -107,15 +87,6 @@ export function buildCashReconciliationPdf(
                 ['Débito', data.systemDebit, data.bankDebit],
                 ['Crédito', data.systemCredit, data.bankCredit],
             ];
-            if (hasOther) {
-                rows.push([
-                    data.otherDescription
-                        ? `Outros (${data.otherDescription})`
-                        : 'Outros',
-                    data.otherSystem,
-                    data.otherBank,
-                ]);
-            }
 
             for (const [label, system, bank] of rows) {
                 const diff = bank - system;
@@ -175,51 +146,21 @@ export function buildCashReconciliationPdf(
             doc.fillColor('#000');
             y += 26;
 
-            if (hasWithdrawal) {
-                doc.fontSize(9).font('Helvetica-Bold').fillColor('#000').text(
-                    'Vale / retirada do caixa',
-                    colX.label,
-                    y,
-                );
-                doc.font('Helvetica').text(
-                    fmtCurrency(data.withdrawalAmount),
-                    colX.sistema,
-                    y,
-                    { width: 90, align: 'right' },
-                );
-                y = doc.y + 4;
-                if (data.withdrawalReason) {
-                    doc.fontSize(8).fillColor('#666').text(
-                        `Motivo: ${data.withdrawalReason}`,
-                        colX.label,
-                        y,
-                        { width: 400 },
-                    );
-                    y = doc.y;
-                }
-                doc.fillColor('#000');
-                y += 14;
-            }
-
-            // Conclusão — texto direto, com o valor exato em falta ou a
-            // mais, já considerando o vale/retirada do dia.
-            const absAdjusted = Math.abs(adjustedDiff);
+            // Conclusão — texto direto, com o valor exato em falta ou a mais.
+            const absDiff = Math.abs(rawDiff);
             let conclusion: string;
             let conclusionColor: string;
 
-            if (absAdjusted < 0.01) {
+            if (absDiff < 0.01) {
                 conclusionColor = '#166534';
-                conclusion = hasWithdrawal
-                    ? `Bateu certinho: o valor que faltou no banco (${fmtCurrency(Math.abs(rawDiff))}) corresponde exatamente ao vale/retirada do dia. Nenhuma diferença sem explicação.`
-                    : 'Bateu certinho: o valor recebido pelo sistema corresponde ao que caiu no banco. Nenhuma ação necessária.';
-            } else if (adjustedDiff < 0) {
+                conclusion =
+                    'Bateu certinho: o valor recebido pelo sistema corresponde ao que caiu no banco. Nenhuma ação necessária.';
+            } else if (rawDiff < 0) {
                 conclusionColor = '#dc2626';
-                conclusion = hasWithdrawal
-                    ? `Faltou cair no banco ${fmtCurrency(absAdjusted)}, mesmo já descontando o vale/retirada de ${fmtCurrency(data.withdrawalAmount)}. Verificar o motivo da diferença antes de fechar o caixa do dia.`
-                    : `Faltou cair no banco ${fmtCurrency(absAdjusted)} em relação ao que o sistema registrou. Verificar o motivo da diferença antes de fechar o caixa do dia.`;
+                conclusion = `Faltou cair no banco ${fmtCurrency(absDiff)} em relação ao que o sistema registrou. Verificar o motivo da diferença antes de fechar o caixa do dia.`;
             } else {
                 conclusionColor = '#b45309';
-                conclusion = `Sobrou ${fmtCurrency(absAdjusted)} no banco em relação ao que o sistema registrou${hasWithdrawal ? ', já considerando o vale/retirada do dia' : ''}. Verificar se algum recebimento não foi lançado no sistema.`;
+                conclusion = `Sobrou ${fmtCurrency(absDiff)} no banco em relação ao que o sistema registrou. Verificar se algum recebimento não foi lançado no sistema.`;
             }
 
             doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text(

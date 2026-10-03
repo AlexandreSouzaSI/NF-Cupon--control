@@ -9,38 +9,26 @@ import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateRevenueEntryDto } from './dto/create-revenue-entry.dto';
 import { UpdateRevenueEntryDto } from './dto/update-revenue-entry.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 @Injectable()
 export class RevenueService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     async create(dto: CreateRevenueEntryDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         // Um lançamento por loja/mês — se já existir, atualiza em vez de
         // duplicar (evita erro de unique constraint numa correção de valor).
@@ -67,10 +55,10 @@ export class RevenueService {
     }
 
     async findAll(user: any, filters?: { storeId?: string }) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         return this.prisma.revenueEntry.findMany({
@@ -112,7 +100,7 @@ export class RevenueService {
     // lançamento contam como zero (não interrompe o cálculo, só fica
     // impreciso até todos os meses serem preenchidos).
     async getRbt12(storeId: string, referenceMonth: string, user: any) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const months = this.last12MonthsUpTo(referenceMonth);
 
@@ -158,7 +146,7 @@ export class RevenueService {
             throw new NotFoundException('Lançamento de faturamento não encontrado.');
         }
 
-        this.ensureStoreAccess(entry.storeId, user);
+        await this.ensureStoreAccess(entry.storeId, user);
 
         return entry;
     }

@@ -20,6 +20,7 @@ type StoreRow = {
     id: string;
     name: string;
     enabledModules: StoreModuleKey[];
+    empresaName?: string | null;
 };
 
 // Mesma ordenação de módulo que vem da API, só pra comparar duas listas
@@ -65,9 +66,15 @@ export default function AdminModulesPage() {
             try {
                 setLoading(true);
 
+                // /stores/switcher (não /stores) de propósito: essa tela é
+                // o painel do dono do sistema pra gerenciar módulo por
+                // loja de QUALQUER empresa-cliente — precisa continuar
+                // vendo todas, mesmo com uma loja ativa selecionada no
+                // topo (diferente de Cadastros → Lojas, que passou a ser
+                // escopado pela empresa da loja ativa).
                 const [catalogRes, storesRes] = await Promise.all([
                     api.get('/stores/admin/modules-catalog'),
-                    api.get('/stores'),
+                    api.get('/stores/switcher'),
                 ]);
 
                 setCatalog(catalogRes.data);
@@ -76,6 +83,7 @@ export default function AdminModulesPage() {
                     id: store.id,
                     name: store.name,
                     enabledModules: store.enabledModules || [],
+                    empresaName: store.empresaName,
                 }));
 
                 setStores(rows);
@@ -227,6 +235,12 @@ export default function AdminModulesPage() {
                                             <td className="sticky left-0 z-10 bg-inherit px-4 py-3 font-medium">
                                                 <div className="flex items-center gap-2">
                                                     <span>{store.name}</span>
+
+                                                    {store.empresaName && (
+                                                        <span className="rounded-full bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                                                            {store.empresaName}
+                                                        </span>
+                                                    )}
 
                                                     {dirty && !savingThis && (
                                                         <span

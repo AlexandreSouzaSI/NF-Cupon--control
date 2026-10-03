@@ -112,12 +112,28 @@ export class NotificationsService {
         type: NotificationType;
         excludeUserId?: string;
     }) {
+        // Multi-tenant: "perfil global" (Administrativo/Proprietário) só é
+        // global DENTRO da própria empresa — sem isso, um Proprietário da
+        // Empresa A recebia notificação (e via no sino) de ação em loja da
+        // Empresa B. Precisa saber de qual empresa é a loja de origem pra
+        // restringir quem entra no GLOBAL_ACCESS_ROLES abaixo.
+        const store = await this.prisma.store.findUnique({
+            where: { id: options.storeId },
+            select: { empresaId: true },
+        });
+
         const users = await this.prisma.user.findMany({
             where: {
                 active: true,
                 id: options.excludeUserId ? { not: options.excludeUserId } : undefined,
                 OR: [
-                    { role: { in: GLOBAL_ACCESS_ROLES } },
+                    {
+                        role: { in: GLOBAL_ACCESS_ROLES },
+                        // Sentinela impossível se a loja não for encontrada
+                        // (não deveria acontecer) — melhor não notificar
+                        // ninguém "global" do que notificar todo mundo.
+                        empresaId: store?.empresaId ?? '__loja-nao-encontrada__',
+                    },
                     {
                         role: { in: options.allowedRoles },
                         userStores: { some: { storeId: options.storeId } },

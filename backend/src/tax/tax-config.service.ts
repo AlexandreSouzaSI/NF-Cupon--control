@@ -8,6 +8,10 @@ import { UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTaxRegimeConfigDto } from './dto/create-tax-regime-config.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Converte "AAAA-MM" (referenceMonth) num Date no dia 1 ao meio-dia UTC —
 // mesmo padrão de meio-dia usado no resto do projeto pra evitar recuo de
@@ -30,29 +34,13 @@ export function monthEndDate(referenceMonth: string): Date {
 export class TaxConfigService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     // Ao cadastrar uma config nova, fecha automaticamente a vigência da
@@ -61,7 +49,7 @@ export class TaxConfigService {
     // loja, o que garante que o cálculo de cada mês sempre bate com uma
     // única configuração.
     async create(dto: CreateTaxRegimeConfigDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const effectiveFrom = new Date(dto.effectiveFrom);
 
@@ -104,10 +92,10 @@ export class TaxConfigService {
     }
 
     async findAll(user: any, filters?: { storeId?: string }) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         return this.prisma.taxRegimeConfig.findMany({
@@ -130,7 +118,7 @@ export class TaxConfigService {
             throw new NotFoundException('Configuração não encontrada.');
         }
 
-        this.ensureStoreAccess(config.storeId, user);
+        await this.ensureStoreAccess(config.storeId, user);
 
         await this.prisma.taxRegimeConfig.delete({ where: { id } });
 
@@ -146,7 +134,7 @@ export class TaxConfigService {
     // recalcular o passado com a regra de hoje.
     async findEffective(storeId: string, referenceMonth: string, user?: any) {
         if (user) {
-            this.ensureStoreAccess(storeId, user);
+            await this.ensureStoreAccess(storeId, user);
         }
 
         const monthStart = monthToDate(referenceMonth);

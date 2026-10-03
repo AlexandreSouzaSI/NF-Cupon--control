@@ -12,6 +12,10 @@ import { CreateFreelancerDto } from './dto/create-freelancer.dto';
 import { UpdateFreelancerDto } from './dto/update-freelancer.dto';
 import { SetWorkDaysDto } from './dto/set-work-days.dto';
 import { ConfirmFreelancerPaymentDto } from './dto/confirm-payment.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Dias da semana (JS getUTCDay: 0=domingo ... 6=sábado) que entram em cada
 // grupo de pagamento. Segunda (1) nunca aparece — não é dia de trabalho
@@ -25,29 +29,13 @@ export class FreelancersService {
 
     // Mesmo padrão usado em todo o resto do sistema: Administrativo/
     // Proprietário enxergam todas as lojas, os demais só as vinculadas.
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     private async ensureFreelancerAccess(id: string, user: any) {
@@ -59,7 +47,7 @@ export class FreelancersService {
             throw new NotFoundException('Freelancer não encontrado.');
         }
 
-        this.ensureStoreAccess(freelancer.storeId, user);
+        await this.ensureStoreAccess(freelancer.storeId, user);
 
         return freelancer;
     }
@@ -89,7 +77,7 @@ export class FreelancersService {
     }
 
     async create(dto: CreateFreelancerDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         return this.prisma.freelancer.create({
             data: {
@@ -107,10 +95,10 @@ export class FreelancersService {
         user: any,
         filters?: { storeId?: string; onlyActive?: boolean },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         return this.prisma.freelancer.findMany({
@@ -138,7 +126,7 @@ export class FreelancersService {
         await this.ensureFreelancerAccess(id, user);
 
         if (dto.storeId) {
-            this.ensureStoreAccess(dto.storeId, user);
+            await this.ensureStoreAccess(dto.storeId, user);
         }
 
         return this.prisma.freelancer.update({
@@ -284,7 +272,7 @@ export class FreelancersService {
     // pagamento confirmado (FreelancerPayment), pra tela decidir entre
     // mostrar "Marcar como pago" ou o selo de confirmado.
     async getPaymentsSummary(storeId: string, weekStart: string, user: any) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const start = this.toDateNoonUtc(weekStart);
         const end = this.addDaysUtc(start, 5);
@@ -448,7 +436,7 @@ export class FreelancersService {
             throw new NotFoundException('Pagamento não encontrado.');
         }
 
-        this.ensureStoreAccess(payment.storeId, user);
+        await this.ensureStoreAccess(payment.storeId, user);
 
         await this.prisma.freelancerPayment.delete({
             where: { id: paymentId },
@@ -468,10 +456,10 @@ export class FreelancersService {
             to?: string;
         },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         return this.prisma.freelancerPayment.findMany({

@@ -40,33 +40,6 @@ export class UpsertCashReconciliationDto {
     bankCredit!: number;
 
     @IsOptional()
-    @IsNumber()
-    @Min(0)
-    otherSystem?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(0)
-    otherBank?: number;
-
-    @IsOptional()
-    @IsString()
-    otherDescription?: string;
-
-    // Vale/retirada — dinheiro que saiu do caixa durante o dia (sangria,
-    // adiantamento, despesa) e por isso não vai aparecer no depósito do
-    // banco. Abatido do lado do sistema no cálculo da diferença (ver
-    // cash-reconciliation.service.ts).
-    @IsOptional()
-    @IsNumber()
-    @Min(0)
-    withdrawalAmount?: number;
-
-    @IsOptional()
-    @IsString()
-    withdrawalReason?: string;
-
-    @IsOptional()
     @IsString()
     notes?: string;
 }

@@ -1,28 +1,22 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 @Injectable()
 export class AlertsService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
     async findAll(user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         return this.prisma.purchaseAlert.findMany({
             where: {
@@ -65,7 +59,7 @@ export class AlertsService {
     }
 
     async resolve(id: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (allowedStoreIds) {
             const alert = await this.prisma.purchaseAlert.findUnique({

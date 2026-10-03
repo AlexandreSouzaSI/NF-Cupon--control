@@ -44,7 +44,47 @@ type StoreOption = {
     id: string;
     name: string;
     enabledModules?: StoreModuleKey[];
+    tipoPessoa?: 'JURIDICA' | 'FISICA';
+    // Só vem preenchido pro Admin Master (ver findAllForSwitcher no
+    // backend) — usado só pra agrupar os cards por empresa-cliente no
+    // seletor de loja. Todo outro perfil nunca recebe isso (só enxerga a
+    // própria empresa mesmo).
+    empresaId?: string | null;
+    empresaName?: string | null;
 };
+
+// Agrupa a lista de lojas por empresa — só faz diferença de verdade pro
+// Admin Master (único perfil que enxerga mais de uma empresa no seletor).
+// Se não tiver empresaName em nenhuma loja (perfil comum) ou só existir
+// uma empresa na lista, devolve um grupo "achatado" (sem cabeçalho), pra
+// não mudar em nada a experiência de quem não é Admin Master.
+function groupStoresByEmpresa(
+    stores: StoreOption[],
+): { empresaName: string | null; stores: StoreOption[] }[] {
+    const hasEmpresaInfo = stores.some((store) => store.empresaName);
+
+    if (!hasEmpresaInfo) {
+        return [{ empresaName: null, stores }];
+    }
+
+    const groups = new Map<string, StoreOption[]>();
+
+    for (const store of stores) {
+        const key = store.empresaName || 'Sem empresa';
+        const list = groups.get(key) || [];
+        list.push(store);
+        groups.set(key, list);
+    }
+
+    if (groups.size <= 1) {
+        return [{ empresaName: null, stores }];
+    }
+
+    return Array.from(groups.entries()).map(([empresaName, groupStores]) => ({
+        empresaName,
+        stores: groupStores,
+    }));
+}
 
 type StoreStatus = 'loading' | 'needs-selection' | 'ready' | 'error';
 
@@ -129,11 +169,19 @@ export function AppLayout({ children, title }: AppLayoutProps) {
 
     async function resolveActiveStore() {
         try {
-            const response = await api.get('/stores');
+            // /stores/switcher (não /stores) de propósito: essa lista
+            // alimenta o seletor do topo e a tela de "escolha a loja" —
+            // pro Admin Master ela sempre traz TODAS as lojas de TODAS as
+            // empresas-cliente (é o único jeito dele trocar de empresa).
+            // /stores normal (usado em Cadastros → Lojas e no formulário
+            // de Fornecedor) é escopado só pela empresa da loja ativa.
+            const response = await api.get('/stores/switcher');
             const stores: StoreOption[] = response.data.map((store: any) => ({
                 id: store.id,
                 name: store.name,
                 enabledModules: store.enabledModules,
+                empresaId: store.empresaId,
+                empresaName: store.empresaName,
             }));
 
             setAvailableStores(stores);
@@ -253,6 +301,21 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, pathname, storeStatus, activeStore]);
 
+    // Loja Pessoa Física (ver Store.tipoPessoa) só usa Dashboard Financeiro
+    // + Contas a Pagar — Início e o Dashboard operacional (módulo de
+    // Compras/NF/Perdas) não têm módulo associado, então canAccessHref
+    // acima deixa passar; manda direto pro Dashboard Financeiro em vez de
+    // deixar essas duas telas genéricas abrirem vazias/confusas.
+    useEffect(() => {
+        if (storeStatus !== 'ready') return;
+        if (activeStore?.tipoPessoa !== 'FISICA') return;
+
+        if (pathname === '/home' || pathname === '/dashboard') {
+            router.replace('/financial-dashboard');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname, storeStatus, activeStore]);
+
     function handleSelectStore(store: StoreOption) {
         setActiveStore(store);
         setActiveStoreState(store);
@@ -330,16 +393,35 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                         </p>
                     </div>
 
-                    <div className="space-y-2">
-                        {availableStores.map((store) => (
-                            <button
-                                key={store.id}
-                                onClick={() => handleSelectStore(store)}
-                                className="flex w-full items-center justify-between rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-3 text-left hover:border-blue-500"
-                            >
-                                <span className="font-medium">{store.name}</span>
-                                <ChevronDown size={18} className="-rotate-90 text-zinc-500" />
-                            </button>
+                    <div className="space-y-4">
+                        {groupStoresByEmpresa(availableStores).map((group) => (
+                            <div key={group.empresaName || 'flat'}>
+                                {group.empresaName && (
+                                    <p className="mb-2 flex items-center gap-1 px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                                        <Building2 size={12} />
+                                        {group.empresaName}
+                                    </p>
+                                )}
+
+                                <div
+                                    className={
+                                        group.empresaName
+                                            ? 'space-y-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-2'
+                                            : 'space-y-2'
+                                    }
+                                >
+                                    {group.stores.map((store) => (
+                                        <button
+                                            key={store.id}
+                                            onClick={() => handleSelectStore(store)}
+                                            className="flex w-full items-center justify-between rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 py-3 text-left hover:border-blue-500"
+                                        >
+                                            <span className="font-medium">{store.name}</span>
+                                            <ChevronDown size={18} className="-rotate-90 text-zinc-500" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         ))}
                     </div>
 
@@ -464,17 +546,27 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                     Trocar de loja
                                 </p>
 
-                                {availableStores.map((store) => (
-                                    <button
-                                        key={store.id}
-                                        onClick={() => handleSelectStore(store)}
-                                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 ${store.id === activeStore?.id
-                                                ? 'text-blue-400'
-                                                : 'text-zinc-700 dark:text-zinc-300'
-                                            }`}
-                                    >
-                                        {store.name}
-                                    </button>
+                                {groupStoresByEmpresa(availableStores).map((group) => (
+                                    <div key={group.empresaName || 'flat'} className="mb-1 last:mb-0">
+                                        {group.empresaName && (
+                                            <p className="mt-2 px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 first:mt-0">
+                                                {group.empresaName}
+                                            </p>
+                                        )}
+
+                                        {group.stores.map((store) => (
+                                            <button
+                                                key={store.id}
+                                                onClick={() => handleSelectStore(store)}
+                                                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 ${store.id === activeStore?.id
+                                                        ? 'text-blue-400'
+                                                        : 'text-zinc-700 dark:text-zinc-300'
+                                                    }`}
+                                            >
+                                                {store.name}
+                                            </button>
+                                        ))}
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -617,6 +709,16 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                 </p>
 
                                 <button
+                                    onClick={() => router.push('/admin/empresas')}
+                                    className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                >
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+                                        <Building2 size={18} />
+                                    </span>
+                                    <span className="flex-1">Empresas</span>
+                                </button>
+
+                                <button
                                     onClick={() => router.push('/admin/modules')}
                                     className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
                                 >
@@ -650,19 +752,31 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                         Loja ativa
                                     </p>
 
-                                    <div className="space-y-1">
-                                        {availableStores.map((store) => (
-                                            <button
-                                                key={store.id}
-                                                onClick={() => handleSelectStore(store)}
-                                                className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm ${store.id === activeStore?.id
-                                                        ? 'border-blue-500/40 bg-blue-500/10 text-blue-400'
-                                                        : 'border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
-                                                    }`}
-                                            >
-                                                <Building2 size={16} />
-                                                {store.name}
-                                            </button>
+                                    <div className="space-y-2">
+                                        {groupStoresByEmpresa(availableStores).map((group) => (
+                                            <div key={group.empresaName || 'flat'}>
+                                                {group.empresaName && (
+                                                    <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                                                        {group.empresaName}
+                                                    </p>
+                                                )}
+
+                                                <div className="space-y-1">
+                                                    {group.stores.map((store) => (
+                                                        <button
+                                                            key={store.id}
+                                                            onClick={() => handleSelectStore(store)}
+                                                            className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm ${store.id === activeStore?.id
+                                                                    ? 'border-blue-500/40 bg-blue-500/10 text-blue-400'
+                                                                    : 'border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
+                                                                }`}
+                                                        >
+                                                            <Building2 size={16} />
+                                                            {store.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
@@ -743,6 +857,19 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                         <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                                             Admin
                                         </p>
+
+                                        <button
+                                            onClick={() => {
+                                                setMenuOpen(false);
+                                                router.push('/admin/empresas');
+                                            }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                        >
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+                                                <Building2 size={18} />
+                                            </span>
+                                            <span className="flex-1">Empresas</span>
+                                        </button>
 
                                         <button
                                             onClick={() => {

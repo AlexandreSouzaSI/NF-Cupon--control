@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminMasterGuard } from '../auth/admin-master.guard';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -16,21 +16,22 @@ export class SuppliersController {
     // conflito real (paths fixos), mas mantém o padrão do resto do
     // projeto de declarar o path fixo primeiro.
     @Get('categories')
-    async findAllCategories() {
-        return this.suppliersService.findAllCategories();
+    async findAllCategories(@Req() req: any) {
+        return this.suppliersService.findAllCategories(req.user);
     }
 
     @Post('categories')
-    async createCategory(@Body() body: CreateSupplierCategoryDto) {
-        return this.suppliersService.createCategory(body);
+    async createCategory(@Body() body: CreateSupplierCategoryDto, @Req() req: any) {
+        return this.suppliersService.createCategory(body, req.user);
     }
 
     @Patch('categories/:id')
     async renameCategory(
         @Param('id') id: string,
         @Body('name') name: string,
+        @Req() req: any,
     ) {
-        return this.suppliersService.renameCategory(id, name);
+        return this.suppliersService.renameCategory(id, name, req.user);
     }
 
     // Excluir categoria de verdade — restrito ao dono do sistema
@@ -43,26 +44,27 @@ export class SuppliersController {
     }
 
     @Post()
-    async create(@Body() body: CreateSupplierDto) {
-        return this.suppliersService.create(body);
+    async create(@Body() body: CreateSupplierDto, @Req() req: any) {
+        return this.suppliersService.create(body, req.user);
     }
 
     @Post('find-or-create')
-    async findOrCreate(@Body() body: FindOrCreateSupplierDto) {
-        return this.suppliersService.findOrCreate(body.name);
+    async findOrCreate(@Body() body: FindOrCreateSupplierDto, @Req() req: any) {
+        return this.suppliersService.findOrCreate(body.name, req.user);
     }
 
     @Get()
-    async findAll(@Query('search') search?: string) {
-        return this.suppliersService.findAll(search);
+    async findAll(@Query('search') search: string | undefined, @Req() req: any) {
+        return this.suppliersService.findAll(search, req.user);
     }
 
     @Put(':id')
     async update(
         @Param('id') id: string,
         @Body() body: UpdateSupplierDto,
+        @Req() req: any,
     ) {
-        return this.suppliersService.update(id, body);
+        return this.suppliersService.update(id, body, req.user);
     }
 
     // Exclusão de verdade — restrita ao dono do sistema (isAdminMaster).

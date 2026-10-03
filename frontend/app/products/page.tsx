@@ -10,7 +10,7 @@ import { ImportProductSalesTab } from '../../src/components/product-sales/Import
 import { ProductsTab } from '../../src/components/product-sales/ProductsTab';
 import { DashboardTab } from '../../src/components/product-sales/DashboardTab';
 import { ShoppingListTab } from '../../src/components/product-sales/ShoppingListTab';
-import { PeriodFilter } from '../../src/components/product-sales/PeriodFilter';
+import { DateRangeFilter } from '../../src/components/product-sales/DateRangeFilter';
 import { ProductionTab } from '../../src/components/product-sales/ProductionTab';
 import { FichaTecnicaTab } from '../../src/components/product-sales/FichaTecnicaTab';
 import { ReportTab } from '../../src/components/product-sales/ReportTab';
@@ -106,9 +106,25 @@ function ProductsPageInner() {
     // "Produtos" a recarregar o resumo sem precisar trocar de aba.
     const [refreshKey, setRefreshKey] = useState(0);
 
-    // null = "Tudo" (soma todas as importações). Compartilhado entre as 3
-    // abas de análise, já que os dados vêm da mesma planilha recorrente.
-    const [importId, setImportId] = useState<string | null>(null);
+    // Compartilhado entre Dashboard e Produtos — agora que a Meep traz a
+    // data real de cada venda (um ProductSalesImport por dia comercial),
+    // filtrar por intervalo de datas faz muito mais sentido do que
+    // escolher uma "importação" da lista (que cresceria um item por dia,
+    // por loja, pra sempre).
+    //
+    // Padrão: mês corrente acumulado (dia 1 até hoje, sem data final
+    // fixa) — vai somando sozinho conforme os dias passam, sem precisar
+    // trocar o filtro toda hora. O usuário pode trocar pra outro período
+    // quando quiser.
+    const primeiroDiaDoMes = () => {
+        const hoje = new Date();
+        const ano = hoje.getFullYear();
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+        return `${ano}-${mes}-01`;
+    };
+
+    const [periodoInicio, setPeriodoInicio] = useState(primeiroDiaDoMes);
+    const [periodoFim, setPeriodoFim] = useState('');
 
     const mostrarFiltroPeriodo =
         activeTab === 'dashboard' ||
@@ -125,8 +141,9 @@ function ProductsPageInner() {
                 <div>
                     <h2 className="text-2xl font-bold">Venda/Lista</h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        Importe a planilha de vendas do PDV e acompanhe
-                        quantidade vendida e faturamento por produto.
+                        Acompanhe quantidade vendida e faturamento por
+                        produto — sincronizado automaticamente da Meep (ou
+                        importado por planilha, pra lojas sem integração).
                     </p>
                 </div>
 
@@ -153,19 +170,30 @@ function ProductsPageInner() {
                     </div>
 
                     {mostrarFiltroPeriodo && (
-                        <PeriodFilter
-                            value={importId}
-                            onChange={setImportId}
-                            refreshKey={refreshKey}
+                        <DateRangeFilter
+                            inicio={periodoInicio}
+                            fim={periodoFim}
+                            onChange={(inicio, fim) => {
+                                setPeriodoInicio(inicio);
+                                setPeriodoFim(fim);
+                            }}
                         />
                     )}
                 </div>
 
                 {activeTab === 'dashboard' && (
-                    <DashboardTab refreshKey={refreshKey} importId={importId} />
+                    <DashboardTab
+                        refreshKey={refreshKey}
+                        periodoInicio={periodoInicio || undefined}
+                        periodoFim={periodoFim || undefined}
+                    />
                 )}
                 {activeTab === 'produtos' && (
-                    <ProductsTab refreshKey={refreshKey} importId={importId} />
+                    <ProductsTab
+                        refreshKey={refreshKey}
+                        periodoInicio={periodoInicio || undefined}
+                        periodoFim={periodoFim || undefined}
+                    />
                 )}
                 {activeTab === 'fichas-tecnicas' && (
                     <FichaTecnicaTab refreshKey={refreshKey} />
@@ -177,7 +205,6 @@ function ProductsPageInner() {
                     <ImportProductSalesTab
                         onImported={() => {
                             setRefreshKey((k) => k + 1);
-                            setImportId(null);
                         }}
                     />
                 )}

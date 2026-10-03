@@ -316,6 +316,22 @@ function NewBillPageInner() {
     const [uploadingCoupon, setUploadingCoupon] =
         useState(false);
 
+    // Conta recorrente (aluguel, internet, condomínio...) — só disponível
+    // pra conta nova sem compra vinculada (ver BillRecorrencia no
+    // backend). Quando marcada, o submit cria a recorrência em vez da
+    // conta única; o backend já gera a primeira ocorrência na hora.
+    const [isRecurring, setIsRecurring] =
+        useState(false);
+
+    const [recurrenceType, setRecurrenceType] =
+        useState<'MONTHLY' | 'WEEKLY'>('MONTHLY');
+
+    const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] =
+        useState('5');
+
+    const [recurrenceWeekday, setRecurrenceWeekday] =
+        useState('1');
+
     const purchaseHasFiscalDocument =
         (purchase?.fiscalDocuments?.length || 0) > 0;
 
@@ -657,6 +673,63 @@ function NewBillPageInner() {
             toast.error(
                 'Não foi possível identificar a loja ativa. Saia e entre novamente.',
             );
+            return;
+        }
+
+        // Conta recorrente: não pede Vencimento (a primeira ocorrência é
+        // calculada pelo backend a partir do dia do mês/semana escolhido)
+        // e é um fluxo totalmente separado do POST /bills normal.
+        if (isRecurring && !form.purchaseId) {
+            try {
+                setSaving(true);
+
+                let resolvedSupplierId = form.supplierId;
+
+                if (!resolvedSupplierId && form.supplierName.trim()) {
+                    const supplier = await findOrCreateSupplier(
+                        form.supplierName,
+                    );
+
+                    resolvedSupplierId = supplier.id;
+                }
+
+                await api.post('/bills/recorrencias', {
+                    description: form.description.trim(),
+                    value: parseDecimal(form.value),
+                    recurrence: recurrenceType,
+                    dayOfMonth:
+                        recurrenceType === 'MONTHLY'
+                            ? Number(recurrenceDayOfMonth)
+                            : undefined,
+                    weekday:
+                        recurrenceType === 'WEEKLY'
+                            ? Number(recurrenceWeekday)
+                            : undefined,
+                    type: form.type,
+                    paymentMethod: form.paymentMethod,
+                    storeId: form.storeId,
+                    supplierId: resolvedSupplierId || undefined,
+                });
+
+                toast.success(
+                    'Conta recorrente criada — a primeira ocorrência já apareceu em Contas a Pagar.',
+                );
+
+                router.push('/bills');
+            } catch (error: any) {
+                const message =
+                    error?.response?.data?.message ||
+                    'Erro ao criar conta recorrente.';
+
+                toast.error(
+                    Array.isArray(message)
+                        ? message.join(', ')
+                        : message,
+                );
+            } finally {
+                setSaving(false);
+            }
+
             return;
         }
 
@@ -1632,6 +1705,116 @@ function NewBillPageInner() {
                                 </a>
                             )}
                         </div>
+
+                        {!form.purchaseId && (
+                            <div className="md:col-span-2 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
+                                <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={isRecurring}
+                                        onChange={(event) =>
+                                            setIsRecurring(
+                                                event.target.checked,
+                                            )
+                                        }
+                                        className="rounded border-zinc-300 dark:border-zinc-700"
+                                    />
+                                    Conta recorrente (aluguel, internet,
+                                    condomínio...) — gera automaticamente os
+                                    próximos 12 meses
+                                </label>
+
+                                {isRecurring && (
+                                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <div>
+                                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                                Repetir
+                                            </label>
+
+                                            <select
+                                                value={recurrenceType}
+                                                onChange={(event) =>
+                                                    setRecurrenceType(
+                                                        event.target
+                                                            .value as
+                                                            | 'MONTHLY'
+                                                            | 'WEEKLY',
+                                                    )
+                                                }
+                                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-cyan-500"
+                                            >
+                                                <option value="MONTHLY">
+                                                    Todo dia X do mês
+                                                </option>
+                                                <option value="WEEKLY">
+                                                    Todo dia da semana
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        {recurrenceType === 'MONTHLY' ? (
+                                            <div>
+                                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                                    Dia do mês
+                                                </label>
+
+                                                <select
+                                                    value={
+                                                        recurrenceDayOfMonth
+                                                    }
+                                                    onChange={(event) =>
+                                                        setRecurrenceDayOfMonth(
+                                                            event.target
+                                                                .value,
+                                                        )
+                                                    }
+                                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-cyan-500"
+                                                >
+                                                    {Array.from(
+                                                        { length: 30 },
+                                                        (_, i) => i + 1,
+                                                    ).map((d) => (
+                                                        <option
+                                                            key={d}
+                                                            value={d}
+                                                        >
+                                                            {d}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                                    Dia da semana
+                                                </label>
+
+                                                <select
+                                                    value={
+                                                        recurrenceWeekday
+                                                    }
+                                                    onChange={(event) =>
+                                                        setRecurrenceWeekday(
+                                                            event.target
+                                                                .value,
+                                                        )
+                                                    }
+                                                    className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-cyan-500"
+                                                >
+                                                    <option value="0">Domingo</option>
+                                                    <option value="1">Segunda</option>
+                                                    <option value="2">Terça</option>
+                                                    <option value="3">Quarta</option>
+                                                    <option value="4">Quinta</option>
+                                                    <option value="5">Sexta</option>
+                                                    <option value="6">Sábado</option>
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <div className="md:col-span-2">
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">

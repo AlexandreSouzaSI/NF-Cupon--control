@@ -154,6 +154,21 @@ export type AccountActivationInviteEvent = {
     link: string;
 };
 
+// Mesma ideia do evento acima, mas por e-mail — disparado sempre junto
+// (não só quando falta telefone), porque e-mail é obrigatório pra todo
+// usuário e o WhatsApp depende de provedor configurado (Evolution API);
+// sem esse fallback, um convite podia não chegar em lugar nenhum. Quem
+// estiver ouvindo (EmailService) decide o texto e manda via Resend.
+export const ACCOUNT_ACTIVATION_INVITE_EMAIL_EVENT =
+    'account.activation.invited.email';
+
+export type AccountActivationInviteEmailEvent = {
+    userId: string;
+    name: string;
+    email: string;
+    link: string;
+};
+
 // Disparado quando a pessoa pede o link de "esqueci minha senha" e escolhe
 // receber por WhatsApp. AccountService só monta o link único
 // (User.passwordResetToken) e dispara; quem estiver ouvindo decide o texto

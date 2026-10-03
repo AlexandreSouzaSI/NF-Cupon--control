@@ -13,7 +13,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { normalizePhone } from '../common/phone.util';
-import { ACCOUNT_ACTIVATION_INVITE_EVENT } from '../common/events';
+import {
+    ACCOUNT_ACTIVATION_INVITE_EVENT,
+    ACCOUNT_ACTIVATION_INVITE_EMAIL_EVENT,
+} from '../common/events';
 
 // 7 dias — dá tempo da pessoa ver a mensagem no WhatsApp com calma antes
 // do link expirar (ver docs/BUSINESS_RULES.md).
@@ -65,6 +68,48 @@ export class UsersService {
                 (item: any) => item.storeId || item.store?.id,
             ) || []
         );
+    }
+
+    // Mesma ideia do check em update()/create(), reaproveitada em
+    // findOne/remove: Admin Master escapa, todo o resto só mexe em gente da
+    // própria empresa.
+    private ensureSameEmpresa(actingUser: any, targetEmpresaId: string | null) {
+        if (actingUser.isAdminMaster) return;
+
+        if (targetEmpresaId !== actingUser.empresaId) {
+            throw new ForbiddenException(
+                'Você só pode gerenciar usuários da sua empresa.',
+            );
+        }
+    }
+
+    // Multi-tenant: valida que as lojas informadas pertencem à MESMA empresa
+    // do usuário que está agindo — sem isso, "acesso global" (Administrativo/
+    // Proprietário, ver hasGlobalStoreAccess acima) significaria acesso
+    // global a QUALQUER loja do banco, inclusive de outra empresa-cliente.
+    // Admin Master (isAdminMaster) sempre escapa dessa checagem, porque ele
+    // de propósito opera entre empresas (painel /admin).
+    private async ensureStoresBelongToActingEmpresa(
+        actingUser: any,
+        storeIds: string[],
+    ) {
+        if (actingUser.isAdminMaster) return;
+        if (!storeIds || storeIds.length === 0) return;
+
+        const stores = await this.prisma.store.findMany({
+            where: { id: { in: storeIds } },
+            select: { id: true, empresaId: true },
+        });
+
+        const foreign = stores.some(
+            (store) => store.empresaId !== actingUser.empresaId,
+        );
+
+        if (foreign || stores.length !== storeIds.length) {
+            throw new ForbiddenException(
+                'Você só pode gerenciar usuários vinculados a lojas da sua empresa.',
+            );
+        }
     }
 
     // Admin Master (dono do sistema) sempre pode gerenciar qualquer
@@ -124,6 +169,13 @@ export class UsersService {
             );
         }
 
+        // Admin Master (painel /admin) não tem role nem userStores próprios
+        // — ele age em nome da empresa-cliente escolhida, não da própria.
+        // A checagem de "loja pertence à mesma empresa" já roda à parte em
+        // ensureStoresBelongToActingEmpresa; aqui só escapamos do check de
+        // overlap de loja, que não faz sentido pra ele.
+        if (actingUser.isAdminMaster) return;
+
         if (this.hasGlobalStoreAccess(actingUser)) return;
 
         if (options.targetStoreIds) {
@@ -150,11 +202,28 @@ export class UsersService {
             throw new ConflictException('E-mail já cadastrado');
         }
 
+        // Multi-tenant: a quem esse usuário novo pertence. Quem cria age
+        // dentro da própria empresa sempre (mesmo tendo "acesso global" de
+        // Proprietário/Administrativo — isso é global DENTRO da empresa, não
+        // entre empresas). Só o Admin Master, criando pelo painel /admin,
+        // pode passar dto.empresaId explicitamente pra escolher em qual
+        // empresa nova o usuário nasce.
+        const empresaId = actingUser?.isAdminMaster
+            ? dto.empresaId ?? null
+            : actingUser?.empresaId ?? null;
+
         if (actingUser) {
             this.ensureManagedUserAccess(actingUser, {
                 targetRole: dto.role,
                 targetStoreIds: dto.storeIds || [],
             });
+
+            await this.ensureStoresBelongToActingEmpresa(
+                actingUser.isAdminMaster
+                    ? { isAdminMaster: false, empresaId }
+                    : actingUser,
+                dto.storeIds || [],
+            );
 
             if (dto.canApprovePurchases !== undefined) {
                 this.ensureCanGrantApprovalPermission(actingUser);
@@ -219,6 +288,7 @@ export class UsersService {
                 password,
                 role: dto.role,
                 phone,
+                empresaId,
                 active: true,
                 accountActivated: !isInviteFlow,
                 activationToken,
@@ -243,17 +313,32 @@ export class UsersService {
             },
         });
 
-        if (isInviteFlow && phone && activationToken) {
+        if (isInviteFlow && activationToken) {
             const frontendUrl = (process.env.FRONTEND_URL || '').replace(
                 /\/$/,
                 '',
             );
             const link = `${frontendUrl}/ativar-conta/${activationToken}`;
 
-            this.eventEmitter.emit(ACCOUNT_ACTIVATION_INVITE_EVENT, {
+            // Manda pelos dois canais sempre que possível — WhatsApp
+            // depende de provedor configurado (Evolution API) e, mesmo
+            // configurado, pode falhar; e-mail é obrigatório pra todo
+            // usuário, então serve de garantia de que o convite chega em
+            // algum lugar. Cada canal decide/loga sua própria falha, sem
+            // travar a criação do usuário.
+            if (phone) {
+                this.eventEmitter.emit(ACCOUNT_ACTIVATION_INVITE_EVENT, {
+                    userId: user.id,
+                    name: user.name,
+                    phone,
+                    link,
+                });
+            }
+
+            this.eventEmitter.emit(ACCOUNT_ACTIVATION_INVITE_EMAIL_EVENT, {
                 userId: user.id,
                 name: user.name,
-                phone,
+                email: user.email,
                 link,
             });
         }
@@ -270,6 +355,19 @@ export class UsersService {
 
         if (allowedStoreIds) {
             where.userStores = { some: { storeId: { in: allowedStoreIds } } };
+        }
+
+        // Multi-tenant: "acesso global" (Administrativo/Proprietário) só
+        // enxerga todo mundo DENTRO da própria empresa — sem isso, o
+        // Proprietário da empresa A veria os funcionários da empresa B
+        // nessa mesma tela. Admin Master, com uma loja ativa selecionada no
+        // topo, vê só os colaboradores da empresa dessa loja
+        // (activeStoreEmpresaId, ver jwt.strategy.ts); sem loja ativa (ex.:
+        // painel /admin) continua vendo todo mundo, de propósito.
+        if (actingUser && !actingUser.isAdminMaster) {
+            where.empresaId = actingUser.empresaId;
+        } else if (actingUser?.isAdminMaster && actingUser.activeStoreEmpresaId) {
+            where.empresaId = actingUser.activeStoreEmpresaId;
         }
 
         // Conta de teste (isDemo) nunca aparece pra ninguém do time de
@@ -302,6 +400,8 @@ export class UsersService {
     // próprio usuário autenticado e pro update/remove reaproveitarem.
     async findOne(id: string, actingUser: any) {
         const user = await this.findById(id);
+
+        this.ensureSameEmpresa(actingUser, user.empresaId);
 
         if (!this.hasGlobalStoreAccess(actingUser)) {
             this.ensureManagedUserAccess(actingUser, {
@@ -376,6 +476,15 @@ export class UsersService {
         const existing = await this.findById(id);
 
         if (actingUser) {
+            // Multi-tenant: mesmo com acesso global (Administrativo/
+            // Proprietário), só edita gente da própria empresa. Admin
+            // Master escapa (gerencia qualquer empresa pelo /admin).
+            if (!actingUser.isAdminMaster && existing.empresaId !== actingUser.empresaId) {
+                throw new ForbiddenException(
+                    'Você só pode gerenciar usuários da sua empresa.',
+                );
+            }
+
             this.ensureManagedUserAccess(actingUser, {
                 targetRole: existing.role,
                 targetStoreIds: existing.userStores.map((us: any) => us.storeId),
@@ -389,6 +498,11 @@ export class UsersService {
                 this.ensureManagedUserAccess(actingUser, {
                     targetStoreIds: dto.storeIds,
                 });
+
+                await this.ensureStoresBelongToActingEmpresa(
+                    actingUser,
+                    dto.storeIds,
+                );
             }
 
             if (dto.canApprovePurchases !== undefined) {
@@ -498,6 +612,8 @@ export class UsersService {
         const existing = await this.findById(id);
 
         if (actingUser) {
+            this.ensureSameEmpresa(actingUser, existing.empresaId);
+
             this.ensureManagedUserAccess(actingUser, {
                 targetRole: existing.role,
                 targetStoreIds: existing.userStores.map((us: any) => us.storeId),

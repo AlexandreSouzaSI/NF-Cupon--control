@@ -22,6 +22,10 @@ import {
 import { CreateProductionItemDto } from './dto/create-production-item.dto';
 import { UpdateProductionItemDto } from './dto/update-production-item.dto';
 import { ProduzirDto } from './dto/produzir.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Mesmo normalizador usado em product-sales.service.ts/estoque.service.ts
 // — cópia local pra não acoplar módulos.
@@ -33,29 +37,13 @@ function normalizarNome(nome: string): string {
 export class ProductionService {
     constructor(private prisma: PrismaService) {}
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     // ---------------------------------------------------------------
@@ -69,7 +57,7 @@ export class ProductionService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const items = await this.prisma.productionItem.findMany({
             where: { storeId, active: true },
@@ -109,7 +97,7 @@ export class ProductionService {
 
         if (!item) throw new NotFoundException('Item de produção não encontrado.');
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         return {
             id: item.id,
@@ -128,7 +116,7 @@ export class ProductionService {
     }
 
     async createItem(dto: CreateProductionItemDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const nomeChave = normalizarNome(dto.nome);
 
@@ -173,7 +161,7 @@ export class ProductionService {
         const item = await this.prisma.productionItem.findUnique({ where: { id } });
         if (!item) throw new NotFoundException('Item de produção não encontrado.');
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         if (dto.receita) {
             await this.assertReceitaValida(item.storeId, dto.receita);
@@ -219,7 +207,7 @@ export class ProductionService {
         const item = await this.prisma.productionItem.findUnique({ where: { id } });
         if (!item) throw new NotFoundException('Item de produção não encontrado.');
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         // Soft delete — um item de produção já pode estar referenciado por
         // fichas técnicas de pratos (ProductRecipeItem); apagar de vez
@@ -263,7 +251,7 @@ export class ProductionService {
 
         if (!item) throw new NotFoundException('Item de produção não encontrado.');
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         if (item.recipeItems.length === 0) {
             throw new BadRequestException(
@@ -327,7 +315,7 @@ export class ProductionService {
             );
         }
 
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         const page = params.page && params.page > 0 ? params.page : 1;
         const pageSize = params.pageSize && params.pageSize > 0 ? params.pageSize : 30;

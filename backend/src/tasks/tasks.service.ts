@@ -28,6 +28,10 @@ import {
     WHATSAPP_TASK_START_EVENT,
 } from '../common/events';
 import type { WhatsappTaskStartEvent } from '../common/events';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Quem pode criar/editar/remover tarefas e desfazer confirmações — a
 // própria tela é aberta pra todo mundo ver, mas só gestão pode atribuir.
@@ -74,29 +78,13 @@ export class TasksService implements OnModuleInit {
         await this.runDailyGeneration();
     }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     private ensureCanManage(user: any) {
@@ -307,7 +295,7 @@ export class TasksService implements OnModuleInit {
         attachment?: { url: string; name: string },
     ) {
         this.ensureCanManage(user);
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
         this.validateRecurrenceFields(dto);
 
         const assignee = await this.prisma.user.findUnique({
@@ -357,10 +345,10 @@ export class TasksService implements OnModuleInit {
         user: any,
         filters?: { storeId?: string; assignedToId?: string; active?: boolean },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         return this.prisma.task.findMany({
@@ -387,7 +375,7 @@ export class TasksService implements OnModuleInit {
             throw new NotFoundException('Tarefa não encontrada.');
         }
 
-        this.ensureStoreAccess(task.storeId, user);
+        await this.ensureStoreAccess(task.storeId, user);
         this.ensureTaskVisible(task, user);
 
         return task;
@@ -402,11 +390,11 @@ export class TasksService implements OnModuleInit {
             throw new NotFoundException('Tarefa não encontrada.');
         }
 
-        this.ensureStoreAccess(task.storeId, user);
+        await this.ensureStoreAccess(task.storeId, user);
         this.ensureTaskVisible(task, user);
 
         if (dto.storeId) {
-            this.ensureStoreAccess(dto.storeId, user);
+            await this.ensureStoreAccess(dto.storeId, user);
         }
 
         const recurrence = dto.recurrence || task.recurrence;
@@ -464,7 +452,7 @@ export class TasksService implements OnModuleInit {
             throw new NotFoundException('Tarefa não encontrada.');
         }
 
-        this.ensureStoreAccess(task.storeId, user);
+        await this.ensureStoreAccess(task.storeId, user);
         this.ensureTaskVisible(task, user);
 
         return this.prisma.task.update({
@@ -729,12 +717,12 @@ export class TasksService implements OnModuleInit {
             to?: string;
         },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         let storeFilter: string | { in: string[] } | undefined;
 
         if (filters.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
             storeFilter = filters.storeId;
         } else if (allowedStoreIds) {
             storeFilter = { in: allowedStoreIds };
@@ -806,7 +794,7 @@ export class TasksService implements OnModuleInit {
             throw new NotFoundException('Tarefa não encontrada.');
         }
 
-        this.ensureStoreAccess(occurrence.task.storeId, user);
+        await this.ensureStoreAccess(occurrence.task.storeId, user);
 
         if (!this.isResponsavel(occurrence.task, user)) {
             throw new ForbiddenException(
@@ -907,7 +895,7 @@ export class TasksService implements OnModuleInit {
             throw new NotFoundException('Tarefa não encontrada.');
         }
 
-        this.ensureStoreAccess(occurrence.task.storeId, user);
+        await this.ensureStoreAccess(occurrence.task.storeId, user);
 
         if (!this.isResponsavel(occurrence.task, user)) {
             throw new ForbiddenException(
@@ -955,7 +943,7 @@ export class TasksService implements OnModuleInit {
             throw new NotFoundException('Tarefa não encontrada.');
         }
 
-        this.ensureStoreAccess(occurrence.task.storeId, user);
+        await this.ensureStoreAccess(occurrence.task.storeId, user);
         this.ensureTaskVisible(occurrence.task, user);
 
         const startOfToday = this.startOfUtcDay(new Date());
@@ -990,7 +978,7 @@ export class TasksService implements OnModuleInit {
             throw new NotFoundException('Tarefa não encontrada.');
         }
 
-        this.ensureStoreAccess(occurrence.task.storeId, user);
+        await this.ensureStoreAccess(occurrence.task.storeId, user);
         this.ensureTaskVisible(occurrence.task, user);
 
         if (
@@ -1037,7 +1025,7 @@ export class TasksService implements OnModuleInit {
             throw new NotFoundException('Tarefa não encontrada.');
         }
 
-        this.ensureStoreAccess(occurrence.task.storeId, user);
+        await this.ensureStoreAccess(occurrence.task.storeId, user);
         this.ensureTaskVisible(occurrence.task, user);
 
         if (

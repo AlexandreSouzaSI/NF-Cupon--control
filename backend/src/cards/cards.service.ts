@@ -7,42 +7,26 @@ import {
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCardDto } from './dto/create-card.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 @Injectable()
 export class CardsService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) {
-            return;
-        }
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException(
-                'Você não tem acesso a esta loja.',
-            );
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     async create(dto: CreateCardDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         return this.prisma.card.create({
             data: {
@@ -58,7 +42,7 @@ export class CardsService {
     }
 
     async findAll(user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         return this.prisma.card.findMany({
             where: {
@@ -87,7 +71,7 @@ export class CardsService {
             throw new NotFoundException('Cartão não encontrado');
         }
 
-        this.ensureStoreAccess(card.storeId, user);
+        await this.ensureStoreAccess(card.storeId, user);
 
         return this.prisma.card.update({
             where: { id },

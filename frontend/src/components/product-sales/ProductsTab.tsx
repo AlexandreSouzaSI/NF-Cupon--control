@@ -58,10 +58,12 @@ const CATEGORY_COLORS = [
 
 export function ProductsTab({
     refreshKey,
-    importId,
+    periodoInicio,
+    periodoFim,
 }: {
     refreshKey?: number;
-    importId?: string | null;
+    periodoInicio?: string;
+    periodoFim?: string;
 }) {
     const [summary, setSummary] = useState<ProductSummary | null>(null);
     const [loading, setLoading] = useState(true);
@@ -80,7 +82,7 @@ export function ProductsTab({
             setLoading(true);
 
             const response = await api.get('/product-sales/summary', {
-                params: { storeId: store.id, importId: importId || undefined },
+                params: { storeId: store.id, periodoInicio, periodoFim },
             });
 
             setSummary(response.data);
@@ -96,7 +98,7 @@ export function ProductsTab({
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [refreshKey, importId]);
+    }, [refreshKey, periodoInicio, periodoFim]);
 
     const itensDaCategoria = useMemo(() => {
         if (!categoriaSelecionada) return [];
@@ -268,7 +270,9 @@ export function ProductsTab({
                 </div>
             ) : !summary || summary.porCategoria.length === 0 ? (
                 <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-                    Nenhum produto encontrado — importe uma planilha na aba
+                    Nenhum produto encontrado nesse período — se a loja
+                    recebe vendas automaticamente da Meep, aguarde a próxima
+                    sincronização ou importe uma planilha na aba
                     &quot;Importar&quot;.
                 </div>
             ) : (

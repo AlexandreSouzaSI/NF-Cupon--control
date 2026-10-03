@@ -38,6 +38,10 @@ import { SendQuotationDto } from './dto/send-quotation.dto';
 import { SubmitQuotationPricesDto } from './dto/submit-quotation-prices.dto';
 import { SelectSupplierDto } from './dto/select-supplier.dto';
 import { EditItemPriceDto } from './dto/edit-item-price.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Mesma lista de perfis que recebem notificação de evento de Compras
 // (ver PURCHASE_NOTIFY_ROLES em purchases.service.ts) — Administrativo/
@@ -68,28 +72,27 @@ export class QuotationsService {
         private notificationsService: NotificationsService,
     ) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
+    }
 
-        if (!allowedStoreIds) return;
+    // Multi-tenant: SupplierCategory.empresaId — checar só a loja (storeId)
+    // não bastava, porque o storeId vem da própria empresa de quem está
+    // logado, mas o categoryId é um id solto no payload (IDOR): sem essa
+    // checagem, dava pra ler/editar agenda ou lista de outra empresa
+    // adivinhando/reaproveitando um id de categoria. Mesma mensagem do
+    // "não encontrada" pra não revelar que o id existe em outra empresa.
+    // Admin Master é a única exceção (mesmo padrão do resto do sistema).
+    private ensureCategoryEmpresaAccess(category: { empresaId: string | null }, user: any) {
+        if (!user || user.isAdminMaster) return;
 
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
+        if (category.empresaId !== user.empresaId) {
+            throw new NotFoundException('Categoria não encontrada.');
         }
     }
 
@@ -106,7 +109,7 @@ export class QuotationsService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         return this.prisma.quotationScheduleEntry.findMany({
             where: { storeId },
@@ -116,7 +119,7 @@ export class QuotationsService {
     }
 
     async createScheduleEntry(dto: CreateScheduleEntryDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const category = await this.prisma.supplierCategory.findUnique({
             where: { id: dto.categoryId },
@@ -125,6 +128,8 @@ export class QuotationsService {
         if (!category) {
             throw new NotFoundException('Categoria não encontrada.');
         }
+
+        this.ensureCategoryEmpresaAccess(category, user);
 
         try {
             return await this.prisma.quotationScheduleEntry.create({
@@ -158,7 +163,7 @@ export class QuotationsService {
             throw new NotFoundException('Entrada da agenda não encontrada.');
         }
 
-        this.ensureStoreAccess(entry.storeId, user);
+        await this.ensureStoreAccess(entry.storeId, user);
 
         await this.prisma.quotationScheduleEntry.delete({ where: { id } });
 
@@ -174,7 +179,7 @@ export class QuotationsService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const diaSemana = new Date().getDay();
 
@@ -266,7 +271,7 @@ export class QuotationsService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const category = await this.prisma.supplierCategory.findUnique({
             where: { id: categoryId },
@@ -275,6 +280,8 @@ export class QuotationsService {
         if (!category) {
             throw new NotFoundException('Categoria não encontrada.');
         }
+
+        this.ensureCategoryEmpresaAccess(category, user);
 
         const rows = await this.prisma.quotationCategoryItem.findMany({
             where: { categoryId, storeId },
@@ -292,7 +299,7 @@ export class QuotationsService {
     // de uma categoria) ---
 
     async addCategoryItem(dto: CreateCategoryItemDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const category = await this.prisma.supplierCategory.findUnique({
             where: { id: dto.categoryId },
@@ -301,6 +308,8 @@ export class QuotationsService {
         if (!category) {
             throw new NotFoundException('Categoria não encontrada.');
         }
+
+        this.ensureCategoryEmpresaAccess(category, user);
 
         if (!dto.stockItemId && !dto.descricaoManual) {
             throw new BadRequestException(
@@ -362,7 +371,7 @@ export class QuotationsService {
             throw new NotFoundException('Item não encontrado.');
         }
 
-        this.ensureStoreAccess(row.storeId, user);
+        await this.ensureStoreAccess(row.storeId, user);
 
         const updated = await this.prisma.quotationCategoryItem.update({
             where: { id },
@@ -388,7 +397,7 @@ export class QuotationsService {
             throw new NotFoundException('Item não encontrado.');
         }
 
-        this.ensureStoreAccess(row.storeId, user);
+        await this.ensureStoreAccess(row.storeId, user);
 
         await this.prisma.quotationCategoryItem.delete({ where: { id } });
 
@@ -457,7 +466,7 @@ export class QuotationsService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const category = await this.prisma.supplierCategory.findUnique({
             where: { id: categoryId },
@@ -466,6 +475,8 @@ export class QuotationsService {
         if (!category) {
             throw new NotFoundException('Categoria não encontrada.');
         }
+
+        this.ensureCategoryEmpresaAccess(category, user);
 
         const suppliers = await this.resolveCandidateSuppliers(
             storeId,
@@ -486,7 +497,7 @@ export class QuotationsService {
     // pública que o link abre ainda não existe (Fase 4): o fornecedor vai
     // receber a mensagem, mas o link só funciona de verdade depois disso.
     async sendQuotation(dto: SendQuotationDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const [store, category, categoryItemRows] = await Promise.all([
             this.prisma.store.findUnique({ where: { id: dto.storeId } }),
@@ -507,6 +518,8 @@ export class QuotationsService {
         if (!category) {
             throw new NotFoundException('Categoria não encontrada.');
         }
+
+        this.ensureCategoryEmpresaAccess(category, user);
 
         if (categoryItemRows.length === 0) {
             throw new BadRequestException(
@@ -764,7 +777,7 @@ export class QuotationsService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         // Essa listagem só mostra contagens (quantos itens, quantos
         // fornecedores responderam/recusaram), nunca o conteúdo — trazer
@@ -896,7 +909,7 @@ export class QuotationsService {
             throw new NotFoundException('Cotação não encontrada.');
         }
 
-        this.ensureStoreAccess(quotation.storeId, user);
+        await this.ensureStoreAccess(quotation.storeId, user);
 
         const stockItemIds = quotation.items
             .map((item) => item.stockItemId)
@@ -996,7 +1009,7 @@ export class QuotationsService {
             throw new NotFoundException('Cotação não encontrada.');
         }
 
-        this.ensureStoreAccess(quotation.storeId, user);
+        await this.ensureStoreAccess(quotation.storeId, user);
 
         if (
             quotation.status !== QuotationStatus.SENT &&
@@ -1102,7 +1115,7 @@ export class QuotationsService {
             throw new NotFoundException('Cotação não encontrada.');
         }
 
-        this.ensureStoreAccess(quotation.storeId, user);
+        await this.ensureStoreAccess(quotation.storeId, user);
 
         if (
             quotation.status !== QuotationStatus.SENT &&
@@ -1157,7 +1170,7 @@ export class QuotationsService {
             throw new NotFoundException('Cotação não encontrada.');
         }
 
-        this.ensureStoreAccess(quotation.storeId, user);
+        await this.ensureStoreAccess(quotation.storeId, user);
 
         if (
             quotation.status !== QuotationStatus.SENT &&
@@ -1305,7 +1318,7 @@ export class QuotationsService {
             throw new NotFoundException('Cotação não encontrada.');
         }
 
-        this.ensureStoreAccess(quotation.storeId, user);
+        await this.ensureStoreAccess(quotation.storeId, user);
 
         if (quotation.status !== QuotationStatus.SUPPLIER_SELECTED) {
             throw new BadRequestException(

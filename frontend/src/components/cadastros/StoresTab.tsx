@@ -6,6 +6,7 @@ import { canDeleteForever, getUser, hasGlobalStoreAccess } from '@/lib/auth';
 import {
     Building2,
     CheckCircle2,
+    CreditCard,
     FileSearch,
     Flame,
     History,
@@ -38,6 +39,9 @@ type Store = {
     codigoMunicipioIbge?: string | null;
     cep?: string | null;
     inscricaoEstadual?: string | null;
+    tipoPessoa?: 'JURIDICA' | 'FISICA';
+    cpf?: string | null;
+    telefoneAvisoDiario?: string | null;
 };
 
 type CertificateStatus = {
@@ -55,12 +59,37 @@ type SyncLog = {
     createdAt: string;
 };
 
+type MeepSyncLog = {
+    id: string;
+    endpoint: string;
+    rangeStart: string;
+    rangeEnd: string;
+    success: boolean;
+    message: string;
+    ordersFetched: number;
+    transactionsFetched: number;
+    createdAt: string;
+};
+
+type MeepStatus = {
+    hasCredential: boolean;
+    meepStoreId: string | null;
+    username: string | null;
+    active: boolean;
+    lastSalesSyncedUntil: string | null;
+    lastConciliationSyncedUntil: string | null;
+    updatedAt: string | null;
+};
+
 function formatDate(value: string) {
     return new Date(value).toLocaleDateString('pt-BR');
 }
 
 function formatDateTime(value: string) {
+    // Fuso explícito — sem isso o navegador pode exibir o horário UTC
+    // cru em vez de converter pra Brasília.
     return new Date(value).toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
         day: '2-digit',
         month: '2-digit',
         hour: '2-digit',
@@ -107,6 +136,9 @@ export function StoresTab() {
         cep: '',
         inscricaoEstadual: '',
         isDemo: false,
+        tipoPessoa: 'JURIDICA' as 'JURIDICA' | 'FISICA',
+        cpf: '',
+        telefoneAvisoDiario: '',
     });
 
     const [showFiscalFields, setShowFiscalFields] = useState(false);
@@ -138,6 +170,35 @@ export function StoresTab() {
         string | null
     >(null);
 
+    // Credencial da API Meep (vendas do bar/restaurante) — mesmo padrão do
+    // certificado digital acima, com campos próprios (subscription key,
+    // login/senha do portal.meep-app.com, StoreId da Meep).
+    const [meepStatus, setMeepStatus] = useState<Record<string, MeepStatus>>(
+        {},
+    );
+    const [meepFormStoreId, setMeepFormStoreId] = useState<string | null>(
+        null,
+    );
+    const [meepForm, setMeepForm] = useState({
+        subscriptionKey: '',
+        username: '',
+        password: '',
+        meepStoreId: '',
+    });
+    const [meepSaving, setMeepSaving] = useState(false);
+    const [syncingMeepStoreId, setSyncingMeepStoreId] = useState<
+        string | null
+    >(null);
+    const [meepSyncLogs, setMeepSyncLogs] = useState<
+        Record<string, MeepSyncLog[]>
+    >({});
+    const [meepLogsOpenStoreId, setMeepLogsOpenStoreId] = useState<
+        string | null
+    >(null);
+    const [loadingMeepLogsStoreId, setLoadingMeepLogsStoreId] = useState<
+        string | null
+    >(null);
+
     async function loadStores() {
         try {
             setLoading(true);
@@ -147,6 +208,7 @@ export function StoresTab() {
 
             if (canManageCertificate) {
                 await loadCertificateStatuses(loadedStores);
+                await loadMeepStatuses(loadedStores);
             }
         } catch {
             toast.error('Erro ao carregar lojas.');
@@ -168,6 +230,23 @@ export function StoresTab() {
             setCertStatus(Object.fromEntries(results));
         } catch {
             // Status do certificado é informativo; se falhar, a tela
+            // continua utilizável sem essa informação.
+        }
+    }
+
+    async function loadMeepStatuses(storeList: Store[]) {
+        try {
+            const results = await Promise.all(
+                storeList.map((store) =>
+                    api
+                        .get(`/stores/${store.id}/meep-credential`)
+                        .then((res) => [store.id, res.data] as const),
+                ),
+            );
+
+            setMeepStatus(Object.fromEntries(results));
+        } catch {
+            // Status da credencial Meep é informativo; se falhar, a tela
             // continua utilizável sem essa informação.
         }
     }
@@ -369,6 +448,154 @@ export function StoresTab() {
         }
     }
 
+    function openMeepForm(storeId: string) {
+        setMeepFormStoreId(storeId);
+        setMeepForm({
+            subscriptionKey: '',
+            username: '',
+            password: '',
+            meepStoreId: '',
+        });
+    }
+
+    function closeMeepForm() {
+        setMeepFormStoreId(null);
+        setMeepForm({
+            subscriptionKey: '',
+            username: '',
+            password: '',
+            meepStoreId: '',
+        });
+    }
+
+    async function handleSaveMeep(storeId: string) {
+        if (!meepForm.subscriptionKey.trim()) {
+            toast.error('Informe a subscription key da Meep.');
+            return;
+        }
+        if (!meepForm.username.trim()) {
+            toast.error('Informe o login do portal.meep-app.com.');
+            return;
+        }
+        if (!meepForm.password.trim()) {
+            toast.error('Informe a senha da Meep.');
+            return;
+        }
+        if (!meepForm.meepStoreId.trim()) {
+            toast.error('Informe o StoreId da Meep dessa loja.');
+            return;
+        }
+
+        try {
+            setMeepSaving(true);
+
+            await api.post(`/stores/${storeId}/meep-credential`, meepForm);
+
+            toast.success('Credencial Meep salva.');
+            closeMeepForm();
+            await loadMeepStatuses(stores);
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message ||
+                'Erro ao salvar a credencial Meep.';
+
+            toast.error(
+                Array.isArray(message) ? message.join(', ') : message,
+            );
+        } finally {
+            setMeepSaving(false);
+        }
+    }
+
+    async function handleRemoveMeep(store: Store) {
+        const confirmed = confirm(
+            `Remover a credencial Meep da loja "${store.name}"?`,
+        );
+
+        if (!confirmed) return;
+
+        try {
+            await api.delete(`/stores/${store.id}/meep-credential`);
+            toast.success('Credencial Meep removida.');
+            await loadMeepStatuses(stores);
+        } catch {
+            toast.error('Erro ao remover a credencial Meep.');
+        }
+    }
+
+    async function handleToggleMeepActive(store: Store) {
+        const current = meepStatus[store.id];
+        if (!current) return;
+
+        try {
+            await api.patch(`/stores/${store.id}/meep-credential/active`, {
+                active: !current.active,
+            });
+            await loadMeepStatuses(stores);
+        } catch {
+            toast.error('Erro ao atualizar a credencial Meep.');
+        }
+    }
+
+    async function handleSyncMeepNow(store: Store) {
+        try {
+            setSyncingMeepStoreId(store.id);
+
+            const response = await api.post(`/meep/${store.id}/sync-now`);
+            const result = response.data as {
+                success: boolean;
+                message?: string;
+            };
+
+            if (result.success) {
+                toast.success('Sincronização Meep disparada.');
+                await loadMeepStatuses(stores);
+                // Se o histórico já estava aberto, recarrega pra já mostrar
+                // o resultado dessa tentativa (sucesso/erro, quantos
+                // pedidos/transações vieram) sem precisar clicar de novo.
+                if (meepLogsOpenStoreId === store.id) {
+                    await loadMeepSyncLogs(store.id);
+                }
+            } else {
+                toast.error(result.message || 'Não foi possível sincronizar.');
+            }
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message ||
+                'Erro ao sincronizar com a Meep.';
+
+            toast.error(
+                Array.isArray(message) ? message.join(', ') : message,
+            );
+        } finally {
+            setSyncingMeepStoreId(null);
+        }
+    }
+
+    async function loadMeepSyncLogs(storeId: string) {
+        try {
+            setLoadingMeepLogsStoreId(storeId);
+            const response = await api.get('/meep/sync-logs', {
+                params: { storeId },
+            });
+            setMeepSyncLogs((prev) => ({ ...prev, [storeId]: response.data }));
+        } catch {
+            toast.error('Erro ao carregar histórico de sincronização Meep.');
+        } finally {
+            setLoadingMeepLogsStoreId(null);
+        }
+    }
+
+    async function toggleMeepLogs(store: Store) {
+        if (meepLogsOpenStoreId === store.id) {
+            setMeepLogsOpenStoreId(null);
+            return;
+        }
+
+        setMeepLogsOpenStoreId(store.id);
+        await loadMeepSyncLogs(store.id);
+    }
+
     function resetForm() {
         setForm({
             name: '',
@@ -385,6 +612,9 @@ export function StoresTab() {
             cep: '',
             inscricaoEstadual: '',
             isDemo: false,
+            tipoPessoa: 'JURIDICA',
+            cpf: '',
+            telefoneAvisoDiario: '',
         });
         setEditingStore(null);
         setShowFiscalFields(false);
@@ -417,6 +647,9 @@ export function StoresTab() {
             cep: store.cep || '',
             inscricaoEstadual: store.inscricaoEstadual || '',
             isDemo: !!store.isDemo,
+            tipoPessoa: store.tipoPessoa || 'JURIDICA',
+            cpf: store.cpf || '',
+            telefoneAvisoDiario: store.telefoneAvisoDiario || '',
         });
         setModalOpen(true);
     }
@@ -568,6 +801,86 @@ export function StoresTab() {
                                 className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                             />
                         </div>
+
+                        <div>
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                Tipo
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setForm({ ...form, tipoPessoa: 'JURIDICA' })
+                                    }
+                                    className={`h-11 rounded-xl border text-sm font-medium ${form.tipoPessoa === 'JURIDICA'
+                                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                        : 'border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400'
+                                        }`}
+                                >
+                                    Loja (CNPJ)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setForm({ ...form, tipoPessoa: 'FISICA' })
+                                    }
+                                    className={`h-11 rounded-xl border text-sm font-medium ${form.tipoPessoa === 'FISICA'
+                                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                        : 'border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400'
+                                        }`}
+                                >
+                                    Pessoa Física
+                                </button>
+                            </div>
+                            {form.tipoPessoa === 'FISICA' && (
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    Pra controlar contas pessoais do proprietário
+                                    (não do negócio). Essa loja só vai mostrar
+                                    Dashboard e Contas a Pagar no menu.
+                                </p>
+                            )}
+                        </div>
+
+                        {form.tipoPessoa === 'FISICA' && (
+                            <>
+                                <div>
+                                    <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                        CPF
+                                    </label>
+                                    <input
+                                        value={form.cpf}
+                                        onChange={(e) =>
+                                            setForm({ ...form, cpf: e.target.value })
+                                        }
+                                        autoComplete="off"
+                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                        Telefone pra aviso diário (WhatsApp)
+                                    </label>
+                                    <input
+                                        value={form.telefoneAvisoDiario}
+                                        onChange={(e) =>
+                                            setForm({
+                                                ...form,
+                                                telefoneAvisoDiario: e.target.value,
+                                            })
+                                        }
+                                        placeholder="Ex: 31999999999"
+                                        autoComplete="off"
+                                        className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
+                                    />
+                                    <p className="mt-1 text-xs text-zinc-500">
+                                        Recebe um WhatsApp todo dia com as
+                                        contas que vencem hoje. Deixe em branco
+                                        pra não receber.
+                                    </p>
+                                </div>
+                            </>
+                        )}
 
                         <div>
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
@@ -851,6 +1164,12 @@ export function StoresTab() {
                                             {store.isDemo && (
                                                 <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                                                     Demonstração
+                                                </span>
+                                            )}
+
+                                            {store.tipoPessoa === 'FISICA' && (
+                                                <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
+                                                    Pessoa Física
                                                 </span>
                                             )}
                                         </div>
@@ -1193,6 +1512,315 @@ export function StoresTab() {
                                                         )}
                                                     </div>
                                                 )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {canManageCertificate && (
+                                    <div className="mt-4 border-t border-zinc-200 dark:border-zinc-800 pt-4">
+                                        {meepStatus[store.id]?.hasCredential ? (
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="flex items-center gap-2 text-sm text-teal-600 dark:text-teal-400">
+                                                    <CreditCard size={16} />
+                                                    <span>
+                                                        Credencial Meep
+                                                        cadastrada
+                                                        {meepStatus[store.id]
+                                                            ?.meepStoreId &&
+                                                            ` (StoreId ${meepStatus[store.id]!.meepStoreId})`}
+                                                        {' — '}
+                                                        {meepStatus[store.id]
+                                                            ?.active
+                                                            ? 'ativa'
+                                                            : 'desativada'}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-2">
+                                                    <button
+                                                        disabled={
+                                                            syncingMeepStoreId ===
+                                                            store.id
+                                                        }
+                                                        onClick={() =>
+                                                            handleSyncMeepNow(
+                                                                store,
+                                                            )
+                                                        }
+                                                        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium disabled:cursor-wait ${syncingMeepStoreId ===
+                                                            store.id
+                                                            ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-500'
+                                                            : 'border-teal-500/30 bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 dark:text-teal-400'
+                                                            }`}
+                                                    >
+                                                        {syncingMeepStoreId ===
+                                                            store.id ? (
+                                                            <Loader2
+                                                                size={14}
+                                                                className="animate-spin"
+                                                            />
+                                                        ) : (
+                                                            <Plug size={14} />
+                                                        )}
+                                                        Buscar agora
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() =>
+                                                            toggleMeepLogs(
+                                                                store,
+                                                            )
+                                                        }
+                                                        title="Histórico das últimas tentativas de sincronização (manuais e automáticas)"
+                                                        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium ${meepLogsOpenStoreId ===
+                                                            store.id
+                                                            ? 'border-zinc-400 bg-zinc-200 text-zinc-800 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100'
+                                                            : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                                                            }`}
+                                                    >
+                                                        {loadingMeepLogsStoreId ===
+                                                            store.id ? (
+                                                            <Loader2
+                                                                size={14}
+                                                                className="animate-spin"
+                                                            />
+                                                        ) : (
+                                                            <History size={14} />
+                                                        )}
+                                                        Histórico
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() =>
+                                                            handleToggleMeepActive(
+                                                                store,
+                                                            )
+                                                        }
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                                    >
+                                                        {meepStatus[store.id]
+                                                            ?.active
+                                                            ? 'Desativar'
+                                                            : 'Ativar'}
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() =>
+                                                            openMeepForm(
+                                                                store.id,
+                                                            )
+                                                        }
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                                    >
+                                                        <KeyRound size={14} />
+                                                        Trocar
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() =>
+                                                            handleRemoveMeep(
+                                                                store,
+                                                            )
+                                                        }
+                                                        className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"
+                                                    >
+                                                        Remover
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                <p className="text-sm text-zinc-500">
+                                                    Nenhuma credencial Meep
+                                                    cadastrada (integração de
+                                                    vendas do bar/restaurante).
+                                                </p>
+
+                                                {meepFormStoreId !== store.id && (
+                                                    <button
+                                                        onClick={() =>
+                                                            openMeepForm(
+                                                                store.id,
+                                                            )
+                                                        }
+                                                        className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                                    >
+                                                        <CreditCard size={14} />
+                                                        Cadastrar credencial Meep
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {meepLogsOpenStoreId === store.id && (
+                                            <div className="mt-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+                                                <p className="mb-2 text-xs font-semibold text-zinc-500">
+                                                    Últimas tentativas de
+                                                    sincronização (manuais e
+                                                    automáticas — a automática
+                                                    roda sozinha a cada hora,
+                                                    respeitando os limites da
+                                                    Meep)
+                                                </p>
+
+                                                {loadingMeepLogsStoreId ===
+                                                    store.id ? (
+                                                    <p className="text-sm text-zinc-500">
+                                                        Carregando...
+                                                    </p>
+                                                ) : !meepSyncLogs[store.id] ||
+                                                    meepSyncLogs[store.id]
+                                                        .length === 0 ? (
+                                                    <p className="text-sm text-zinc-500">
+                                                        Nenhuma tentativa
+                                                        registrada ainda.
+                                                    </p>
+                                                ) : (
+                                                    <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                                                        {meepSyncLogs[
+                                                            store.id
+                                                        ].map((log) => (
+                                                            <div
+                                                                key={log.id}
+                                                                className="flex items-start gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-xs"
+                                                            >
+                                                                {log.success ? (
+                                                                    <CheckCircle2
+                                                                        size={
+                                                                            14
+                                                                        }
+                                                                        className="mt-0.5 shrink-0 text-teal-500"
+                                                                    />
+                                                                ) : (
+                                                                    <XCircle
+                                                                        size={
+                                                                            14
+                                                                        }
+                                                                        className="mt-0.5 shrink-0 text-red-400"
+                                                                    />
+                                                                )}
+                                                                <div>
+                                                                    <p className="font-medium text-zinc-700 dark:text-zinc-300">
+                                                                        {
+                                                                            log.endpoint
+                                                                        }{' '}
+                                                                        —{' '}
+                                                                        {new Date(
+                                                                            log.createdAt,
+                                                                        ).toLocaleString(
+                                                                            'pt-BR',
+                                                                        )}
+                                                                    </p>
+                                                                    <p className="text-zinc-500">
+                                                                        Janela:{' '}
+                                                                        {new Date(
+                                                                            log.rangeStart,
+                                                                        ).toLocaleString(
+                                                                            'pt-BR',
+                                                                        )}{' '}
+                                                                        até{' '}
+                                                                        {new Date(
+                                                                            log.rangeEnd,
+                                                                        ).toLocaleString(
+                                                                            'pt-BR',
+                                                                        )}
+                                                                    </p>
+                                                                    <p className="text-zinc-500">
+                                                                        {
+                                                                            log.message
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {meepFormStoreId === store.id && (
+                                            <div className="mt-3 grid grid-cols-1 gap-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 sm:grid-cols-2">
+                                                <input
+                                                    type="text"
+                                                    value={
+                                                        meepForm.subscriptionKey
+                                                    }
+                                                    onChange={(e) =>
+                                                        setMeepForm((prev) => ({
+                                                            ...prev,
+                                                            subscriptionKey:
+                                                                e.target.value,
+                                                        }))
+                                                    }
+                                                    placeholder="Subscription key"
+                                                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
+                                                />
+
+                                                <input
+                                                    type="text"
+                                                    value={meepForm.meepStoreId}
+                                                    onChange={(e) =>
+                                                        setMeepForm((prev) => ({
+                                                            ...prev,
+                                                            meepStoreId:
+                                                                e.target.value,
+                                                        }))
+                                                    }
+                                                    placeholder="StoreId da Meep"
+                                                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
+                                                />
+
+                                                <input
+                                                    type="text"
+                                                    value={meepForm.username}
+                                                    onChange={(e) =>
+                                                        setMeepForm((prev) => ({
+                                                            ...prev,
+                                                            username:
+                                                                e.target.value,
+                                                        }))
+                                                    }
+                                                    placeholder="Login (portal.meep-app.com)"
+                                                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
+                                                />
+
+                                                <input
+                                                    type="password"
+                                                    value={meepForm.password}
+                                                    onChange={(e) =>
+                                                        setMeepForm((prev) => ({
+                                                            ...prev,
+                                                            password:
+                                                                e.target.value,
+                                                        }))
+                                                    }
+                                                    placeholder="Senha da Meep"
+                                                    className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-teal-500"
+                                                />
+
+                                                <div className="flex gap-2 sm:col-span-2">
+                                                    <button
+                                                        disabled={meepSaving}
+                                                        onClick={() =>
+                                                            handleSaveMeep(
+                                                                store.id,
+                                                            )
+                                                        }
+                                                        className="h-10 rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                                                    >
+                                                        {meepSaving
+                                                            ? 'Enviando...'
+                                                            : 'Salvar'}
+                                                    </button>
+
+                                                    <button
+                                                        onClick={closeMeepForm}
+                                                        className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                                    >
+                                                        Cancelar
+                                                    </button>
+                                                </div>
                                             </div>
                                         )}
                                     </div>

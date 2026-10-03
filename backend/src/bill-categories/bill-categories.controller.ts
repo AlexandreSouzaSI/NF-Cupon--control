@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminMasterGuard } from '../auth/admin-master.guard';
 import { FindOrCreateBillCategoryDto } from './dto/find-or-create-bill-category.dto';
@@ -10,13 +10,13 @@ export class BillCategoriesController {
     constructor(private billCategoriesService: BillCategoriesService) { }
 
     @Post('find-or-create')
-    async findOrCreate(@Body() body: FindOrCreateBillCategoryDto) {
-        return this.billCategoriesService.findOrCreate(body.name);
+    async findOrCreate(@Body() body: FindOrCreateBillCategoryDto, @Req() req: any) {
+        return this.billCategoriesService.findOrCreate(body.name, req.user);
     }
 
     @Get()
-    async findAll(@Query('search') search?: string) {
-        return this.billCategoriesService.findAll(search);
+    async findAll(@Query('search') search: string | undefined, @Req() req: any) {
+        return this.billCategoriesService.findAll(search, req.user);
     }
 
     @Get('suggest')

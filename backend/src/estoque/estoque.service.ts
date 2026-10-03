@@ -27,6 +27,10 @@ import { UpdateStockItemDto } from './dto/update-stock-item.dto';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { LinkNfItemsDto } from './dto/link-nf-items.dto';
 import { LinkPurchaseItemsDto } from './dto/link-purchase-items.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Categoria de negócio do StockItem — fixa nessas 6 opções (o frontend só
 // deixa escolher uma delas; StockItem.categoria continua String no schema
@@ -74,29 +78,13 @@ function parseNumeroCell(value: unknown): number | null {
 export class EstoqueService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     // ---------------------------------------------------------------
@@ -117,7 +105,7 @@ export class EstoqueService {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
         }
 
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         const where: Prisma.StockItemWhereInput = {
             storeId: params.storeId,
@@ -189,7 +177,7 @@ export class EstoqueService {
     }
 
     async listCategorias(user: any, storeId: string) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const items = await this.prisma.stockItem.findMany({
             where: { storeId, active: true, categoria: { not: null } },
@@ -211,7 +199,7 @@ export class EstoqueService {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const items = await this.prisma.stockItem.findMany({
             where: {
@@ -244,7 +232,7 @@ export class EstoqueService {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const [items, ultimasMovimentacoes] = await Promise.all([
             this.prisma.stockItem.findMany({
@@ -321,7 +309,7 @@ export class EstoqueService {
     }
 
     async createItem(dto: CreateStockItemDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const nomeChave = normalizarNome(dto.nome);
 
@@ -353,7 +341,7 @@ export class EstoqueService {
         const item = await this.prisma.stockItem.findUnique({ where: { id } });
         if (!item) throw new NotFoundException('Item de estoque não encontrado.');
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         const data: Prisma.StockItemUpdateInput = {};
 
@@ -396,7 +384,7 @@ export class EstoqueService {
 
         const storeIds = Array.from(new Set(items.map((i) => i.storeId)));
         for (const storeId of storeIds) {
-            this.ensureStoreAccess(storeId, user);
+            await this.ensureStoreAccess(storeId, user);
         }
 
         await this.prisma.stockItem.updateMany({
@@ -416,7 +404,7 @@ export class EstoqueService {
         const item = await this.prisma.stockItem.findUnique({ where: { id } });
         if (!item) throw new NotFoundException('Item de estoque não encontrado.');
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         await this.prisma.stockItem.delete({ where: { id } });
 
@@ -435,7 +423,7 @@ export class EstoqueService {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
         }
 
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         const page = params.page && params.page > 0 ? params.page : 1;
         const pageSize = params.pageSize && params.pageSize > 0 ? params.pageSize : 20;
@@ -487,7 +475,7 @@ export class EstoqueService {
             throw new BadRequestException('Item de estoque não pertence a essa loja.');
         }
 
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         await this.prisma.$transaction(async (tx) => {
             await this.applyMovement(tx, {
@@ -658,7 +646,7 @@ export class EstoqueService {
     // no estoque. Mesma condição tri-OR já usada em
     // purchases.service.ts pra lista de "NFs Aceitas".
     async listNfsPendentes(user: any, storeId: string) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         return this.prisma.incomingGoodsNf.findMany({
             where: {
@@ -722,7 +710,7 @@ export class EstoqueService {
 
         if (!incoming) throw new NotFoundException('NF não encontrada.');
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         if (!incoming.accepted && !incoming.purchaseId && !incoming.billId) {
             throw new BadRequestException(
@@ -817,7 +805,7 @@ export class EstoqueService {
         });
 
         if (!incoming) throw new NotFoundException('NF não encontrada.');
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         if (!incoming.accepted && !incoming.purchaseId && !incoming.billId) {
             throw new BadRequestException(
@@ -897,7 +885,7 @@ export class EstoqueService {
     // INVOICE) vinculada — só cupom (COUPON) ou nada — e ainda não
     // tiveram os itens ligados ao estoque.
     async listComprasPendentes(user: any, storeId: string) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const purchases = await this.prisma.purchase.findMany({
             where: {
@@ -952,7 +940,7 @@ export class EstoqueService {
         });
 
         if (!purchase) throw new NotFoundException('Compra não encontrada.');
-        this.ensureStoreAccess(purchase.storeId, user);
+        await this.ensureStoreAccess(purchase.storeId, user);
 
         if (purchase.bills.length === 0) {
             throw new BadRequestException(
@@ -990,7 +978,7 @@ export class EstoqueService {
         });
 
         if (!purchase) throw new NotFoundException('Compra não encontrada.');
-        this.ensureStoreAccess(purchase.storeId, user);
+        await this.ensureStoreAccess(purchase.storeId, user);
 
         if (purchase.bills.length === 0) {
             throw new BadRequestException(
@@ -1047,7 +1035,7 @@ export class EstoqueService {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const itensExistentes = await this.prisma.stockItem.findMany({
             where: { storeId },
@@ -1119,7 +1107,7 @@ export class EstoqueService {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         if (!file) {
             throw new BadRequestException('Envie o arquivo Excel (.xlsx).');

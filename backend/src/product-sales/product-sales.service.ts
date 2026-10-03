@@ -14,6 +14,10 @@ import {
     type ProductSalesImportedEvent,
 } from '../common/events';
 import { LISTAS_CURADAS_POR_LOJA } from './recipe-template-dish-lists';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Normaliza pra facilitar agrupar o mesmo produto entre importações
 // diferentes (e, mais pra frente, casar com o nome do item na NF de
@@ -418,29 +422,30 @@ export class ProductSalesService {
         private eventEmitter: EventEmitter2,
     ) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
+    }
 
-        if (!allowedStoreIds) return;
+    // Diz se essa loja já tem a integração Meep ativa — usado pelo
+    // frontend (ImportProductSalesTab) pra esconder o upload manual de
+    // planilha de vendas nesse caso, já que as vendas passam a vir
+    // automaticamente (ver MeepProductSalesSyncService).
+    async meepStatus(storeId: string, user: any) {
+        if (!storeId) return { meepAtivo: false };
 
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+        await this.ensureStoreAccess(storeId, user);
+
+        const credential = await this.prisma.meepCredential.findUnique({
+            where: { storeId },
+            select: { active: true },
+        });
+
+        return { meepAtivo: !!credential?.active };
     }
 
     // Lê a planilha de vendas por produto (ex: export "Nu Galho Raiz") e
@@ -462,7 +467,23 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
+
+        // Loja com integração Meep ativa: as vendas agora vêm
+        // automaticamente de lá (ver MeepProductSalesSyncService) — a
+        // planilha manual fica desativada pra essa loja, pra não ter duas
+        // fontes de dado (e duas baixas de estoque) disputando o mesmo
+        // dia. Lojas sem Meep continuam importando normalmente.
+        const meepCredential = await this.prisma.meepCredential.findUnique({
+            where: { storeId },
+            select: { active: true },
+        });
+
+        if (meepCredential?.active) {
+            throw new BadRequestException(
+                'Essa loja já recebe as vendas automaticamente da Meep — a importação manual de planilha foi desativada pra ela.',
+            );
+        }
 
         if (!file) {
             throw new BadRequestException('Envie o arquivo Excel (.xlsx).');
@@ -598,10 +619,10 @@ export class ProductSalesService {
         user: any,
         filters?: { storeId?: string; page?: number; pageSize?: number },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         const page = filters?.page && filters.page > 0 ? filters.page : 1;
@@ -646,7 +667,7 @@ export class ProductSalesService {
             throw new NotFoundException('Importação não encontrada.');
         }
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         return this.prisma.productSalesImport.update({
             where: { id },
@@ -676,7 +697,7 @@ export class ProductSalesService {
             throw new NotFoundException('Importação não encontrada.');
         }
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         await this.prisma.productSalesImport.delete({ where: { id } });
 
@@ -703,7 +724,7 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         const where: Prisma.ProductSalesEntryWhereInput = {
             import: {
@@ -837,7 +858,7 @@ export class ProductSalesService {
     // gramas que ele leva (ex: Chapa de Contra Filé -> Batata 400g,
     // Contra Filé 400g).
     async getRecipe(user: any, params: { storeId: string; produto: string }) {
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         const produtoChave = normalizarProduto(params.produto);
 
@@ -889,7 +910,7 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         if (!params.produto || !params.produto.trim()) {
             throw new BadRequestException('Produto inválido.');
@@ -985,7 +1006,7 @@ export class ProductSalesService {
     // prato, e pra tela de configuração (unidade de medida / peso da
     // peça / proteína / categoria da lista).
     async listStockItemsCatalog(user: any, storeId: string) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         return this.prisma.stockItem.findMany({
             where: { storeId, active: true },
@@ -1024,7 +1045,7 @@ export class ProductSalesService {
             throw new NotFoundException('Item de estoque não encontrado.');
         }
 
-        this.ensureStoreAccess(stockItem.storeId, user);
+        await this.ensureStoreAccess(stockItem.storeId, user);
 
         if (
             data.unidadeMedida &&
@@ -1081,7 +1102,7 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const ordemPorCategoria = new Map<string, number>();
 
@@ -1309,7 +1330,7 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         const where: Prisma.ProductSalesEntryWhereInput = {
             import: {
@@ -1496,7 +1517,7 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         if (!params.stockItemId) {
             throw new BadRequestException('Selecione um item do Estoque.');
@@ -1747,7 +1768,7 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         if (!file) {
             throw new BadRequestException('Envie o arquivo Excel (.xlsx).');
@@ -1930,7 +1951,7 @@ export class ProductSalesService {
     // Existe backup disponível pra essa loja? (pra UI decidir se mostra o
     // botão "Desfazer última importação").
     async statusBackupFichasTecnicas(storeId: string, user: any) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const backup = await this.prisma.productRecipeImportBackup.findUnique({
             where: { storeId },
@@ -1944,7 +1965,7 @@ export class ProductSalesService {
     // exatamente o que existia em ProductRecipeItem antes dela (backup de
     // 1 nível só; rodar uma nova importação sobrescreve esse backup).
     async desfazerImportacaoFichasTecnicas(storeId: string, user: any) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const backup = await this.prisma.productRecipeImportBackup.findUnique({
             where: { storeId },
@@ -2017,7 +2038,7 @@ export class ProductSalesService {
     // veio na nova planilha. Tira backup antes (mesmo backup usado pelo
     // "desfazer"), então dá pra restaurar se limpar sem querer.
     async limparFichasTecnicas(storeId: string, user: any) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         await this.salvarBackupFichasTecnicas(storeId);
 
@@ -2095,7 +2116,7 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const [nomes, recipeItems] = await Promise.all([
             this.getNomesPratosDaLoja(storeId),
@@ -2150,7 +2171,7 @@ export class ProductSalesService {
     // com o produtoChave usado no resto do módulo. É só preencher as
     // colunas de ingrediente ao lado e importar de volta.
     async gerarModeloFichasTecnicas(storeId: string, user: any) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const nomes = await this.getNomesPratosDaLoja(storeId);
 
@@ -2246,7 +2267,7 @@ export class ProductSalesService {
             );
         }
 
-        this.ensureStoreAccess(params.storeId, user);
+        await this.ensureStoreAccess(params.storeId, user);
 
         if (!params.tipo || !LABEL_PADRAO[params.tipo]) {
             throw new BadRequestException(

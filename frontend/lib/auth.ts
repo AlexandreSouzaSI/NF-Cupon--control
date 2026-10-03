@@ -40,6 +40,9 @@ export type AuthUser = {
     // independente do role, e é quem sempre pode cadastrar/editar outro
     // Proprietário.
     isAdminMaster?: boolean;
+    // Multi-tenant: de qual empresa-cliente essa conta é. Nulo pro Admin
+    // Master (não pertence a nenhuma, gerencia todas pelo painel /admin).
+    empresaId?: string | null;
     // Permissão extra pra aprovar/reprovar compras, fora do que o perfil já
     // dá por padrão (Comprador/Proprietário/Admin Master) — ver
     // canApprovePurchase() abaixo e purchases.service.ts no backend.

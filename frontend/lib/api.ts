@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import { getActiveStore } from './active-store';
 
 // Em produção (Railway, etc.) defina NEXT_PUBLIC_API_URL apontando pra URL
 // pública do backend. Sem essa variável, cai no localhost de sempre pro
@@ -16,6 +17,18 @@ api.interceptors.request.use((config) => {
 
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Manda a loja ativa (seletor no topo) em todo request. Pra usuário
+    // normal isso não muda nada (ele já só vê a própria empresa, com ou
+    // sem esse header). Pro Admin Master é o que permite o backend saber
+    // "de qual empresa" filtrar os cadastros globais (Fornecedores,
+    // Categorias, Config de lote, Colaboradores) — sem isso ele via tudo
+    // misturado de todas as empresas-cliente. Ver jwt.strategy.ts.
+    const activeStore = getActiveStore();
+
+    if (activeStore?.id) {
+        config.headers['x-store-id'] = activeStore.id;
     }
 
     return config;

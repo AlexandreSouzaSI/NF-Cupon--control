@@ -25,6 +25,7 @@ import { UpdateStoreDto } from './dto/update-store.dto';
 import { UpdateStoreModulesDto } from './dto/update-store-modules.dto';
 import { StoresService } from './stores.service';
 import { LinkUserStoreDto } from './dto/link-user-store.dto';
+import { SaveMeepCredentialDto } from './dto/save-meep-credential.dto';
 import { ALL_STORE_MODULES, MODULE_LABELS } from '../common/store-module-labels';
 
 @Controller('stores')
@@ -34,13 +35,32 @@ export class StoresController {
 
     @Post()
     @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO)
-    async create(@Body() body: CreateStoreDto) {
-        return this.storesService.create(body);
+    async create(@Body() body: CreateStoreDto, @Req() req: any) {
+        // Admin Master não tem empresaId próprio — a empresa-alvo é a da
+        // loja que ele tem ativa no seletor do topo (activeStoreEmpresaId,
+        // resolvido no JwtStrategy a partir do header x-store-id). Mesmo
+        // fallback já usado no resto deste controller/service (ver
+        // ensureManagedStoreAccess em stores.service.ts).
+        const empresaId = req.user?.isAdminMaster
+            ? req.user?.activeStoreEmpresaId
+            : req.user?.empresaId;
+
+        return this.storesService.create(body, empresaId ?? null);
     }
 
     @Get()
     async findAll(@Req() req: any) {
         return this.storesService.findAll(req.user);
+    }
+
+    // Lista pro seletor de loja do topo e pra tela "escolha a loja" do
+    // login — precisa vir ANTES de ':id' na ordem das rotas, senão o Nest
+    // tentaria casar "switcher" como se fosse um :id. Ver comentário em
+    // storesService.findAllForSwitcher sobre por que essa lista é
+    // diferente da de Cadastros → Lojas (findAll).
+    @Get('switcher')
+    async findAllForSwitcher(@Req() req: any) {
+        return this.storesService.findAllForSwitcher(req.user);
     }
 
     @Get(':id')
@@ -192,5 +212,41 @@ export class StoresController {
         @Body() body: UpdateStoreModulesDto,
     ) {
         return this.storesService.updateModules(id, body.enabledModules as StoreModule[]);
+    }
+
+    // Credencial da API Meep (vendas do bar/restaurante). Só metadado
+    // (StoreId Meep, login, ativo/inativo) é devolvido — subscription key
+    // e senha nunca saem do backend. Hoje só a loja Contagem tem valor
+    // aqui, mas o cadastro já existe (vazio) pra Anchieta e Raiz.
+    @Get(':id/meep-credential')
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async getMeepCredentialStatus(@Param('id') id: string, @Req() req: any) {
+        return this.storesService.getMeepCredentialStatus(id, req.user);
+    }
+
+    @Post(':id/meep-credential')
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async saveMeepCredential(
+        @Param('id') id: string,
+        @Body() body: SaveMeepCredentialDto,
+        @Req() req: any,
+    ) {
+        return this.storesService.saveMeepCredential(id, body, req.user);
+    }
+
+    @Delete(':id/meep-credential')
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async removeMeepCredential(@Param('id') id: string, @Req() req: any) {
+        return this.storesService.removeMeepCredential(id, req.user);
+    }
+
+    @Patch(':id/meep-credential/active')
+    @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.GERENTE)
+    async setMeepCredentialActive(
+        @Param('id') id: string,
+        @Body('active') active: boolean,
+        @Req() req: any,
+    ) {
+        return this.storesService.setMeepCredentialActive(id, !!active, req.user);
     }
 }

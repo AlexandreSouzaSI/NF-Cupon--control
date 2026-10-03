@@ -2,6 +2,10 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { BillStatus, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Dashboard Financeiro — só Contas a Pagar (NF de entrada/serviço e Perdas
 // já têm tela própria, tirado daqui de propósito). Os buckets de
@@ -16,29 +20,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class FinancialDashboardService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     // Intervalo do mês (1º dia 00:00 até 1º dia do mês seguinte) — usado só
@@ -131,7 +119,7 @@ export class FinancialDashboardService {
         user: any,
         filters: { storeId: string; month: number; year: number },
     ) {
-        this.ensureStoreAccess(filters.storeId, user);
+        await this.ensureStoreAccess(filters.storeId, user);
 
         const { storeId } = filters;
         const range = this.monthRange(filters.month, filters.year);

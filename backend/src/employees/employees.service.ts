@@ -15,6 +15,10 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { CreateEmployeePaymentDto } from './dto/create-employee-payment.dto';
 import { UpdateEmployeePaymentDto } from './dto/update-employee-payment.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 const paymentEmployeeSelect = {
     id: true,
@@ -32,33 +36,13 @@ export class EmployeesService {
     // bloqueia qualquer outro perfil via RolesGuard, na prática só
     // ADMINISTRATIVO/PROPRIETARIO chegam aqui — mantemos o filtro mesmo
     // assim por consistência com o resto do sistema.
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) {
-            return;
-        }
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException(
-                'Você não tem acesso a esta loja.',
-            );
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     private async ensureEmployeeAccess(id: string, user: any) {
@@ -70,7 +54,7 @@ export class EmployeesService {
             throw new NotFoundException('Funcionário não encontrado.');
         }
 
-        this.ensureStoreAccess(employee.storeId, user);
+        await this.ensureStoreAccess(employee.storeId, user);
 
         return employee;
     }
@@ -85,7 +69,7 @@ export class EmployeesService {
             throw new NotFoundException('Pagamento não encontrado.');
         }
 
-        this.ensureStoreAccess(payment.employee.storeId, user);
+        await this.ensureStoreAccess(payment.employee.storeId, user);
 
         return payment;
     }
@@ -114,7 +98,7 @@ export class EmployeesService {
     }
 
     async create(dto: CreateEmployeeDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         return this.prisma.employee.create({
             data: {
@@ -149,10 +133,10 @@ export class EmployeesService {
         user: any,
         filters?: { storeId?: string; name?: string; onlyActive?: boolean },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         return this.prisma.employee.findMany({
@@ -183,7 +167,7 @@ export class EmployeesService {
         await this.ensureEmployeeAccess(id, user);
 
         if (dto.storeId) {
-            this.ensureStoreAccess(dto.storeId, user);
+            await this.ensureStoreAccess(dto.storeId, user);
         }
 
         return this.prisma.employee.update({
@@ -496,10 +480,10 @@ export class EmployeesService {
             employeeId?: string;
         },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         return this.prisma.employeePayment.findMany({

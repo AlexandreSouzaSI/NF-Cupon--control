@@ -1,165 +1,136 @@
-import {
-    ForbiddenException,
-    Injectable,
-    NotFoundException,
-} from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 import { UpsertCashReconciliationDto } from './dto/upsert-cash-reconciliation.dto';
 import {
     buildCashReconciliationPdf,
-    CashReconciliationReportData,
+    type CashReconciliationReportData,
 } from './cash-reconciliation-report-builder';
 
+// Conciliação manual banco x sistema, por loja e por dia — não existe
+// integração com PDV/frente de caixa hoje, então "o que entrou no
+// sistema" também é digitado por quem faz a conferência. Ver
+// CashReconciliation no schema.prisma pro porquê da quebra por forma de
+// pagamento nos dois lados (aponta onde exatamente está a diferença, não
+// só o total). Essa tela é separada da aba "Conciliação de Caixa" dentro
+// de Vendas Meep (ver meep-query.service.ts/CashConciliationTab.tsx), que
+// confere o que a Meep já fechou automaticamente por forma de pagamento —
+// aqui é o lançamento manual do dia (pode nem ter Meep na loja).
 @Injectable()
 export class CashReconciliationService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService) {}
 
-    // Mesmo critério de acesso por loja usado em bills.service.ts —
-    // Administrativo/Proprietário enxergam todas, o resto só as lojas
-    // vinculadas no próprio cadastro (UserStore).
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) —
+    // corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO
+    // de qualquer empresa via/mexia em dado de qualquer outra (undefined =
+    // sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-        if (!allowedStoreIds) return;
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
-    }
-
-    private toDate(value: string): Date {
+    // "AAAA-MM-DD" vindo de <input type="date"> — convertido com horário
+    // intermediário (meio-dia UTC), mesmo padrão do resto do projeto, pra
+    // não recuar um dia por causa do fuso.
+    private parseDate(value: string): Date {
         return new Date(`${value}T12:00:00.000Z`);
     }
 
-    // Upsert por loja+data — lançar de novo no mesmo dia atualiza em vez
-    // de duplicar (ver @@unique([storeId, date]) no schema).
     async upsert(dto: UpsertCashReconciliationDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
-        const date = this.toDate(dto.date);
+        const date = this.parseDate(dto.date);
+        const data = {
+            storeId: dto.storeId,
+            date,
+            systemCash: dto.systemCash,
+            systemDebit: dto.systemDebit,
+            systemCredit: dto.systemCredit,
+            bankCash: dto.bankCash,
+            bankDebit: dto.bankDebit,
+            bankCredit: dto.bankCredit,
+            notes: dto.notes ?? null,
+            launchedById: user.id,
+        };
 
         return this.prisma.cashReconciliation.upsert({
-            where: {
-                storeId_date: { storeId: dto.storeId, date },
-            },
-            create: {
-                storeId: dto.storeId,
-                date,
-                systemCash: dto.systemCash,
-                systemDebit: dto.systemDebit,
-                systemCredit: dto.systemCredit,
-                bankCash: dto.bankCash,
-                bankDebit: dto.bankDebit,
-                bankCredit: dto.bankCredit,
-                otherSystem: dto.otherSystem ?? 0,
-                otherBank: dto.otherBank ?? 0,
-                otherDescription: dto.otherDescription,
-                withdrawalAmount: dto.withdrawalAmount ?? 0,
-                withdrawalReason: dto.withdrawalReason,
-                notes: dto.notes,
-                launchedById: user.id,
-            },
-            update: {
-                systemCash: dto.systemCash,
-                systemDebit: dto.systemDebit,
-                systemCredit: dto.systemCredit,
-                bankCash: dto.bankCash,
-                bankDebit: dto.bankDebit,
-                bankCredit: dto.bankCredit,
-                otherSystem: dto.otherSystem ?? 0,
-                otherBank: dto.otherBank ?? 0,
-                otherDescription: dto.otherDescription,
-                withdrawalAmount: dto.withdrawalAmount ?? 0,
-                withdrawalReason: dto.withdrawalReason,
-                notes: dto.notes,
-                launchedById: user.id,
-            },
+            where: { storeId_date: { storeId: dto.storeId, date } },
+            create: data,
+            update: data,
         });
     }
 
-    // Remover uma conciliação salva — mesmo controle de acesso por loja do
-    // resto do módulo.
-    async remove(id: string, user: any) {
-        const record = await this.prisma.cashReconciliation.findUnique({
-            where: { id },
-        });
+    async findAll(
+        storeId: string,
+        user: any,
+        page = 1,
+        pageSize = 10,
+    ) {
+        await this.ensureStoreAccess(storeId, user);
 
-        if (!record) {
-            throw new NotFoundException('Conciliação não encontrada.');
-        }
+        const take = Math.min(Math.max(pageSize, 1), 50);
+        const skip = (Math.max(page, 1) - 1) * take;
 
-        this.ensureStoreAccess(record.storeId, user);
+        const [items, total] = await Promise.all([
+            this.prisma.cashReconciliation.findMany({
+                where: { storeId },
+                orderBy: { date: 'desc' },
+                skip,
+                take,
+                include: { launchedBy: { select: { name: true } } },
+            }),
+            this.prisma.cashReconciliation.count({ where: { storeId } }),
+        ]);
 
-        await this.prisma.cashReconciliation.delete({ where: { id } });
-
-        return { success: true };
+        return { items, total };
     }
 
-    // Conciliação do dia atual pra loja — usada pelo card no Dashboard
-    // Financeiro. Mesmo horário intermediário (meio-dia UTC) usado no
-    // upsert, pra bater com o registro salvo pelo <input type="date">.
     async findToday(storeId: string, user: any) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
-        const now = new Date();
-        const todayIso = now.toISOString().slice(0, 10);
-        const date = this.toDate(todayIso);
+        const hojeIso = new Date().toISOString().slice(0, 10);
+        const date = this.parseDate(hojeIso);
 
         return this.prisma.cashReconciliation.findUnique({
             where: { storeId_date: { storeId, date } },
         });
     }
 
-    // page/pageSize sempre vêm do frontend hoje (conciliacao-caixa/page.tsx
-    // já manda os dois em toda chamada), mas antes o fallback sem os dois
-    // parâmetros trazia a tabela inteira sem paginação nenhuma — trocado
-    // por um default fixo pra fechar essa brecha de vez.
-    async findAll(
-        storeId: string,
-        user: any,
-        page?: number,
-        pageSize?: number,
-    ) {
-        this.ensureStoreAccess(storeId, user);
+    private async findRecordOrThrow(id: string) {
+        const record = await this.prisma.cashReconciliation.findUnique({
+            where: { id },
+        });
 
-        const where = { storeId };
-        const resolvedPage = page && page > 0 ? page : 1;
-        const resolvedPageSize = pageSize && pageSize > 0 ? pageSize : 30;
+        if (!record) {
+            throw new NotFoundException('Conciliação não encontrada.');
+        }
 
-        const [items, total] = await Promise.all([
-            this.prisma.cashReconciliation.findMany({
-                where,
-                orderBy: { date: 'desc' },
-                skip: (resolvedPage - 1) * resolvedPageSize,
-                take: resolvedPageSize,
-                include: { launchedBy: { select: { name: true } } },
-            }),
-            this.prisma.cashReconciliation.count({ where }),
-        ]);
-
-        return { items, total, page: resolvedPage, pageSize: resolvedPageSize };
+        return record;
     }
 
     async findOne(id: string, user: any) {
+        const record = await this.findRecordOrThrow(id);
+        await this.ensureStoreAccess(record.storeId, user);
+        return record;
+    }
+
+    async remove(id: string, user: any) {
+        const record = await this.findRecordOrThrow(id);
+        await this.ensureStoreAccess(record.storeId, user);
+
+        await this.prisma.cashReconciliation.delete({ where: { id } });
+        return { success: true };
+    }
+
+    async getReportPdf(id: string, user: any): Promise<Buffer> {
         const record = await this.prisma.cashReconciliation.findUnique({
             where: { id },
             include: {
-                launchedBy: { select: { name: true } },
                 store: { select: { name: true } },
+                launchedBy: { select: { name: true } },
             },
         });
 
@@ -167,13 +138,7 @@ export class CashReconciliationService {
             throw new NotFoundException('Conciliação não encontrada.');
         }
 
-        this.ensureStoreAccess(record.storeId, user);
-
-        return record;
-    }
-
-    async getReportPdf(id: string, user: any): Promise<Buffer> {
-        const record = await this.findOne(id, user);
+        await this.ensureStoreAccess(record.storeId, user);
 
         const data: CashReconciliationReportData = {
             storeName: record.store.name,
@@ -184,13 +149,8 @@ export class CashReconciliationService {
             bankCash: Number(record.bankCash),
             bankDebit: Number(record.bankDebit),
             bankCredit: Number(record.bankCredit),
-            otherSystem: Number(record.otherSystem),
-            otherBank: Number(record.otherBank),
-            otherDescription: record.otherDescription,
-            withdrawalAmount: Number(record.withdrawalAmount),
-            withdrawalReason: record.withdrawalReason,
             notes: record.notes,
-            launchedByName: record.launchedBy.name,
+            launchedByName: record.launchedBy?.name ?? '—',
         };
 
         return buildCashReconciliationPdf(data);

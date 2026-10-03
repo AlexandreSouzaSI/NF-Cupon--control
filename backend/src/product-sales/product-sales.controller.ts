@@ -44,6 +44,19 @@ import { ProductSalesService } from './product-sales.service';
 export class ProductSalesController {
     constructor(private productSalesService: ProductSalesService) { }
 
+    // Diz se essa loja já recebe vendas automaticamente da Meep (ver
+    // MeepProductSalesSyncService) — usado pelo frontend pra esconder o
+    // upload de planilha manual nesse caso. Fica aqui (não em
+    // /meep/...) porque os perfis que acessam Venda/Lista (inclui
+    // COMPRADOR/FINANCEIRO) são mais amplos que os do módulo Meep.
+    @Get('meep-status')
+    async meepStatus(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+    ) {
+        return this.productSalesService.meepStatus(storeId, user);
+    }
+
     @Post('import')
     @UseInterceptors(
         FileInterceptor('file', {

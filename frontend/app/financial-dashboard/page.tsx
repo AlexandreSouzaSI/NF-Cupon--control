@@ -60,9 +60,6 @@ type CashReconciliationToday = {
     bankCash: string;
     bankDebit: string;
     bankCredit: string;
-    otherSystem: string;
-    otherBank: string;
-    withdrawalAmount: string;
 } | null;
 
 function formatCurrency(value: number) {
@@ -212,17 +209,12 @@ export default function FinancialDashboardPage() {
         const system =
             Number(cashToday.systemCash) +
             Number(cashToday.systemDebit) +
-            Number(cashToday.systemCredit) +
-            Number(cashToday.otherSystem || 0);
+            Number(cashToday.systemCredit);
         const bank =
             Number(cashToday.bankCash) +
             Number(cashToday.bankDebit) +
-            Number(cashToday.bankCredit) +
-            Number(cashToday.otherBank || 0);
-        const withdrawal = Number(cashToday.withdrawalAmount || 0);
-        // Mesma lógica ajustada da tela de Conciliação de Caixa — vale ou
-        // retirada abate do que seria esperado no banco.
-        const diff = bank - system + withdrawal;
+            Number(cashToday.bankCredit);
+        const diff = bank - system;
 
         return { system, bank, diff };
     }, [cashToday]);

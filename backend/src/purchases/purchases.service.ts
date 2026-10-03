@@ -48,6 +48,10 @@ import { buildDanfePdf } from '../common/danfe-builder';
 import { sleep } from '../common/sleep.util';
 import { derivePaymentDefaults } from '../common/bill-payment-defaults.util';
 import { LinkIncomingGoodsNfDto } from './dto/link-incoming-goods-nf.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Mesmo padrão dos XMLs de NF de serviço: ficam dentro de /uploads, lado a
 // lado com os documentos enviados à mão.
@@ -107,27 +111,17 @@ export class PurchasesService {
         private billCategoriesService: BillCategoriesService,
     ) { }
 
-    private getAllowedStoreIds(user: any) {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map((item: any) => item.storeId || item.store?.id) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) —
+    // ver comentário lá pra entender por que isso deixou de ser "undefined
+    // = sem filtro nenhum" pra ADMINISTRATIVO/PROPRIETARIO (correção de
+    // vazamento cross-empresa; antes disso via/mexia em compra de
+    // qualquer empresa-cliente, não só a própria).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     private canCreatePurchase(user: any) {
@@ -242,7 +236,7 @@ export class PurchasesService {
             );
         }
 
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const requiresApproval = this.shouldRequireApproval(dto, user);
         const status = this.getInitialStatus(dto, user);
@@ -332,10 +326,10 @@ export class PurchasesService {
             );
         }
 
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         // Compra aguardando aprovação ou reprovada não aparece mais na
@@ -457,10 +451,10 @@ export class PurchasesService {
             );
         }
 
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (storeId) {
-            this.ensureStoreAccess(storeId, user);
+            await this.ensureStoreAccess(storeId, user);
         }
 
         const storeFilter =
@@ -820,7 +814,7 @@ export class PurchasesService {
             throw new NotFoundException('Compra não encontrada.');
         }
 
-        this.ensureStoreAccess(purchase.storeId, user);
+        await this.ensureStoreAccess(purchase.storeId, user);
 
         if (purchase.status !== PurchaseStatus.REJECTED) {
             throw new ForbiddenException('Só é possível excluir compras reprovadas.');
@@ -849,7 +843,7 @@ export class PurchasesService {
             );
         }
 
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         return this.prisma.purchase.findMany({
             where: {
@@ -975,7 +969,7 @@ export class PurchasesService {
     }
 
     async findWaitingInvoices(user?: any) {
-        const allowedStoreIds = user ? this.getAllowedStoreIds(user) : undefined;
+        const allowedStoreIds = user ? await this.getAllowedStoreIds(user) : undefined;
 
         // Estágio fiscal (nota/cupom) agora vive em fiscalStatus, separado
         // do operacional — ver comentário do enum PurchaseFiscalStatus no
@@ -1096,7 +1090,7 @@ export class PurchasesService {
             throw new NotFoundException('Compra não encontrada.');
         }
 
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (allowedStoreIds && !allowedStoreIds.includes(purchase.storeId)) {
             throw new ForbiddenException('Você não tem acesso a esta loja.');
@@ -1509,7 +1503,7 @@ export class PurchasesService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         return this.runGoodsSync(storeId);
     }
@@ -1962,7 +1956,7 @@ export class PurchasesService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         if (!files || files.length === 0) {
             throw new BadRequestException('Envie pelo menos um arquivo XML.');
@@ -2080,10 +2074,10 @@ export class PurchasesService {
             );
         }
 
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         const page = filters?.page && filters.page > 0 ? filters.page : 1;
@@ -2197,10 +2191,10 @@ export class PurchasesService {
             );
         }
 
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         const dateFilter = this.buildDateFilter(filters);
@@ -2283,7 +2277,7 @@ export class PurchasesService {
             throw new NotFoundException('Compra não encontrada.');
         }
 
-        this.ensureStoreAccess(purchase.storeId, user);
+        await this.ensureStoreAccess(purchase.storeId, user);
 
         if (purchase.fiscalDocuments.length > 0) {
             throw new BadRequestException(
@@ -2425,7 +2419,7 @@ export class PurchasesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         const xml = this.readIncomingGoodsNfXmlContent(incoming);
 
@@ -2480,7 +2474,7 @@ export class PurchasesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         const purchase = await this.ensurePurchaseAccess(purchaseId, user);
 
@@ -2552,6 +2546,7 @@ export class PurchasesService {
             if (!supplierId && incoming.issuerName) {
                 const supplier = await this.suppliersService.findOrCreate(
                     incoming.issuerName,
+                    user,
                 );
                 supplierId = supplier.id;
             }
@@ -2605,7 +2600,7 @@ export class PurchasesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         const updated = await this.prisma.incomingGoodsNf.update({
             where: { id: incomingNfId },
@@ -2640,7 +2635,7 @@ export class PurchasesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         if (!dto.generateBill) {
             const updated = await this.prisma.incomingGoodsNf.update({
@@ -2665,13 +2660,14 @@ export class PurchasesService {
             );
         }
 
-        const supplier = await this.suppliersService.findOrCreate(supplierName);
+        const supplier = await this.suppliersService.findOrCreate(supplierName, user);
 
         let categoryId: string | undefined;
 
         if (dto.categoryName?.trim()) {
             const category = await this.billCategoriesService.findOrCreate(
                 dto.categoryName.trim(),
+                user,
             );
             categoryId = category.id;
         }
@@ -2725,7 +2721,7 @@ export class PurchasesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         let parsed: NfeView | null = null;
 
@@ -2787,7 +2783,7 @@ export class PurchasesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         if (!incoming.fileUrl) {
             throw new NotFoundException('XML original não disponível pra essa NF.');

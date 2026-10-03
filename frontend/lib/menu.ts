@@ -22,6 +22,7 @@ import {
     Warehouse,
     PieChart,
     Calculator,
+    CreditCard,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -46,7 +47,8 @@ export type StoreModuleKey =
     | 'PRODUTOS'
     | 'ESTOQUE'
     | 'COTACAO'
-    | 'CONCILIACAO_CAIXA';
+    | 'CONCILIACAO_CAIXA'
+    | 'MEEP';
 
 // Nome amigável de cada módulo — espelha MODULE_LABELS no backend
 // (common/store-module-labels.ts). Usado no painel /admin/modules e nas
@@ -66,6 +68,7 @@ export const moduleLabels: Record<StoreModuleKey, string> = {
     ESTOQUE: 'Estoque',
     COTACAO: 'Cotação',
     CONCILIACAO_CAIXA: 'Conciliação de Caixa',
+    MEEP: 'Vendas Meep',
 };
 
 export const ALL_STORE_MODULES: StoreModuleKey[] = Object.keys(
@@ -428,6 +431,16 @@ export const menu: MenuGroup[] = [
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
                 color: 'teal',
                 module: 'CONCILIACAO_CAIXA',
+            },
+            {
+                label: 'Vendas Meep',
+                href: '/meep',
+                icon: CreditCard,
+                // Só aparece nas lojas com a integração Meep ligada
+                // (hoje só Contagem — ver módulo MEEP em /admin/modules).
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO', 'GERENTE'],
+                color: 'teal',
+                module: 'MEEP',
             },
         ],
     },

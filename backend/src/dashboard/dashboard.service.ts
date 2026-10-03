@@ -6,6 +6,10 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Mesmo critério de "quem vê tudo" usado em tasks.service.ts — Proprietário
 // e Administrativo enxergam o quadro da equipe inteira; os demais perfis só
@@ -29,25 +33,15 @@ type TeamTaskStat = {
 export class DashboardService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
     // O dashboard é sempre sobre a loja ativa escolhida no topo do sistema,
     // nunca a soma de todas as lojas que o usuário tem acesso.
-    private resolveStoreFilter(user: any, storeId?: string) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+    private async resolveStoreFilter(user: any, storeId?: string) {
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (storeId) {
             if (allowedStoreIds && !allowedStoreIds.includes(storeId)) {
@@ -138,7 +132,7 @@ export class DashboardService {
         // Dashboard agora é só o resumo de Tarefas — o resto (compras,
         // perdas, financeiro, NF, faturamento...) já vive na própria tela
         // de cada módulo, não faz mais sentido duplicar aqui.
-        const storeFilter = this.resolveStoreFilter(user, storeId);
+        const storeFilter = await this.resolveStoreFilter(user, storeId);
         const isGlobalTaskViewer = GLOBAL_TASK_VIEW_ROLES.includes(
             user.role,
         );
@@ -269,7 +263,7 @@ export class DashboardService {
     }
 
     async badges(user: any, storeId?: string) {
-        const storeFilter = this.resolveStoreFilter(user, storeId);
+        const storeFilter = await this.resolveStoreFilter(user, storeId);
 
         const [approvals, alerts, notifications] =
             await Promise.all([

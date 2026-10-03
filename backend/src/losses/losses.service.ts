@@ -29,6 +29,10 @@ import {
 import { CreateLossDto } from './dto/create-loss.dto';
 import { CreateLossBatchDto } from './dto/create-loss-batch.dto';
 import { CreateLossNfeDto } from './dto/create-loss-nfe.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Mesmo espírito do normalizarNome usado em outros módulos (estoque,
 // product-sales) — maiúsculo, sem espaço duplicado/nas pontas. Cópia
@@ -74,29 +78,13 @@ export class LossesService {
         private notificationsService: NotificationsService,
     ) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     private defaultInclude() {
@@ -116,7 +104,7 @@ export class LossesService {
             throw new BadRequestException('Selecione uma loja ativa no topo do sistema.');
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         const alvo = description?.trim();
         if (!alvo) return { reason: null };
@@ -138,7 +126,7 @@ export class LossesService {
     }
 
     async create(dto: CreateLossDto, photoUrl: string | undefined, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         if (!photoUrl) {
             throw new BadRequestException(
@@ -185,7 +173,7 @@ export class LossesService {
         photoUrl: string | undefined,
         user: any,
     ) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         if (!photoUrl) {
             throw new BadRequestException(
@@ -293,10 +281,10 @@ export class LossesService {
         user: any,
         filters: { storeId?: string; month?: number; year?: number },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         const range = this.monthRange(filters.month, filters.year);
@@ -337,7 +325,7 @@ export class LossesService {
         user: any,
         filters: { storeId: string; month: number; year: number },
     ) {
-        this.ensureStoreAccess(filters.storeId, user);
+        await this.ensureStoreAccess(filters.storeId, user);
 
         const range = this.monthRange(filters.month, filters.year);
 
@@ -387,7 +375,7 @@ export class LossesService {
     // Perdas com valor unitário definido e que ainda não entraram em
     // nenhuma NF — é dessa lista que a tela de emissão escolhe os itens.
     async findEligibleLosses(user: any, storeId: string) {
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         return this.prisma.productLoss.findMany({
             where: {
@@ -421,7 +409,7 @@ export class LossesService {
     }
 
     async createLossNfeDraft(dto: CreateLossNfeDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const store = await this.prisma.store.findUnique({ where: { id: dto.storeId } });
 
@@ -678,10 +666,10 @@ export class LossesService {
     }
 
     async findLossNfes(user: any, storeId?: string) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (storeId) {
-            this.ensureStoreAccess(storeId, user);
+            await this.ensureStoreAccess(storeId, user);
         }
 
         return this.prisma.lossNfe.findMany({
@@ -711,7 +699,7 @@ export class LossesService {
             throw new NotFoundException('NF de perda não encontrada.');
         }
 
-        this.ensureStoreAccess(lossNfe.storeId, user);
+        await this.ensureStoreAccess(lossNfe.storeId, user);
 
         return lossNfe;
     }
@@ -891,7 +879,7 @@ export class LossesService {
             throw new NotFoundException('Registro de perda não encontrado.');
         }
 
-        this.ensureStoreAccess(loss.storeId, user);
+        await this.ensureStoreAccess(loss.storeId, user);
 
         if (loss.reportedById !== user.id && !MANAGE_ROLES.includes(user.role)) {
             throw new ForbiddenException(

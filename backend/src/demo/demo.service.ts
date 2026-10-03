@@ -41,6 +41,22 @@ export class DemoService {
         const demoExpiresAt = new Date(now.getTime() + TRIAL_DURATION_MS);
         const displayName = dto.name?.trim() || 'Visitante';
 
+        // Multi-tenant: Store.empresaId é obrigatório, mas o teste grátis
+        // não é "de" nenhuma empresa-cliente real — todas as lojas de teste
+        // ficam agrupadas numa empresa guarda-chuva só pra isso (nunca
+        // aparece pra ninguém, é só pra satisfazer a constraint e manter as
+        // lojas de teste juntas caso precise auditar/limpar em massa).
+        const empresaDemo = await this.prisma.empresa.upsert({
+            where: { id: 'empresa-demo' },
+            update: {},
+            create: {
+                id: 'empresa-demo',
+                name: 'Testes grátis (demo)',
+                adminNotes:
+                    'Empresa guarda-chuva pras lojas descartáveis do /demo/signup — nunca é uma empresa-cliente de verdade.',
+            },
+        });
+
         // Cada teste ganha a própria loja, nova e vazia — ninguém vê o que
         // outro tester cadastrou, e o isolamento reaproveita o mesmo filtro
         // por loja que já vale pro resto do sistema (ver hasGlobalStoreAccess
@@ -51,6 +67,7 @@ export class DemoService {
             data: {
                 name: `Teste — ${displayName}`,
                 isDemo: true,
+                empresaId: empresaDemo.id,
             },
         });
 

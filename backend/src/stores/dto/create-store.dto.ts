@@ -1,8 +1,26 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import { TipoPessoaStore } from '@prisma/client';
 
 export class CreateStoreDto {
     @IsString()
     name!: string;
+
+    // Loja "pessoal" do proprietário (contas da casa, não do negócio) —
+    // continua na mesma empresa, só nasce com o menu restrito a Dashboard +
+    // Contas a Pagar (ver stores.service.ts create()). Default: JURIDICA.
+    @IsOptional()
+    @IsEnum(TipoPessoaStore)
+    tipoPessoa?: TipoPessoaStore;
+
+    @IsOptional()
+    @IsString()
+    cpf?: string;
+
+    // Telefone (só dígitos + DDI 55) que recebe aviso diário via WhatsApp
+    // das contas com vencimento hoje — normalizado no service.
+    @IsOptional()
+    @IsString()
+    telefoneAvisoDiario?: string;
 
     // Marca essa loja como a loja pública de demonstração (destino do
     // autocadastro de teste). Só deve existir uma marcada assim.

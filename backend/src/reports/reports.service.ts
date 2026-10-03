@@ -1,6 +1,10 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { FiscalDocumentType, PurchaseStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 const NOT_APPLICABLE_FOR_INVOICE_STATUSES: PurchaseStatus[] = [
     PurchaseStatus.DRAFT,
@@ -12,25 +16,15 @@ const NOT_APPLICABLE_FOR_INVOICE_STATUSES: PurchaseStatus[] = [
 export class ReportsService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
     // Mesmo helper usado no dashboard: se vier storeId, valida que o usuário
     // tem acesso; se não vier, cai no filtro padrão de lojas permitidas.
-    private resolveStoreFilter(user: any, storeId?: string) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+    private async resolveStoreFilter(user: any, storeId?: string) {
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (storeId) {
             if (allowedStoreIds && !allowedStoreIds.includes(storeId)) {
@@ -46,7 +40,7 @@ export class ReportsService {
     }
 
     async suppliers(user: any, storeId?: string) {
-        const storeFilter = this.resolveStoreFilter(user, storeId);
+        const storeFilter = await this.resolveStoreFilter(user, storeId);
 
         const suppliers = await this.prisma.supplier.findMany({
             where: { active: true },
@@ -110,7 +104,7 @@ export class ReportsService {
             endDate?: string;
         },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         const purchases = await this.prisma.purchase.findMany({
             where: {
@@ -200,7 +194,7 @@ export class ReportsService {
             endDate?: string;
         },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         const purchases = await this.prisma.purchase.findMany({
             where: {

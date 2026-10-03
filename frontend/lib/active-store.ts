@@ -11,6 +11,10 @@ export type ActiveStore = {
     // dessa feature) — nesse caso o menu trata como "libera tudo" até o
     // próximo resolveActiveStore trazer o valor de verdade.
     enabledModules?: StoreModuleKey[];
+    // Loja pessoal do proprietário (ver Store.tipoPessoa no backend) — só
+    // usa Dashboard Financeiro + Contas a Pagar. Opcional/undefined em
+    // cookies antigos; tratado como loja normal (JURIDICA) nesse caso.
+    tipoPessoa?: 'JURIDICA' | 'FISICA';
 };
 
 export function getActiveStore(): ActiveStore | null {

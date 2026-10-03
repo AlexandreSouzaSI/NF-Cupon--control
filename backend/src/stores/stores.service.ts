@@ -11,7 +11,7 @@ import { join } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
-import { StoreModule, UserRole } from '@prisma/client';
+import { StoreModule, TipoPessoaStore, UserRole } from '@prisma/client';
 import { encryptSecret } from './certificate-crypto.util';
 import { runDiagnostics, testCertificateConnection, loadCertificate } from './sefaz-nfse-client';
 import { testGoodsConnection } from './sefaz-nfe-client';
@@ -34,11 +34,29 @@ if (!existsSync(certificatesPath)) {
 export class StoresService {
     constructor(private prisma: PrismaService) { }
 
-    async create(dto: CreateStoreDto) {
+    // empresaId vem de quem está criando (Administrativo/Proprietário
+    // sempre cria loja dentro da própria empresa) — só o Admin Master, pelo
+    // módulo admin/ (fluxo separado, ver admin.service.ts), cria loja pra
+    // uma empresa escolhida à parte. Agora que Store.empresaId é
+    // obrigatório no schema, essa checagem existe pra dar um erro claro em
+    // vez de deixar o Prisma estourar uma constraint NOT NULL genérica —
+    // não deveria acontecer na prática (controller sempre manda
+    // req.user.empresaId, e toda conta comum tem isso preenchido depois do
+    // backfill).
+    async create(dto: CreateStoreDto, empresaId?: string | null) {
+        if (!empresaId) {
+            throw new BadRequestException(
+                'Não foi possível identificar a empresa de quem está criando a loja.',
+            );
+        }
+
+        const tipoPessoa = dto.tipoPessoa ?? TipoPessoaStore.JURIDICA;
+
         return this.prisma.store.create({
             data: {
                 name: dto.name,
                 isDemo: dto.isDemo,
+                empresaId,
                 cnpj: dto.cnpj,
                 address: dto.address,
                 phone: dto.phone,
@@ -51,6 +69,16 @@ export class StoresService {
                 codigoMunicipioIbge: dto.codigoMunicipioIbge,
                 cep: dto.cep,
                 inscricaoEstadual: dto.inscricaoEstadual,
+                tipoPessoa,
+                cpf: dto.cpf,
+                telefoneAvisoDiario: dto.telefoneAvisoDiario,
+                // Loja Pessoa Física só usa Contas a Pagar — nasce (e fica)
+                // restrita, mesmo que alguém tente ligar outro módulo depois
+                // (ver updateModules, que também bloqueia isso).
+                enabledModules:
+                    tipoPessoa === TipoPessoaStore.FISICA
+                        ? [StoreModule.CONTAS_A_PAGAR]
+                        : undefined,
             },
         });
     }
@@ -68,8 +96,39 @@ export class StoresService {
     // usuário continuam restritos a Administrativo/Proprietário no
     // controller (@Roles), então essa checagem só entra em cena pra
     // update/certificado.
-    private ensureManagedStoreAccess(storeId: string, user: any) {
-        if (this.hasGlobalStoreAccess(user)) return;
+    //
+    // Multi-tenant: "acesso global" (Administrativo/Proprietário) é global
+    // DENTRO da própria empresa, nunca entre empresas — sem essa checagem,
+    // um Administrativo/Proprietário de QUALQUER empresa-cliente que
+    // soubesse (ou adivinhasse) o storeId de outra empresa conseguia editar
+    // os dados da loja, ou pior, mexer no certificado digital dela (testar
+    // conexão/diagnóstico usa o certificado e-CNPJ de terceiro pra
+    // autenticar na Sefaz). Corrigido aqui buscando a loja e comparando a
+    // empresa dona dela com a empresa de quem está agindo (ou a empresa da
+    // loja ativa, se for Admin Master — ver activeStoreEmpresaId no
+    // jwt.strategy.ts). Admin Master sem loja ativa (painel /admin)
+    // continua escapando de propósito.
+    private async ensureManagedStoreAccess(storeId: string, user: any) {
+        if (user?.isAdminMaster && !user.activeStoreEmpresaId) return;
+
+        if (this.hasGlobalStoreAccess(user) || user?.isAdminMaster) {
+            const empresaId = user.isAdminMaster
+                ? user.activeStoreEmpresaId
+                : user.empresaId;
+
+            const store = await this.prisma.store.findUnique({
+                where: { id: storeId },
+                select: { empresaId: true },
+            });
+
+            if (!store || store.empresaId !== empresaId) {
+                throw new ForbiddenException(
+                    'Você só pode gerenciar as lojas da sua empresa.',
+                );
+            }
+
+            return;
+        }
 
         const allowedStoreIds =
             user.userStores?.map(
@@ -93,6 +152,22 @@ export class StoresService {
                     // Proprietário — mesmo efeito de ter uma tabela
                     // separada só pra isso, sem precisar duplicar nada.
                     isDemo: false,
+                    // Multi-tenant: "acesso global" é global DENTRO da
+                    // própria empresa, não entre empresas — sem isso o
+                    // Proprietário da empresa A veria as lojas da empresa B
+                    // aqui. Admin Master usa a empresa da loja ativa
+                    // (activeStoreEmpresaId, resolvido no jwt.strategy.ts a
+                    // partir do header x-store-id) — dentro de uma loja da
+                    // empresa X ele só vê/gerencia lojas da empresa X aqui.
+                    // Sem loja ativa nenhuma (ex.: painel /admin puro,
+                    // fora do fluxo normal de Cadastros) cai sem filtro de
+                    // propósito, mas essa tela normalmente só é acessada já
+                    // com uma loja selecionada.
+                    ...(user.isAdminMaster
+                        ? user.activeStoreEmpresaId
+                            ? { empresaId: user.activeStoreEmpresaId }
+                            : {}
+                        : { empresaId: user.empresaId }),
                 },
                 orderBy: {
                     name: 'asc',
@@ -129,6 +204,39 @@ export class StoresService {
         });
     }
 
+    // Lista usada só pelo seletor de loja do topo (e na tela de "escolha
+    // a loja" logo após o login) — diferente de findAll() acima, que
+    // agora é escopado pela empresa da loja ativa. Aqui o Admin Master
+    // precisa continuar vendo TODAS as lojas de TODAS as empresas-cliente
+    // (é o único jeito de trocar de empresa), então devolve também o nome
+    // da empresa dona de cada loja pra o frontend poder agrupar em cards.
+    // Qualquer outro perfil recebe exatamente a mesma lista de sempre
+    // (findAll), sem nenhuma mudança de comportamento.
+    async findAllForSwitcher(user: any) {
+        if (user?.isAdminMaster) {
+            const stores = await this.prisma.store.findMany({
+                where: {
+                    active: true,
+                    isDemo: false,
+                },
+                orderBy: [{ empresa: { name: 'asc' } }, { name: 'asc' }],
+                include: {
+                    empresa: {
+                        select: { id: true, name: true },
+                    },
+                },
+            });
+
+            return stores.map((store) => ({
+                ...store,
+                empresaId: store.empresa?.id ?? null,
+                empresaName: store.empresa?.name ?? null,
+            }));
+        }
+
+        return this.findAll(user);
+    }
+
     async ensureStoreExists(id: string) {
         const store = await this.prisma.store.findUnique({
             where: { id },
@@ -152,6 +260,13 @@ export class StoresService {
                     userId: user.id,
                 },
             };
+        }
+
+        // Multi-tenant: mesmo com acesso global, nunca abre loja de outra
+        // empresa por id direto (IDOR) — Admin Master é a única exceção,
+        // ele de propósito enxerga qualquer loja.
+        if (user && !user.isAdminMaster) {
+            where.empresaId = user.empresaId;
         }
 
         const store = await this.prisma.store.findFirst({
@@ -183,7 +298,7 @@ export class StoresService {
 
     async update(id: string, dto: UpdateStoreDto, user: any) {
         await this.ensureStoreExists(id);
-        this.ensureManagedStoreAccess(id, user);
+        await this.ensureManagedStoreAccess(id, user);
 
         return this.prisma.store.update({
             where: { id },
@@ -202,6 +317,16 @@ export class StoresService {
                 codigoMunicipioIbge: dto.codigoMunicipioIbge,
                 cep: dto.cep,
                 inscricaoEstadual: dto.inscricaoEstadual,
+                tipoPessoa: dto.tipoPessoa,
+                cpf: dto.cpf,
+                telefoneAvisoDiario: dto.telefoneAvisoDiario,
+                // Se virou (ou continua) Física, trava de volta nos módulos
+                // dela — mesma regra do create(), pra não dar de ligar um
+                // módulo de negócio numa loja pessoal por engano.
+                enabledModules:
+                    dto.tipoPessoa === TipoPessoaStore.FISICA
+                        ? [StoreModule.CONTAS_A_PAGAR]
+                        : undefined,
             },
         });
     }
@@ -318,7 +443,7 @@ export class StoresService {
 
     async getCertificateStatus(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
-        this.ensureManagedStoreAccess(storeId, user);
+        await this.ensureManagedStoreAccess(storeId, user);
 
         const certificate = await this.prisma.storeCertificate.findUnique({
             where: { storeId },
@@ -343,7 +468,7 @@ export class StoresService {
         user: any,
     ) {
         await this.ensureStoreExists(storeId);
-        this.ensureManagedStoreAccess(storeId, user);
+        await this.ensureManagedStoreAccess(storeId, user);
 
         if (!file) {
             throw new BadRequestException(
@@ -389,7 +514,7 @@ export class StoresService {
 
     async removeCertificate(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
-        this.ensureManagedStoreAccess(storeId, user);
+        await this.ensureManagedStoreAccess(storeId, user);
 
         const certificate = await this.prisma.storeCertificate.findUnique({
             where: { storeId },
@@ -414,7 +539,7 @@ export class StoresService {
 
     async testCertificateConnection(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
-        this.ensureManagedStoreAccess(storeId, user);
+        await this.ensureManagedStoreAccess(storeId, user);
 
         const certificate = await this.prisma.storeCertificate.findUnique({
             where: { storeId },
@@ -446,7 +571,7 @@ export class StoresService {
     // Exige CNPJ e UF cadastrados na loja além do certificado.
     async testGoodsConnection(storeId: string, user: any) {
         const store = await this.ensureStoreExists(storeId);
-        this.ensureManagedStoreAccess(storeId, user);
+        await this.ensureManagedStoreAccess(storeId, user);
 
         if (!store.cnpj) {
             throw new BadRequestException(
@@ -506,7 +631,7 @@ export class StoresService {
     // certificado pra ser vista.
     async runCertificateDiagnostics(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
-        this.ensureManagedStoreAccess(storeId, user);
+        await this.ensureManagedStoreAccess(storeId, user);
 
         const certificate = await this.prisma.storeCertificate.findUnique({
             where: { storeId },
@@ -529,12 +654,140 @@ export class StoresService {
     // Sefaz/ADN dessa loja — sucesso e erro, mais recente primeiro.
     async getSefazSyncLogs(storeId: string, user: any) {
         await this.ensureStoreExists(storeId);
-        this.ensureManagedStoreAccess(storeId, user);
+        await this.ensureManagedStoreAccess(storeId, user);
 
         return this.prisma.sefazSyncLog.findMany({
             where: { storeId },
             orderBy: { createdAt: 'desc' },
             take: 20,
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Credencial Meep (Cadastros → Lojas → aba Meep). Segue exatamente o
+    // mesmo padrão do certificado digital acima: senha/subscription key
+    // nunca ficam em texto puro (AES-256-GCM via certificate-crypto.util),
+    // e status/CRUD são escopados pela mesma ensureManagedStoreAccess.
+    // ------------------------------------------------------------------
+
+    async getMeepCredentialStatus(storeId: string, user: any) {
+        await this.ensureStoreExists(storeId);
+        await this.ensureManagedStoreAccess(storeId, user);
+
+        const credential = await this.prisma.meepCredential.findUnique({
+            where: { storeId },
+            select: {
+                meepStoreId: true,
+                username: true,
+                active: true,
+                lastSalesSyncedUntil: true,
+                lastConciliationSyncedUntil: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
+
+        return {
+            hasCredential: !!credential,
+            meepStoreId: credential?.meepStoreId || null,
+            username: credential?.username || null,
+            active: credential?.active ?? false,
+            lastSalesSyncedUntil: credential?.lastSalesSyncedUntil || null,
+            lastConciliationSyncedUntil:
+                credential?.lastConciliationSyncedUntil || null,
+            updatedAt: credential?.updatedAt || null,
+        };
+    }
+
+    async saveMeepCredential(
+        storeId: string,
+        data: {
+            subscriptionKey: string;
+            username: string;
+            password: string;
+            meepStoreId: string;
+        },
+        user: any,
+    ) {
+        await this.ensureStoreExists(storeId);
+        await this.ensureManagedStoreAccess(storeId, user);
+
+        if (!data.subscriptionKey || !data.subscriptionKey.trim()) {
+            throw new BadRequestException('Informe a subscription key da Meep.');
+        }
+        if (!data.username || !data.username.trim()) {
+            throw new BadRequestException('Informe o login (portal.meep-app.com) da Meep.');
+        }
+        if (!data.password || !data.password.trim()) {
+            throw new BadRequestException('Informe a senha da Meep.');
+        }
+        if (!data.meepStoreId || !data.meepStoreId.trim()) {
+            throw new BadRequestException('Informe o StoreId da Meep dessa loja.');
+        }
+
+        const subscriptionKeyEncrypted = encryptSecret(data.subscriptionKey.trim());
+        const passwordEncrypted = encryptSecret(data.password.trim());
+
+        await this.prisma.meepCredential.upsert({
+            where: { storeId },
+            update: {
+                subscriptionKeyCipher: subscriptionKeyEncrypted.cipher,
+                subscriptionKeyIv: subscriptionKeyEncrypted.iv,
+                subscriptionKeyAuthTag: subscriptionKeyEncrypted.authTag,
+                username: data.username.trim(),
+                passwordCipher: passwordEncrypted.cipher,
+                passwordIv: passwordEncrypted.iv,
+                passwordAuthTag: passwordEncrypted.authTag,
+                meepStoreId: data.meepStoreId.trim(),
+                active: true,
+            },
+            create: {
+                storeId,
+                subscriptionKeyCipher: subscriptionKeyEncrypted.cipher,
+                subscriptionKeyIv: subscriptionKeyEncrypted.iv,
+                subscriptionKeyAuthTag: subscriptionKeyEncrypted.authTag,
+                username: data.username.trim(),
+                passwordCipher: passwordEncrypted.cipher,
+                passwordIv: passwordEncrypted.iv,
+                passwordAuthTag: passwordEncrypted.authTag,
+                meepStoreId: data.meepStoreId.trim(),
+            },
+        });
+
+        return this.getMeepCredentialStatus(storeId, user);
+    }
+
+    async removeMeepCredential(storeId: string, user: any) {
+        await this.ensureStoreExists(storeId);
+        await this.ensureManagedStoreAccess(storeId, user);
+
+        const credential = await this.prisma.meepCredential.findUnique({
+            where: { storeId },
+        });
+        if (!credential) {
+            throw new NotFoundException('Nenhuma credencial Meep cadastrada para essa loja.');
+        }
+
+        await this.prisma.meepCredential.delete({ where: { storeId } });
+        return { success: true };
+    }
+
+    async setMeepCredentialActive(storeId: string, active: boolean, user: any) {
+        await this.ensureStoreExists(storeId);
+        await this.ensureManagedStoreAccess(storeId, user);
+
+        const credential = await this.prisma.meepCredential.findUnique({
+            where: { storeId },
+        });
+        if (!credential) {
+            throw new NotFoundException('Nenhuma credencial Meep cadastrada para essa loja.');
+        }
+
+        await this.prisma.meepCredential.update({
+            where: { storeId },
+            data: { active },
+        });
+
+        return this.getMeepCredentialStatus(storeId, user);
     }
 }

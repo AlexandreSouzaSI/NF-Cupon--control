@@ -18,7 +18,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "export:catalogo-padrao": "ts-node prisma/scripts/export-catalogo-padrao.ts"
+    "export:catalogo-padrao": "ts-node prisma/scripts/export-catalogo-padrao.ts",
+    "meep:test-token": "ts-node scripts/meep/test-token.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed/seed.ts"

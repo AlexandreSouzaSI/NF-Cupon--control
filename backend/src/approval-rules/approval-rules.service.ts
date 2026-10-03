@@ -2,6 +2,10 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateApprovalRuleDto } from './dto/create-approval-rule.dto';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 @Injectable()
 export class ApprovalRulesService {
@@ -14,16 +18,9 @@ export class ApprovalRulesService {
         );
     }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (this.hasGlobalAccess(user)) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
     async create(dto: CreateApprovalRuleDto, user: any) {
@@ -34,7 +31,7 @@ export class ApprovalRulesService {
         }
 
         if (dto.storeId) {
-            const allowedStoreIds = this.getAllowedStoreIds(user);
+            const allowedStoreIds = await this.getAllowedStoreIds(user);
 
             if (allowedStoreIds && !allowedStoreIds.includes(dto.storeId)) {
                 throw new ForbiddenException(
@@ -58,7 +55,7 @@ export class ApprovalRulesService {
     }
 
     async findAll(user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         return this.prisma.approvalRule.findMany({
             where: {

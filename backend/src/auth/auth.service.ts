@@ -69,6 +69,7 @@ export class AuthService {
                 email: user.email,
                 role: user.role,
                 isAdminMaster: user.isAdminMaster,
+                empresaId: user.empresaId,
                 canApprovePurchases: user.canApprovePurchases,
                 moduleAccess: user.moduleAccess,
                 canViewPayrollBills: user.canViewPayrollBills,

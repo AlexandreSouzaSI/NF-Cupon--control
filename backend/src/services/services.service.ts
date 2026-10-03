@@ -29,6 +29,10 @@ import {
 import { buildDanfePdf } from '../common/danfe-builder';
 import { sleep } from '../common/sleep.util';
 import { derivePaymentDefaults } from '../common/bill-payment-defaults.util';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Mesma pasta usada pelo upload manual de NF de serviço — os XMLs baixados
 // da Sefaz ficam lado a lado com os enviados à mão.
@@ -79,33 +83,13 @@ export class ServicesService {
         private billCategoriesService: BillCategoriesService,
     ) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) {
-            return;
-        }
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException(
-                'Você não tem acesso a esta loja.',
-            );
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     private async ensureServiceAccess(id: string, user: any) {
@@ -119,7 +103,7 @@ export class ServicesService {
             );
         }
 
-        this.ensureStoreAccess(service.storeId, user);
+        await this.ensureStoreAccess(service.storeId, user);
 
         return service;
     }
@@ -148,7 +132,7 @@ export class ServicesService {
     }
 
     async create(dto: CreateServiceDto, user: any) {
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         const service = await this.prisma.service.create({
             data: {
@@ -192,10 +176,10 @@ export class ServicesService {
             onlyWithNf?: boolean;
         },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         const dateFilter = this.buildDateFilter(filters);
@@ -274,7 +258,7 @@ export class ServicesService {
         await this.ensureServiceAccess(id, user);
 
         if (dto.storeId) {
-            this.ensureStoreAccess(dto.storeId, user);
+            await this.ensureStoreAccess(dto.storeId, user);
         }
 
         return this.prisma.service.update({
@@ -348,7 +332,7 @@ export class ServicesService {
             onlyWithNf: true,
         });
 
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         const incoming = await this.prisma.incomingServiceNf.findMany({
             where: {
@@ -407,7 +391,7 @@ export class ServicesService {
     // de confirmadas.
     async findConfirmedNf(user: any, storeId?: string) {
         if (storeId) {
-            this.ensureStoreAccess(storeId, user);
+            await this.ensureStoreAccess(storeId, user);
         }
 
         const { services, incoming } = await this.findServiceNfSources(
@@ -431,7 +415,7 @@ export class ServicesService {
     // todas as NFs a qualquer momento, vinculadas ou não a algo existente.
     async findAllNfForDownload(user: any, storeId?: string) {
         if (storeId) {
-            this.ensureStoreAccess(storeId, user);
+            await this.ensureStoreAccess(storeId, user);
         }
 
         const { services, incoming } = await this.findServiceNfSources(
@@ -461,7 +445,7 @@ export class ServicesService {
         },
     ) {
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         const allItems = await this.findAllNfForDownload(
@@ -542,7 +526,7 @@ export class ServicesService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         return this.runServiceSync(storeId);
     }
@@ -801,10 +785,10 @@ export class ServicesService {
             endDate?: string;
         },
     ) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         const page = filters?.page && filters.page > 0 ? filters.page : 1;
@@ -927,7 +911,7 @@ export class ServicesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         if (!incoming.fileUrl) {
             throw new BadRequestException(
@@ -970,7 +954,7 @@ export class ServicesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         const updated = await this.prisma.incomingServiceNf.update({
             where: { id: incomingNfId },
@@ -998,7 +982,7 @@ export class ServicesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         if (!dto.generateBill) {
             const updated = await this.prisma.incomingServiceNf.update({
@@ -1023,13 +1007,14 @@ export class ServicesService {
             );
         }
 
-        const supplier = await this.suppliersService.findOrCreate(supplierName);
+        const supplier = await this.suppliersService.findOrCreate(supplierName, user);
 
         let categoryId: string | undefined;
 
         if (dto.categoryName?.trim()) {
             const category = await this.billCategoriesService.findOrCreate(
                 dto.categoryName.trim(),
+                user,
             );
             categoryId = category.id;
         }
@@ -1075,7 +1060,7 @@ export class ServicesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         const parsed = this.parseNfseFileForView(incoming.fileUrl);
 
@@ -1121,7 +1106,7 @@ export class ServicesService {
             throw new NotFoundException('Documento não encontrado.');
         }
 
-        this.ensureStoreAccess(incoming.storeId, user);
+        await this.ensureStoreAccess(incoming.storeId, user);
 
         if (!incoming.fileUrl) {
             throw new NotFoundException('XML original não disponível pra essa NF.');

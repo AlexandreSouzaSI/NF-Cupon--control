@@ -45,21 +45,26 @@ async function main() {
         },
     });
 
+    // Multi-tenant: Store.empresaId é obrigatório desde a 2ª migração — toda
+    // loja precisa nascer já vinculada a uma empresa. O seed usa a mesma
+    // empresa "Nugalho" do backfill (mesmo id fixo 'empresa-nugalho'), pra
+    // ficar consistente com bancos que já rodaram o backfill manualmente.
+    const empresaNugalho = await prisma.empresa.upsert({
+        where: { id: 'empresa-nugalho' },
+        update: {},
+        create: {
+            id: 'empresa-nugalho',
+            name: 'Nugalho',
+        },
+    });
+
     const lojaAnchieta = await prisma.store.upsert({
         where: { id: 'loja-anchieta' },
         update: {},
         create: {
             id: 'loja-anchieta',
             name: 'Loja Anchieta',
-        },
-    });
-
-    const lojaRaiz = await prisma.store.upsert({
-        where: { id: 'loja-raiz' },
-        update: {},
-        create: {
-            id: 'loja-raiz',
-            name: 'Loja Raiz',
+            empresaId: empresaNugalho.id,
         },
     });
 
@@ -69,8 +74,26 @@ async function main() {
         create: {
             id: 'loja-contagem',
             name: 'Loja Contagem',
+            empresaId: empresaNugalho.id,
         },
     });
+
+    // Raiz NÃO é criada por id fixo aqui de propósito: como Store.id é
+    // uuid() gerado na criação (não uma string previsível como
+    // 'loja-anchieta'/'loja-contagem' acima), uma loja Raiz cadastrada à
+    // mão em Cadastros → Lojas antes desse seed existir tem um id
+    // aleatório — o upsert por id fixo não encontrava ela e criava uma
+    // SEGUNDA "Loja Raiz" duplicada. Por isso: só usa a que já existir com
+    // esse nome; se não existir nenhuma ainda, cria uma nova (única vez).
+    const lojaRaizExistente = await prisma.store.findFirst({
+        where: { name: { in: ['Raiz', 'Loja Raiz'] } },
+    });
+
+    const lojaRaiz =
+        lojaRaizExistente ??
+        (await prisma.store.create({
+            data: { name: 'Loja Raiz', empresaId: empresaNugalho.id },
+        }));
 
     // Loja fixa de uma versão anterior do autocadastro de teste — hoje
     // cada cadastro em /demo cria a própria loja isolada na hora (ver
@@ -85,6 +108,7 @@ async function main() {
             name: 'AMSX Teste (desativada)',
             isDemo: true,
             active: false,
+            empresaId: empresaNugalho.id,
         },
     });
 

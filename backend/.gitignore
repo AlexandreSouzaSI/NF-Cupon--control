@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# Credenciais de teste da API Meep (script standalone, nunca commitar)
+scripts/meep/.env.meep
+
 # Logs
 logs
 *.log

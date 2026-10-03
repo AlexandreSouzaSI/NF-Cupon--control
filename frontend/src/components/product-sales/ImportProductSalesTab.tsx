@@ -11,6 +11,7 @@ import {
     FileSpreadsheet,
     Loader2,
     Pencil,
+    RefreshCw,
     RotateCcw,
     Trash2,
     Upload,
@@ -88,6 +89,21 @@ export function ImportProductSalesTab({
     const [periodoInicio, setPeriodoInicio] = useState('');
     const [periodoFim, setPeriodoFim] = useState('');
 
+    // Loja com integração Meep ativa: as vendas já vêm automaticamente
+    // de lá (ver aba "Vendas Meep") — esconde o upload manual de
+    // planilha pra essa loja. A parte de fichas técnicas continua igual
+    // pra todo mundo, já que é independente da origem das vendas.
+    const [meepAtivo, setMeepAtivo] = useState(false);
+    const [checandoMeep, setChecandoMeep] = useState(true);
+    const [reconstruindoMeep, setReconstruindoMeep] = useState(false);
+    const [resincronizando, setResincronizando] = useState(false);
+    // Datas opcionais pro botão de resync forçado — em branco, usa o
+    // padrão do backend (últimos 10 dias). Preenchendo, dá pra mirar
+    // num dia específico que ficou de fora desse padrão (ex: um dia 20
+    // dias atrás, que o botão sozinho nunca alcançaria).
+    const [resyncInicio, setResyncInicio] = useState('');
+    const [resyncFim, setResyncFim] = useState('');
+
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -125,6 +141,147 @@ export function ImportProductSalesTab({
         loadImports(page);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page]);
+
+    useEffect(() => {
+        async function checarMeep() {
+            const store = getActiveStore();
+            if (!store) {
+                setChecandoMeep(false);
+                return;
+            }
+
+            try {
+                const response = await api.get('/product-sales/meep-status', {
+                    params: { storeId: store.id },
+                });
+                setMeepAtivo(!!response.data?.meepAtivo);
+            } catch (error) {
+                console.error(error);
+                // Silencioso — em caso de erro, assume que não tem Meep
+                // (mostra o upload manual, comportamento de sempre).
+            } finally {
+                setChecandoMeep(false);
+            }
+        }
+
+        checarMeep();
+    }, []);
+
+    // Reconstrói o Venda/Lista a partir dos pedidos Meep que já estão no
+    // banco. Necessário uma vez quando a ponte é ligada: o cron normal só
+    // recalcula a janela que acabou de sincronizar, então dias que já
+    // tinham sido buscados antes (cursor já passou deles) nunca entrariam
+    // sozinhos — precisam desse empurrão manual uma única vez.
+    async function handleReconstruirMeep() {
+        const store = getActiveStore();
+        if (!store) return;
+
+        try {
+            setReconstruindoMeep(true);
+            const response = await api.post(`/meep/${store.id}/rebuild-product-sales`);
+            const resultado = response.data as {
+                success: boolean;
+                message?: string;
+                diasVarridos?: number;
+                diasComVenda?: number;
+                totalItensEncontrados?: number;
+                erros?: string[];
+            };
+
+            if (resultado?.success === false) {
+                toast.error(resultado.message || 'Não foi possível reconstruir agora.');
+                return;
+            }
+
+            if (!resultado?.totalItensEncontrados) {
+                toast.error(
+                    `Varri ${resultado?.diasVarridos ?? 0} dia(s) nos últimos 90 dias e não achei nenhum item vendido salvo da Meep pra essa loja — confira se a sincronização da Meep (página "Vendas Meep") já trouxe pedidos pra esse período antes de reconstruir de novo.`,
+                );
+                return;
+            }
+
+            toast.success(
+                `Venda/Lista reconstruído: ${resultado.diasComVenda} dia(s) com venda, ${resultado.totalItensEncontrados} item(ns) no total.`,
+            );
+
+            // Erro num dia específico não impede os outros dias de serem
+            // reconstruídos com sucesso — por isso não vira o toast de
+            // erro principal acima — mas precisa aparecer em algum lugar,
+            // senão aquele dia fica silenciosamente desatualizado sem
+            // ninguém perceber o motivo.
+            if (resultado.erros && resultado.erros.length > 0) {
+                toast.error(
+                    `${resultado.erros.length} dia(s) falharam ao reconstruir: ${resultado.erros
+                        .slice(0, 3)
+                        .join(' | ')}${resultado.erros.length > 3 ? '...' : ''}`,
+                    { duration: 15000 },
+                );
+            }
+
+            onImported?.();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao reconstruir o Venda/Lista.';
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setReconstruindoMeep(false);
+        }
+    }
+
+    // Diferente do "Reconstruir" acima (que só reaproveita o que já tá no
+    // banco), esse botão volta a CONSULTAR A MEEP de novo — criado depois
+    // de descobrir que, até a noite de 30/09, a sincronização ainda não
+    // tinha a defesa contra o truncamento silencioso da Meep (ela limita
+    // ~104-110 pedidos por chamada sem avisar). Dias de movimento forte
+    // sincronizados antes desse ajuste podem estar com pedidos faltando.
+    // Rebuscar é seguro (não duplica) e corrige isso pros últimos dias.
+    async function handleForceResync() {
+        const store = getActiveStore();
+        if (!store) return;
+
+        if (resyncInicio && resyncFim && resyncInicio > resyncFim) {
+            toast.error('A data de início não pode ser depois da data de fim.');
+            return;
+        }
+
+        try {
+            setResincronizando(true);
+            const params: Record<string, string> = {};
+            if (resyncInicio) params.dateFrom = resyncInicio;
+            if (resyncFim) params.dateTo = resyncFim;
+
+            const response = await api.post(`/meep/${store.id}/force-resync`, null, {
+                params,
+            });
+            const resultado = response.data as {
+                success: boolean;
+                message?: string;
+                totalOrders?: number;
+                chunks?: number;
+            };
+
+            if (resultado?.success === false) {
+                toast.error(resultado.message || 'Não foi possível re-sincronizar agora.');
+                return;
+            }
+
+            const periodoDescricao =
+                resyncInicio || resyncFim
+                    ? `de ${resyncInicio || '...'} até ${resyncFim || '...'}`
+                    : 'últimos 10 dias';
+
+            toast.success(
+                `Re-sincronização concluída: ${resultado.totalOrders ?? 0} pedido(s) conferido(s) na Meep (${periodoDescricao}) e Venda/Lista atualizado.`,
+            );
+            onImported?.();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao re-sincronizar com a Meep.';
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setResincronizando(false);
+        }
+    }
 
     useEffect(() => {
         async function carregarStatusUndo() {
@@ -527,82 +684,171 @@ export function ImportProductSalesTab({
 
     return (
         <div className="space-y-5">
-            <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-                <div>
-                    <p className="font-semibold text-zinc-900 dark:text-white">
-                        Importar planilha de vendas
+            {checandoMeep ? null : meepAtivo ? (
+                <div className="space-y-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                        Vendas vindas automaticamente da Meep
                     </p>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                        Suba o Excel exportado do sistema de vendas/comanda
-                        (categoria, produto, quantidade e valor por item).
-                        Pode importar de novo sempre que quiser atualizar, e
-                        pode selecionar vários arquivos de uma vez — cada um
-                        vira uma importação separada, igual seria importando
-                        um por um.
+                    <p className="text-sm text-emerald-700/80 dark:text-emerald-400/80">
+                        Essa loja já tem a integração com a Meep ativa —
+                        itens, quantidade e valor vendido entram sozinhos
+                        aqui a cada sincronização (de hora em hora), sem
+                        precisar subir planilha. A importação manual de
+                        vendas foi desativada pra essa loja. Se precisar
+                        reativar, é só desligar a credencial Meep em
+                        Cadastros → Lojas → aba Meep.
                     </p>
-                </div>
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                            Esse Excel é do dia... (início, opcional)
-                        </label>
-                        <input
-                            type="date"
-                            value={periodoInicio}
-                            onChange={(e) => setPeriodoInicio(e.target.value)}
-                            className="w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
-                        />
-                    </div>
-
-                    <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                            ...até o dia (fim, opcional)
-                        </label>
-                        <input
-                            type="date"
-                            value={periodoFim}
-                            onChange={(e) => setPeriodoFim(e.target.value)}
-                            className="w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
-                        />
-                    </div>
-
-                    <label
-                        className={`inline-flex h-11 shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-5 font-semibold sm:mb-0 ${uploading
-                            ? 'cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-600'
-                            : 'border-blue-500/30 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:text-blue-400'
-                            }`}
+                    <button
+                        onClick={handleReconstruirMeep}
+                        disabled={reconstruindoMeep}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-emerald-500/40 bg-white px-4 text-sm font-semibold text-emerald-700 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-900 dark:text-emerald-400"
                     >
-                        {uploading ? (
-                            <Loader2 size={18} className="animate-spin" />
+                        {reconstruindoMeep ? (
+                            <Loader2 size={16} className="animate-spin" />
                         ) : (
-                            <Upload size={18} />
+                            <RefreshCw size={16} />
                         )}
-                        {uploading && uploadProgress
-                            ? `Importando ${uploadProgress.atual}/${uploadProgress.total}...`
-                            : 'Importar Excel'}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".xlsx"
-                            multiple
-                            disabled={uploading}
-                            className="hidden"
-                            onChange={(e) => handleUpload(e.target.files)}
-                        />
-                    </label>
-                </div>
+                        Reconstruir Venda/Lista agora
+                    </button>
+                    <p className="text-xs text-emerald-700/70 dark:text-emerald-400/70">
+                        Use isso uma vez pra puxar pro Venda/Lista os dias
+                        que a Meep já sincronizou antes dessa tela existir
+                        (o sync automático de hora em hora, daqui pra
+                        frente, não precisa mais disso).
+                    </p>
 
-                <p className="text-xs text-zinc-500">
-                    Deixando as datas em branco, tentamos ler o período
-                    direto do nome do arquivo (ex: &quot;Anchieta dia 21 a 24
-                    de agosto&quot;). Se não conseguirmos, o período fica em
-                    branco e dá pra corrigir depois na lista abaixo. Ao
-                    selecionar vários arquivos de uma vez, os campos de data
-                    acima são ignorados — o período de cada um vem sempre do
-                    nome do próprio arquivo.
-                </p>
-            </div>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-amber-700/80 dark:text-amber-400/80">
+                                De (opcional)
+                            </label>
+                            <input
+                                type="date"
+                                value={resyncInicio}
+                                onChange={(e) => setResyncInicio(e.target.value)}
+                                className="w-full rounded-xl border border-amber-500/30 bg-white px-3 py-2 text-sm dark:border-amber-500/30 dark:bg-zinc-900"
+                            />
+                        </div>
+
+                        <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-amber-700/80 dark:text-amber-400/80">
+                                Até (opcional)
+                            </label>
+                            <input
+                                type="date"
+                                value={resyncFim}
+                                onChange={(e) => setResyncFim(e.target.value)}
+                                className="w-full rounded-xl border border-amber-500/30 bg-white px-3 py-2 text-sm dark:border-amber-500/30 dark:bg-zinc-900"
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleForceResync}
+                            disabled={resincronizando}
+                            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-amber-500/40 bg-white px-4 text-sm font-semibold text-amber-700 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-900 dark:text-amber-400"
+                        >
+                            {resincronizando ? (
+                                <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                                <RefreshCw size={16} />
+                            )}
+                            {resyncInicio || resyncFim
+                                ? 'Forçar nova busca na Meep (período acima)'
+                                : 'Forçar nova busca na Meep (últimos 10 dias)'}
+                        </button>
+                    </div>
+                    <p className="text-xs text-amber-700/70 dark:text-amber-400/70">
+                        Diferente do botão acima, esse rebusca direto na
+                        Meep (não só recalcula o que já está salvo). Use se
+                        algum dia de movimento forte estiver com quantidade
+                        vendida menor do que o esperado — pode ter ficado
+                        faltando pedido de antes da correção do
+                        truncamento. Deixando as datas em branco, cobre só
+                        os últimos 10 dias; preenchendo, mira exatamente no
+                        período que precisa (útil pra um dia específico que
+                        ficou fora da janela padrão). Idempotente: pode
+                        clicar quantas vezes precisar, não duplica nada.
+                    </p>
+                </div>
+            ) : (
+                <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+                    <div>
+                        <p className="font-semibold text-zinc-900 dark:text-white">
+                            Importar planilha de vendas
+                        </p>
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                            Suba o Excel exportado do sistema de vendas/comanda
+                            (categoria, produto, quantidade e valor por item).
+                            Pode importar de novo sempre que quiser atualizar, e
+                            pode selecionar vários arquivos de uma vez — cada um
+                            vira uma importação separada, igual seria importando
+                            um por um.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                                Esse Excel é do dia... (início, opcional)
+                            </label>
+                            <input
+                                type="date"
+                                value={periodoInicio}
+                                onChange={(e) => setPeriodoInicio(e.target.value)}
+                                className="w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
+                            />
+                        </div>
+
+                        <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                                ...até o dia (fim, opcional)
+                            </label>
+                            <input
+                                type="date"
+                                value={periodoFim}
+                                onChange={(e) => setPeriodoFim(e.target.value)}
+                                className="w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
+                            />
+                        </div>
+
+                        <label
+                            className={`inline-flex h-11 shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-5 font-semibold sm:mb-0 ${uploading
+                                ? 'cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-600'
+                                : 'border-blue-500/30 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:text-blue-400'
+                                }`}
+                        >
+                            {uploading ? (
+                                <Loader2 size={18} className="animate-spin" />
+                            ) : (
+                                <Upload size={18} />
+                            )}
+                            {uploading && uploadProgress
+                                ? `Importando ${uploadProgress.atual}/${uploadProgress.total}...`
+                                : 'Importar Excel'}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".xlsx"
+                                multiple
+                                disabled={uploading}
+                                className="hidden"
+                                onChange={(e) => handleUpload(e.target.files)}
+                            />
+                        </label>
+                    </div>
+
+                    <p className="text-xs text-zinc-500">
+                        Deixando as datas em branco, tentamos ler o período
+                        direto do nome do arquivo (ex: &quot;Anchieta dia 21 a 24
+                        de agosto&quot;). Se não conseguirmos, o período fica em
+                        branco e dá pra corrigir depois na lista abaixo. Ao
+                        selecionar vários arquivos de uma vez, os campos de data
+                        acima são ignorados — o período de cada um vem sempre do
+                        nome do próprio arquivo.
+                    </p>
+                </div>
+            )}
 
             <div className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
                 <div>
@@ -709,6 +955,7 @@ export function ImportProductSalesTab({
                 )}
             </div>
 
+            {!meepAtivo && (
             <div className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="border-b border-zinc-200 p-4 dark:border-zinc-800">
                     <p className="font-semibold text-zinc-900 dark:text-white">
@@ -841,6 +1088,7 @@ export function ImportProductSalesTab({
                     </div>
                 )}
             </div>
+            )}
         </div>
     );
 }

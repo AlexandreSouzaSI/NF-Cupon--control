@@ -49,6 +49,14 @@ export class CreateUserDto {
     @IsString({ each: true })
     storeIds?: string[];
 
+    // Multi-tenant: só tem efeito quando quem está criando é Admin Master
+    // (painel /admin) — pra qualquer outro usuário criando colaborador
+    // normal, o service ignora esse campo e usa a própria empresa de quem
+    // está criando. Ver users.service.ts#create.
+    @IsOptional()
+    @IsString()
+    empresaId?: string;
+
     // Permissão extra pra aprovar/reprovar compras — só quem já aprova por
     // conta própria (Admin Master ou Proprietário) pode enviar esse campo,
     // ver ensureCanGrantApprovalPermission em users.service.ts.

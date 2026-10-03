@@ -41,12 +41,44 @@ function flattenSupplier(supplier: any) {
 export class SuppliersService {
     constructor(private prisma: PrismaService) { }
 
-    async create(dto: CreateSupplierDto) {
+    // Multi-tenant: Admin Master vê a empresa da loja que tem selecionada
+    // no seletor do topo (activeStoreEmpresaId, resolvido no
+    // jwt.strategy.ts a partir do header x-store-id) — assim, dentro de
+    // uma loja da empresa X ele só vê fornecedor da empresa X, e trocando
+    // de loja passa a ver só a outra. Sem loja ativa (ex.: painel /admin),
+    // cai no comportamento antigo (sem filtro, vê tudo). Todo outro
+    // usuário só vê/edita fornecedor da própria empresa, sempre.
+    private empresaFilter(actingUser?: any) {
+        if (!actingUser) return undefined;
+        if (actingUser.isAdminMaster) return actingUser.activeStoreEmpresaId;
+        return actingUser.empresaId;
+    }
+
+    // Supplier.empresaId agora é obrigatório no banco — se chegar aqui sem
+    // empresa (por exemplo, Admin Master sem loja ativa selecionada,
+    // tentando criar fornecedor pela tela normal em vez do painel /admin),
+    // dá um erro claro em vez de estourar a constraint NOT NULL do Prisma.
+    private requireEmpresaId(actingUser?: any): string {
+        const empresaId = actingUser?.isAdminMaster
+            ? actingUser?.activeStoreEmpresaId
+            : actingUser?.empresaId;
+
+        if (!empresaId) {
+            throw new BadRequestException(
+                'Não foi possível identificar sua empresa pra cadastrar isso. Selecione uma loja no topo do sistema.',
+            );
+        }
+
+        return empresaId;
+    }
+
+    async create(dto: CreateSupplierDto, actingUser?: any) {
         const name = dto.name.trim();
         const nameNormalized = normalizeSupplierName(name);
+        const empresaId = this.requireEmpresaId(actingUser);
 
-        const existing = await this.prisma.supplier.findUnique({
-            where: { nameNormalized },
+        const existing = await this.prisma.supplier.findFirst({
+            where: { nameNormalized, empresaId },
         });
 
         if (existing) {
@@ -60,6 +92,7 @@ export class SuppliersService {
                 ...dto,
                 name,
                 nameNormalized,
+                empresaId,
                 phone: dto.phone ? normalizePhone(dto.phone) : undefined,
             },
         });
@@ -67,7 +100,7 @@ export class SuppliersService {
 
     // Usado na hora de criar a compra: digitou o nome, usa o fornecedor que
     // já existe (reativando se estava desativado) ou cadastra um novo na hora.
-    async findOrCreate(name: string) {
+    async findOrCreate(name: string, actingUser?: any) {
         const trimmed = (name || '').trim();
 
         if (!trimmed) {
@@ -77,9 +110,10 @@ export class SuppliersService {
         }
 
         const nameNormalized = normalizeSupplierName(trimmed);
+        const empresaId = this.requireEmpresaId(actingUser);
 
-        const existing = await this.prisma.supplier.findUnique({
-            where: { nameNormalized },
+        const existing = await this.prisma.supplier.findFirst({
+            where: { nameNormalized, empresaId },
         });
 
         if (existing) {
@@ -97,16 +131,19 @@ export class SuppliersService {
             data: {
                 name: trimmed,
                 nameNormalized,
+                empresaId,
             },
         });
     }
 
-    async findAll(search?: string) {
+    async findAll(search: string | undefined, actingUser?: any) {
         const trimmedSearch = search?.trim();
+        const empresaId = this.empresaFilter(actingUser);
 
         const suppliers = await this.prisma.supplier.findMany({
             where: {
                 active: true,
+                ...(empresaId !== undefined ? { empresaId } : {}),
                 nameNormalized: trimmedSearch
                     ? { contains: normalizeSupplierName(trimmedSearch) }
                     : undefined,
@@ -124,12 +161,18 @@ export class SuppliersService {
     // Update completo — usado em Cadastros → Fornecedores, principalmente
     // pra vincular as categorias (Cotação) e o telefone de WhatsApp. Não
     // existia endpoint de edição antes disso.
-    async update(id: string, dto: UpdateSupplierDto) {
+    async update(id: string, dto: UpdateSupplierDto, actingUser?: any) {
         const supplier = await this.prisma.supplier.findUnique({
             where: { id },
         });
 
         if (!supplier) {
+            throw new BadRequestException('Fornecedor não encontrado.');
+        }
+
+        // Multi-tenant: nunca deixa editar fornecedor de outra empresa por
+        // id direto (IDOR) — Admin Master é a única exceção.
+        if (actingUser && !actingUser.isAdminMaster && supplier.empresaId !== actingUser.empresaId) {
             throw new BadRequestException('Fornecedor não encontrado.');
         }
 
@@ -140,8 +183,8 @@ export class SuppliersService {
             const nameNormalized = normalizeSupplierName(name);
 
             if (nameNormalized !== supplier.nameNormalized) {
-                const conflict = await this.prisma.supplier.findUnique({
-                    where: { nameNormalized },
+                const conflict = await this.prisma.supplier.findFirst({
+                    where: { nameNormalized, empresaId: supplier.empresaId },
                 });
 
                 if (conflict && conflict.id !== id) {
@@ -176,6 +219,28 @@ export class SuppliersService {
         }
 
         if (dto.storeIds !== undefined) {
+            // Multi-tenant: nunca deixa atrelar o fornecedor a uma loja de
+            // outra empresa, mesmo que a lista venha manipulada direto na
+            // API (a tela já só mostra as lojas certas, mas isso aqui é o
+            // que garante de verdade). Admin Master sem loja ativa (fora
+            // do fluxo normal) escapa dessa checagem de propósito, igual
+            // ao resto do arquivo.
+            if (dto.storeIds.length > 0) {
+                const empresaId = this.empresaFilter(actingUser);
+
+                if (empresaId !== undefined) {
+                    const validCount = await this.prisma.store.count({
+                        where: { id: { in: dto.storeIds }, empresaId },
+                    });
+
+                    if (validCount !== dto.storeIds.length) {
+                        throw new BadRequestException(
+                            'Uma ou mais lojas selecionadas não pertencem à sua empresa.',
+                        );
+                    }
+                }
+            }
+
             // Mesma lógica de substituição total do categoryIds. Lista
             // vazia é um valor válido (e o caso mais comum): significa
             // "voltar a atender todas as lojas".
@@ -201,18 +266,22 @@ export class SuppliersService {
 
     // --- Categorias de fornecedor (Cotação) ---
 
-    async findAllCategories() {
+    async findAllCategories(actingUser?: any) {
+        const empresaId = this.empresaFilter(actingUser);
+
         return this.prisma.supplierCategory.findMany({
+            where: empresaId !== undefined ? { empresaId } : undefined,
             orderBy: { name: 'asc' },
         });
     }
 
-    async createCategory(dto: CreateSupplierCategoryDto) {
+    async createCategory(dto: CreateSupplierCategoryDto, actingUser?: any) {
         const name = dto.name.trim();
         const nameNormalized = normalizeSupplierName(name);
+        const empresaId = this.requireEmpresaId(actingUser);
 
-        const existing = await this.prisma.supplierCategory.findUnique({
-            where: { nameNormalized },
+        const existing = await this.prisma.supplierCategory.findFirst({
+            where: { nameNormalized, empresaId },
         });
 
         if (existing) {
@@ -222,21 +291,35 @@ export class SuppliersService {
         }
 
         return this.prisma.supplierCategory.create({
-            data: { name, nameNormalized },
+            data: { name, nameNormalized, empresaId },
         });
     }
 
-    async renameCategory(id: string, name: string) {
+    async renameCategory(id: string, name: string, actingUser?: any) {
         const trimmed = name.trim();
 
         if (!trimmed) {
             throw new ConflictException('Informe um nome pra lista.');
         }
 
+        const category = await this.prisma.supplierCategory.findUnique({
+            where: { id },
+        });
+
+        if (!category) {
+            throw new ConflictException('Categoria não encontrada.');
+        }
+
+        // Multi-tenant: nunca deixa renomear categoria de outra empresa
+        // por id direto (IDOR) — Admin Master é a única exceção.
+        if (actingUser && !actingUser.isAdminMaster && category.empresaId !== actingUser.empresaId) {
+            throw new ConflictException('Categoria não encontrada.');
+        }
+
         const nameNormalized = normalizeSupplierName(trimmed);
 
-        const existing = await this.prisma.supplierCategory.findUnique({
-            where: { nameNormalized },
+        const existing = await this.prisma.supplierCategory.findFirst({
+            where: { nameNormalized, empresaId: category.empresaId },
         });
 
         if (existing && existing.id !== id) {

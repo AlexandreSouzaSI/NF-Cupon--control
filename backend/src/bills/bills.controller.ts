@@ -36,6 +36,7 @@ import { ModuleAccessGuard } from '../auth/module-access.guard';
 
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
+import { CreateBillRecorrenciaDto } from './dto/create-bill-recorrencia.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 
 const uploadPath = join(
@@ -158,6 +159,37 @@ export class BillsController {
             'X-Batch-Summary': encodeURIComponent(JSON.stringify(resumo)),
         });
         res.send(conteudo);
+    }
+
+    // Contas a Pagar recorrentes (aluguel, internet, condomínio...) —
+    // precisam vir antes de ":id" pelo mesmo motivo das rotas acima.
+    @Post('recorrencias')
+    async createRecorrencia(
+        @Body() body: CreateBillRecorrenciaDto,
+        @CurrentUser() user: any,
+    ) {
+        return this.billsService.createRecorrencia(body, user);
+    }
+
+    @Get('recorrencias')
+    async listRecorrencias(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+    ) {
+        return this.billsService.listRecorrencias(storeId, user);
+    }
+
+    @Patch('recorrencias/:id/active')
+    async toggleRecorrenciaActive(
+        @Param('id') id: string,
+        @Body('active') active: boolean,
+        @CurrentUser() user: any,
+    ) {
+        return this.billsService.toggleRecorrenciaActive(
+            id,
+            !!active,
+            user,
+        );
     }
 
     @Get(':id')

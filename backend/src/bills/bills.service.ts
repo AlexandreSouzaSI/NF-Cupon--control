@@ -16,6 +16,7 @@ import {
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateBillDto } from './dto/create-bill.dto';
+import { CreateBillRecorrenciaDto } from './dto/create-bill-recorrencia.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { parseOfx } from './ofx-parser';
 import { buildTodayReportPdf } from './bills-report-builder';
@@ -24,38 +25,25 @@ import {
     BoletoPagamento,
     PixPagamento,
 } from './cnab240-sicredi-builder';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 @Injectable()
 export class BillsService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado — ver comentário em
+    // src/common/store-scope.util.ts sobre a correção de vazamento
+    // cross-empresa (antes, ADMINISTRATIVO/PROPRIETARIO de qualquer
+    // empresa via/mexia em conta a pagar de qualquer outra).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) {
-            return;
-        }
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException(
-                'Você não tem acesso a esta loja.',
-            );
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     // Quem não tem canViewPayrollBills nem vê a conta na lista (não só o
@@ -105,7 +93,7 @@ export class BillsService {
             );
         }
 
-        this.ensureStoreAccess(bill.storeId, user);
+        await this.ensureStoreAccess(bill.storeId, user);
 
         if (
             user.canViewPayrollBills === false &&
@@ -128,7 +116,7 @@ export class BillsService {
             );
         }
 
-        this.ensureStoreAccess(dto.storeId, user);
+        await this.ensureStoreAccess(dto.storeId, user);
 
         let noInvoiceProductsNoteToPersist: string | undefined;
 
@@ -290,10 +278,10 @@ export class BillsService {
         },
     ) {
         const allowedStoreIds =
-            this.getAllowedStoreIds(user);
+            await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         const where = {
@@ -392,7 +380,7 @@ export class BillsService {
         );
 
         if (dto.storeId) {
-            this.ensureStoreAccess(dto.storeId, user);
+            await this.ensureStoreAccess(dto.storeId, user);
         }
 
         const dueDateValue = dto.dueDate
@@ -660,6 +648,251 @@ export class BillsService {
         });
     }
 
+    // -----------------------------------------------------------------
+    // Conta a Pagar recorrente (BillRecorrencia) — mesma lógica já
+    // validada no Controle Rota pra ContaPagarRecorrencia: a cada
+    // ciclo gera um Bill normal (campo Bill.recorrenciaId aponta pra
+    // essa recorrência), sempre MESES_GERACAO_RECORRENCIA meses à
+    // frente. Editar/excluir um Bill já gerado não afeta a recorrência
+    // nem as demais ocorrências.
+    // -----------------------------------------------------------------
+
+    private readonly MESES_GERACAO_RECORRENCIA = 12;
+
+    private ultimoDiaDoMes(ano: number, mesIndex: number): number {
+        return new Date(ano, mesIndex + 1, 0).getDate();
+    }
+
+    async createRecorrencia(
+        dto: CreateBillRecorrenciaDto,
+        user: any,
+    ) {
+        if (!this.canManageBills(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para cadastrar contas a pagar.',
+            );
+        }
+
+        await this.ensureStoreAccess(dto.storeId, user);
+
+        if (dto.recurrence === 'MONTHLY') {
+            if (!dto.dayOfMonth || dto.dayOfMonth < 1 || dto.dayOfMonth > 30) {
+                throw new BadRequestException(
+                    'Escolha um dia do mês entre 1 e 30.',
+                );
+            }
+        } else if (dto.recurrence === 'WEEKLY') {
+            if (dto.weekday === undefined || dto.weekday === null) {
+                throw new BadRequestException(
+                    'Escolha o dia da semana da recorrência.',
+                );
+            }
+        } else {
+            throw new BadRequestException('Tipo de recorrência inválido.');
+        }
+
+        const recorrencia = await this.prisma.billRecorrencia.create({
+            data: {
+                description: dto.description,
+                value: dto.value,
+                recurrence: dto.recurrence,
+                weekday: dto.recurrence === 'WEEKLY' ? dto.weekday : null,
+                dayOfMonth:
+                    dto.recurrence === 'MONTHLY' ? dto.dayOfMonth : null,
+                type: dto.type,
+                paymentMethod: dto.paymentMethod,
+                storeId: dto.storeId,
+                categoryId: dto.categoryId,
+                supplierId: dto.supplierId,
+                createdById: user.id,
+            },
+        });
+
+        // Gera as ocorrências na hora, sem esperar o cron da madrugada —
+        // senão a recorrência cadastrada agora só apareceria na lista de
+        // Contas a Pagar no dia seguinte.
+        await this.gerarOcorrenciasRecorrencia(recorrencia.id);
+
+        return this.prisma.billRecorrencia.findUnique({
+            where: { id: recorrencia.id },
+        });
+    }
+
+    async listRecorrencias(storeId: string, user: any) {
+        await this.ensureStoreAccess(storeId, user);
+
+        return this.prisma.billRecorrencia.findMany({
+            where: { storeId, active: true },
+            include: {
+                category: true,
+                supplier: true,
+            },
+            orderBy: { description: 'asc' },
+        });
+    }
+
+    // "Excluir" uma recorrência só desativa a receita (não gera mais
+    // ocorrências novas) — os Bills já gerados continuam existindo
+    // normalmente, o usuário exclui cada um à parte se quiser.
+    async toggleRecorrenciaActive(id: string, active: boolean, user: any) {
+        if (!this.canManageBills(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para gerenciar contas a pagar.',
+            );
+        }
+
+        const recorrencia = await this.prisma.billRecorrencia.findUnique({
+            where: { id },
+        });
+
+        if (!recorrencia) {
+            throw new NotFoundException('Conta recorrente não encontrada.');
+        }
+
+        await this.ensureStoreAccess(recorrencia.storeId, user);
+
+        await this.prisma.billRecorrencia.update({
+            where: { id },
+            data: { active },
+        });
+
+        if (active) {
+            await this.gerarOcorrenciasRecorrencia(id);
+        }
+
+        return { ok: true };
+    }
+
+    // Gera as ocorrências concretas (Bill) de uma recorrência, desde o
+    // que já foi gerado (generatedUntil) até MESES_GERACAO_RECORRENCIA
+    // meses a partir de hoje — idempotente: o @@unique([recorrenciaId,
+    // dueDate]) garante que rodar duas vezes não duplica nada.
+    private async gerarOcorrenciasRecorrencia(recorrenciaId: string) {
+        const recorrencia = await this.prisma.billRecorrencia.findUnique({
+            where: { id: recorrenciaId },
+        });
+
+        if (!recorrencia || !recorrencia.active) {
+            return { geradas: 0 };
+        }
+
+        const hoje = this.startOfToday();
+
+        const limite = new Date(hoje);
+        limite.setMonth(
+            limite.getMonth() + this.MESES_GERACAO_RECORRENCIA,
+        );
+
+        const vencimentos: Date[] = [];
+
+        // `hoje`/`limite` e os cursores abaixo usam componentes LOCAIS de
+        // data (mesma convenção de startOfToday()) só pra decidir QUAIS
+        // datas de calendário caem na recorrência — o Date final gravado
+        // sempre usa Date.UTC(...,12,0,0), igual ao resto do bills.service
+        // (dueDate = `${string}T12:00:00.000Z`), pra nunca recuar de dia
+        // por fuso quando ler/comparar depois.
+        if (recorrencia.recurrence === 'MONTHLY' && recorrencia.dayOfMonth) {
+            const cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+
+            while (cursor <= limite) {
+                const dia = Math.min(
+                    recorrencia.dayOfMonth,
+                    this.ultimoDiaDoMes(cursor.getFullYear(), cursor.getMonth()),
+                );
+                const vencimento = new Date(
+                    Date.UTC(cursor.getFullYear(), cursor.getMonth(), dia, 12, 0, 0),
+                );
+
+                if (vencimento >= hoje) {
+                    vencimentos.push(vencimento);
+                }
+
+                cursor.setMonth(cursor.getMonth() + 1);
+            }
+        } else if (
+            recorrencia.recurrence === 'WEEKLY' &&
+            recorrencia.weekday !== null &&
+            recorrencia.weekday !== undefined
+        ) {
+            const cursor = new Date(hoje);
+
+            while (cursor <= limite) {
+                if (cursor.getDay() === recorrencia.weekday) {
+                    vencimentos.push(
+                        new Date(
+                            Date.UTC(
+                                cursor.getFullYear(),
+                                cursor.getMonth(),
+                                cursor.getDate(),
+                                12,
+                                0,
+                                0,
+                            ),
+                        ),
+                    );
+                }
+
+                cursor.setUTCDate(cursor.getUTCDate() + 1);
+            }
+        }
+
+        let geradas = 0;
+
+        for (const vencimento of vencimentos) {
+            try {
+                await this.prisma.bill.create({
+                    data: {
+                        description: recorrencia.description,
+                        value: recorrencia.value,
+                        type: recorrencia.type,
+                        paymentMethod: recorrencia.paymentMethod,
+                        dueDate: vencimento,
+                        status: this.computeStatusForDueDate(vencimento),
+                        storeId: recorrencia.storeId,
+                        categoryId: recorrencia.categoryId,
+                        supplierId: recorrencia.supplierId,
+                        launchedById: recorrencia.createdById,
+                        recorrenciaId: recorrencia.id,
+                    },
+                });
+
+                geradas++;
+            } catch {
+                // Já existe ocorrência pra essa data (@@unique) — esperado
+                // quando o cron roda de novo sem nada novo pra gerar.
+            }
+        }
+
+        await this.prisma.billRecorrencia.update({
+            where: { id: recorrencia.id },
+            data: { generatedUntil: limite },
+        });
+
+        return { geradas };
+    }
+
+    // Cron diário (madrugada) — garante que toda recorrência ativa sempre
+    // tem ~12 meses de ocorrências futuras geradas, sem depender do
+    // usuário abrir a tela de Contas a Pagar.
+    @Cron('20 0 * * *', { timeZone: 'America/Sao_Paulo' })
+    async estenderOcorrenciasRecorrentes() {
+        const recorrencias = await this.prisma.billRecorrencia.findMany({
+            where: { active: true },
+        });
+
+        for (const recorrencia of recorrencias) {
+            try {
+                await this.gerarOcorrenciasRecorrencia(recorrencia.id);
+            } catch (error) {
+                // Uma recorrência com erro não deve travar as outras.
+                console.error(
+                    `Erro ao estender BillRecorrencia ${recorrencia.id}:`,
+                    error,
+                );
+            }
+        }
+    }
+
     // "Incluir nos pagamentos de hoje" — só pra contas em aberto/vencidas
     // (pagar/cancelada não faz sentido entrar numa fila de pagamento).
     // Alterna: se já estava marcada, desmarca. Não muda dueDate nem status
@@ -715,10 +948,10 @@ export class BillsService {
         }
 
         if (storeId) {
-            this.ensureStoreAccess(storeId, user);
+            await this.ensureStoreAccess(storeId, user);
         }
 
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         const vencidas = await this.prisma.bill.findMany({
             where: {
@@ -750,10 +983,10 @@ export class BillsService {
     // vencidas que alguém marcou manualmente pra entrar nos pagamentos de
     // hoje (toggleQueueToday) — mesmo critério do filtro "Hoje" da tela.
     async findTodayBills(user: any, storeId?: string) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (storeId) {
-            this.ensureStoreAccess(storeId, user);
+            await this.ensureStoreAccess(storeId, user);
         }
 
         const start = this.startOfToday();
@@ -867,6 +1100,27 @@ export class BillsService {
         );
     }
 
+    // PaymentBatchConfig.empresaId agora é obrigatório no banco (e único
+    // por empresa) — mesmo motivo do requireEmpresaId em
+    // suppliers.service.ts: erro claro em vez de estourar a constraint NOT
+    // NULL do Prisma. Admin Master usa a empresa da loja ativa
+    // (activeStoreEmpresaId, ver jwt.strategy.ts) — sem loja ativa
+    // selecionada não dá pra saber de qual empresa é o convênio bancário
+    // que ele quer configurar, então também exige.
+    private requireEmpresaId(user: any): string {
+        const empresaId = user?.isAdminMaster
+            ? user?.activeStoreEmpresaId
+            : user?.empresaId;
+
+        if (!empresaId) {
+            throw new BadRequestException(
+                'Não foi possível identificar sua empresa pra configurar o pagamento em lote. Selecione uma loja no topo do sistema.',
+            );
+        }
+
+        return empresaId;
+    }
+
     async getPaymentBatchConfig(user: any) {
         if (!this.canManagePaymentBatch(user)) {
             throw new ForbiddenException(
@@ -874,7 +1128,13 @@ export class BillsService {
             );
         }
 
+        // Multi-tenant: era "o único registro do banco todo" — dado
+        // bancário sensível (agência/conta) compartilhado entre TODAS as
+        // empresas-cliente. Agora é 1 registro por empresa.
+        const empresaId = this.requireEmpresaId(user);
+
         return this.prisma.paymentBatchConfig.findFirst({
+            where: { empresaId },
             orderBy: { updatedAt: 'desc' },
         });
     }
@@ -909,9 +1169,14 @@ export class BillsService {
             );
         }
 
-        // Único registro pra empresa toda — se já existe, atualiza; se não,
-        // cria. Evita ficar acumulando linha velha a cada edição.
+        const empresaId = this.requireEmpresaId(user);
+
+        // Único registro por empresa — se já existe o da empresa de quem
+        // está editando, atualiza; se não, cria. Evita ficar acumulando
+        // linha velha a cada edição, e nunca mexe no convênio de outra
+        // empresa-cliente.
         const existing = await this.prisma.paymentBatchConfig.findFirst({
+            where: { empresaId },
             orderBy: { updatedAt: 'desc' },
         });
 
@@ -924,6 +1189,7 @@ export class BillsService {
             companyName: body.companyName,
             companyCnpj: body.companyCnpj,
             updatedById: user.id || user.userId,
+            empresaId,
         };
 
         if (existing) {
@@ -953,6 +1219,7 @@ export class BillsService {
         }
 
         const convenio = await this.prisma.paymentBatchConfig.findFirst({
+            where: { empresaId: this.requireEmpresaId(user) },
             orderBy: { updatedAt: 'desc' },
         });
 

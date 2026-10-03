@@ -11,6 +11,10 @@ import { join } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseFullNfeForView, parseFullNfeXml, type NfeView } from '../stores/sefaz-nfe-client';
 import { buildDanfePdf } from '../common/danfe-builder';
+import {
+    resolveAllowedStoreIds,
+    ensureStoreAccessScoped,
+} from '../common/store-scope.util';
 
 // Mesmo padrão dos outros XMLs importados/baixados: fica dentro de
 // /uploads, num diretório próprio pra não misturar com a NF de compra.
@@ -37,36 +41,20 @@ function extractReferenceMonth(issueDate: string): string {
 export class OutgoingSalesNfService {
     constructor(private prisma: PrismaService) { }
 
-    private getAllowedStoreIds(user: any): string[] | undefined {
-        if (
-            user.role === UserRole.ADMINISTRATIVO ||
-            user.role === UserRole.PROPRIETARIO
-        ) {
-            return undefined;
-        }
-
-        return (
-            user.userStores?.map(
-                (item: any) => item.storeId || item.store?.id,
-            ) || []
-        );
+    // Delega pro helper compartilhado (src/common/store-scope.util.ts) — corrige vazamento cross-empresa: antes, ADMINISTRATIVO/PROPRIETARIO de qualquer empresa via/mexia em dado de qualquer outra (undefined = sem filtro nenhum, escrito quando só existia uma empresa no banco).
+    private async getAllowedStoreIds(user: any): Promise<string[] | undefined> {
+        return resolveAllowedStoreIds(this.prisma, user);
     }
 
-    private ensureStoreAccess(storeId: string, user: any) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
-
-        if (!allowedStoreIds) return;
-
-        if (!allowedStoreIds.includes(storeId)) {
-            throw new ForbiddenException('Você não tem acesso a esta loja.');
-        }
+    private async ensureStoreAccess(storeId: string, user: any) {
+        return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
     async findAll(user: any, filters?: { storeId?: string }) {
-        const allowedStoreIds = this.getAllowedStoreIds(user);
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
-            this.ensureStoreAccess(filters.storeId, user);
+            await this.ensureStoreAccess(filters.storeId, user);
         }
 
         // O frontend agrupa por mês e pagina por mês (não por linha), então
@@ -99,7 +87,7 @@ export class OutgoingSalesNfService {
             );
         }
 
-        this.ensureStoreAccess(storeId, user);
+        await this.ensureStoreAccess(storeId, user);
 
         if (!files || files.length === 0) {
             throw new BadRequestException('Envie pelo menos um arquivo XML.');
@@ -224,7 +212,7 @@ export class OutgoingSalesNfService {
             throw new NotFoundException('NF de venda não encontrada.');
         }
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         const updated = await this.prisma.outgoingSalesNf.update({
             where: { id },
@@ -252,7 +240,7 @@ export class OutgoingSalesNfService {
             throw new NotFoundException('NF de venda não encontrada.');
         }
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         let parsed: NfeView | null = null;
 
@@ -299,7 +287,7 @@ export class OutgoingSalesNfService {
             throw new NotFoundException('NF de venda não encontrada.');
         }
 
-        this.ensureStoreAccess(item.storeId, user);
+        await this.ensureStoreAccess(item.storeId, user);
 
         if (!item.fileUrl) {
             throw new NotFoundException('XML original não disponível pra essa NF.');

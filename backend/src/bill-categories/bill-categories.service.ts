@@ -17,9 +17,36 @@ export function normalizeCategoryName(name: string): string {
 export class BillCategoriesService {
     constructor(private prisma: PrismaService) { }
 
+    // Multi-tenant: mesmo padrão do SuppliersService — Admin Master vê a
+    // empresa da loja ativa (activeStoreEmpresaId, resolvido no
+    // jwt.strategy.ts); sem loja ativa (painel /admin), vê tudo. Qualquer
+    // outro usuário só vê/cria categoria da própria empresa, sempre.
+    private empresaFilter(actingUser?: any) {
+        if (!actingUser) return undefined;
+        if (actingUser.isAdminMaster) return actingUser.activeStoreEmpresaId;
+        return actingUser.empresaId;
+    }
+
+    // BillCategory.empresaId agora é obrigatório no banco — mesmo motivo do
+    // requireEmpresaId em suppliers.service.ts: erro claro em vez de
+    // estourar a constraint NOT NULL do Prisma.
+    private requireEmpresaId(actingUser?: any): string {
+        const empresaId = actingUser?.isAdminMaster
+            ? actingUser?.activeStoreEmpresaId
+            : actingUser?.empresaId;
+
+        if (!empresaId) {
+            throw new BadRequestException(
+                'Não foi possível identificar sua empresa pra cadastrar isso. Selecione uma loja no topo do sistema.',
+            );
+        }
+
+        return empresaId;
+    }
+
     // Digitou o nome, usa a categoria que já existe (reativando se estava
     // desativada) ou cadastra uma nova na hora — mesmo padrão do fornecedor.
-    async findOrCreate(name: string) {
+    async findOrCreate(name: string, actingUser?: any) {
         const trimmed = (name || '').trim();
 
         if (!trimmed) {
@@ -27,9 +54,10 @@ export class BillCategoriesService {
         }
 
         const nameNormalized = normalizeCategoryName(trimmed);
+        const empresaId = this.requireEmpresaId(actingUser);
 
-        const existing = await this.prisma.billCategory.findUnique({
-            where: { nameNormalized },
+        const existing = await this.prisma.billCategory.findFirst({
+            where: { nameNormalized, empresaId },
         });
 
         if (existing) {
@@ -47,16 +75,19 @@ export class BillCategoriesService {
             data: {
                 name: trimmed,
                 nameNormalized,
+                empresaId,
             },
         });
     }
 
-    async findAll(search?: string) {
+    async findAll(search: string | undefined, actingUser?: any) {
         const trimmedSearch = search?.trim();
+        const empresaId = this.empresaFilter(actingUser);
 
         return this.prisma.billCategory.findMany({
             where: {
                 active: true,
+                ...(empresaId !== undefined ? { empresaId } : {}),
                 nameNormalized: trimmedSearch
                     ? { contains: normalizeCategoryName(trimmedSearch) }
                     : undefined,
