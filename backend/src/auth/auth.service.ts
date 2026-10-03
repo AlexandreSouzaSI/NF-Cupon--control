@@ -73,6 +73,7 @@ export class AuthService {
                 canApprovePurchases: user.canApprovePurchases,
                 moduleAccess: user.moduleAccess,
                 canViewPayrollBills: user.canViewPayrollBills,
+                canManagePermissions: user.canManagePermissions,
                 isDemo: user.isDemo,
                 demoExpiresAt: user.demoExpiresAt,
                 stores,

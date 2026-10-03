@@ -68,4 +68,12 @@ export class UpdateUserDto {
     @IsOptional()
     @IsBoolean()
     canViewPayrollBills?: boolean;
+
+    // Libera essa pessoa a MEXER em permissões de outros colaboradores
+    // (role, canApprovePurchases, moduleAccess, canViewPayrollBills e esse
+    // próprio campo) — só o Admin Master pode enviar esse campo, ver
+    // ensureCanGrantPermissionsManagement em users.service.ts.
+    @IsOptional()
+    @IsBoolean()
+    canManagePermissions?: boolean;
 }

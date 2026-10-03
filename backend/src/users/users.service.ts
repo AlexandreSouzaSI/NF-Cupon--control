@@ -122,30 +122,51 @@ export class UsersService {
         return allowed.includes(actingUser.role);
     }
 
-    // Só quem já aprova compra por conta própria (Admin Master ou
-    // Proprietário) pode conceder ou tirar a permissão extra
-    // canApprovePurchases de outro usuário — evita que, por exemplo, um
-    // Gerente libere aprovação pra si mesmo ou pra outra pessoa.
+    // Dono do sistema sempre pode; qualquer outra pessoa (mesmo
+    // Proprietário) só se tiver a flag canManagePermissions marcada nela
+    // mesma — ver comentário do campo em schema.prisma. Essa é a checagem
+    // base reaproveitada pelas três guards de permissão abaixo.
+    private hasPermissionsManagementPower(actingUser: any): boolean {
+        if (actingUser.isAdminMaster) return true;
+
+        return actingUser.canManagePermissions === true;
+    }
+
+    // Só quem tem o poder de mexer em permissões (ver
+    // hasPermissionsManagementPower acima) pode conceder ou tirar a
+    // permissão extra canApprovePurchases de outro usuário — evita que,
+    // por exemplo, um Proprietário sem essa flag libere aprovação pra
+    // alguém.
     private ensureCanGrantApprovalPermission(actingUser: any) {
-        if (actingUser.isAdminMaster) return;
-        if (actingUser.role === UserRole.PROPRIETARIO) return;
+        if (this.hasPermissionsManagementPower(actingUser)) return;
 
         throw new ForbiddenException(
-            'Só o Proprietário ou o Admin Master podem liberar a permissão de aprovar compras.',
+            'Você não tem permissão pra mexer em permissões de colaborador. Peça pro Admin Master liberar isso pra você.',
         );
     }
 
     // Mesma ideia da checagem acima, só que pra moduleAccess (quais
     // módulos essa pessoa pode acessar) e canViewPayrollBills (ver valor
-    // de conta Funcionários/Freelancer) — só o Proprietário ou o Admin
-    // Master decidem isso, ninguém mais (nem Administrativo/Gerente, que
-    // normalmente cadastram colaborador).
+    // de conta Funcionários/Freelancer).
     private ensureCanGrantModuleAccess(actingUser: any) {
-        if (actingUser.isAdminMaster) return;
-        if (actingUser.role === UserRole.PROPRIETARIO) return;
+        if (this.hasPermissionsManagementPower(actingUser)) return;
 
         throw new ForbiddenException(
-            'Só o Proprietário ou o Admin Master podem alterar os módulos liberados de um colaborador.',
+            'Você não tem permissão pra mexer em permissões de colaborador. Peça pro Admin Master liberar isso pra você.',
+        );
+    }
+
+    // A própria flag canManagePermissions só pode ser concedida/tirada
+    // pelo Admin Master — diferente das duas guards acima, aqui NÃO basta
+    // já ter a flag (senão qualquer um que ganhasse o poder uma vez
+    // poderia replicá-lo pra qualquer outra pessoa, inclusive pra si
+    // mesmo de novo depois de perder). Só o dono do sistema decide quem
+    // entra e quem sai desse grupo restrito.
+    private ensureCanGrantPermissionsManagement(actingUser: any) {
+        if (actingUser.isAdminMaster) return;
+
+        throw new ForbiddenException(
+            'Só o Admin Master pode liberar ou tirar de alguém o poder de mexer em permissões.',
         );
     }
 
@@ -235,6 +256,10 @@ export class UsersService {
             ) {
                 this.ensureCanGrantModuleAccess(actingUser);
             }
+
+            if (dto.canManagePermissions !== undefined) {
+                this.ensureCanGrantPermissionsManagement(actingUser);
+            }
         }
 
         const phone = dto.phone?.trim() ? normalizePhone(dto.phone) : null;
@@ -297,6 +322,7 @@ export class UsersService {
                 notifyQuotationConfirmed: dto.notifyQuotationConfirmed ?? false,
                 moduleAccess: dto.moduleAccess ?? [],
                 canViewPayrollBills: dto.canViewPayrollBills ?? true,
+                canManagePermissions: dto.canManagePermissions ?? false,
                 userStores: {
                     create:
                         dto.storeIds?.map((storeId) => ({
@@ -519,6 +545,10 @@ export class UsersService {
             ) {
                 this.ensureCanGrantModuleAccess(actingUser);
             }
+
+            if (dto.canManagePermissions !== undefined) {
+                this.ensureCanGrantPermissionsManagement(actingUser);
+            }
         }
 
         if (dto.email) {
@@ -574,6 +604,7 @@ export class UsersService {
                     notifyQuotationConfirmed: dto.notifyQuotationConfirmed,
                     moduleAccess: dto.moduleAccess,
                     canViewPayrollBills: dto.canViewPayrollBills,
+                    canManagePermissions: dto.canManagePermissions,
                 },
             });
 

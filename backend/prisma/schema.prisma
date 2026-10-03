@@ -325,6 +325,15 @@ model User {
   // regra de moduleAccess acima.
   canViewPayrollBills Boolean @default(true)
 
+  // Controla quem pode MEXER em permissões de outros colaboradores (role,
+  // canApprovePurchases, moduleAccess, canViewPayrollBills e esse próprio
+  // campo) — sem essa flag marcada, a pessoa nem vê a seção de permissões
+  // na tela de edição de ninguém, mesmo sendo Proprietário. Default false
+  // de propósito: ninguém ganha esse poder sozinho. Só o Admin Master pode
+  // marcar/desmarcar essa flag em alguém — ver
+  // ensureCanGrantPermissionsManagement em users.service.ts.
+  canManagePermissions Boolean @default(false)
+
   // Conta criada pelo autocadastro público de teste (/demo/signup, loja
   // isDemo=true). demoExpiresAt é o prazo (1h a partir do cadastro) —
   // depois disso login e qualquer request autenticada passam a ser

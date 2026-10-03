@@ -17,6 +17,7 @@ import {
     canDeleteForever,
     canGrantApprovalPermission,
     canGrantModuleAccess,
+    canGrantPermissionsManagement,
     getUser,
 } from '@/lib/auth';
 import { menu, moduleLabels, type StoreModuleKey } from '@/lib/menu';
@@ -37,6 +38,7 @@ type User = {
     notifyQuotationConfirmed?: boolean;
     moduleAccess?: StoreModuleKey[];
     canViewPayrollBills?: boolean;
+    canManagePermissions?: boolean;
     userStores: {
         store: Store;
     }[];
@@ -143,6 +145,7 @@ const emptyForm = {
     notifyQuotationConfirmed: false,
     moduleAccess: [] as StoreModuleKey[],
     canViewPayrollBills: true,
+    canManagePermissions: false,
 };
 
 export function UsersTab() {
@@ -169,6 +172,11 @@ export function UsersTab() {
     // Freelancer — ver ensureCanGrantModuleAccess no backend
     // (users.service.ts).
     const canEditModuleAccess = canGrantModuleAccess(loggedUser);
+
+    // Só o Admin Master vê e pode marcar/desmarcar o "poder" de mexer em
+    // permissões de outro colaborador — ver ensureCanGrantPermissionsManagement
+    // no backend (users.service.ts). Nem o Proprietário concede isso.
+    const canEditPermissionsManagement = canGrantPermissionsManagement(loggedUser);
     const podeExcluirDeVez = canDeleteForever(loggedUser);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -227,6 +235,42 @@ export function UsersTab() {
         loadData();
     }, []);
 
+    // O navegador trata Backspace/Delete fora de um campo editável como
+    // "voltar página" (ou deixa o evento borbulhar pra algum atalho) — isso
+    // fazia o modal fechar sozinho quando a pessoa clicava num checkbox/select
+    // já preenchido e apertava Backspace pra "limpar" (reflexo de quem tá
+    // acostumado a editar texto). Com o modal aberto, trava esse
+    // comportamento: só deixa Backspace/Delete agir normalmente se o foco
+    // estiver mesmo num campo de texto editável (input de texto/senha/número,
+    // textarea, ou contenteditable).
+    useEffect(() => {
+        if (!modalOpen) return;
+
+        function handleKeyDown(event: KeyboardEvent) {
+            if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+
+            const target = event.target as HTMLElement | null;
+            const tagName = target?.tagName;
+
+            const isEditableTextField =
+                tagName === 'TEXTAREA' ||
+                target?.isContentEditable === true ||
+                (tagName === 'INPUT' &&
+                    ['text', 'password', 'number', 'email', 'search', 'tel', 'url']
+                        .includes((target as HTMLInputElement).type));
+
+            if (!isEditableTextField) {
+                event.preventDefault();
+            }
+        }
+
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [modalOpen]);
+
     function openNewModal() {
         setEditingUser(null);
         setForm(emptyForm);
@@ -254,6 +298,7 @@ export function UsersTab() {
             notifyQuotationConfirmed: user.notifyQuotationConfirmed || false,
             moduleAccess: user.moduleAccess || [],
             canViewPayrollBills: user.canViewPayrollBills ?? true,
+            canManagePermissions: user.canManagePermissions || false,
         });
 
         setModalOpen(true);
@@ -353,6 +398,12 @@ export function UsersTab() {
             if (canEditModuleAccess) {
                 payload.moduleAccess = form.moduleAccess;
                 payload.canViewPayrollBills = form.canViewPayrollBills;
+            }
+
+            // Só o Admin Master pode mandar esse campo — mesma lógica dos
+            // dois acima, mas restrita só a ele (nem o Proprietário).
+            if (canEditPermissionsManagement) {
+                payload.canManagePermissions = form.canManagePermissions;
             }
 
             if (editingUser) {
@@ -519,6 +570,12 @@ export function UsersTab() {
                                             {user.canViewPayrollBills === false && (
                                                 <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-400">
                                                     Sem ver Func./Freelancer
+                                                </span>
+                                            )}
+
+                                            {user.canManagePermissions && (
+                                                <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-500">
+                                                    Pode mexer em permissões
                                                 </span>
                                             )}
                                         </div>
@@ -891,6 +948,32 @@ export function UsersTab() {
                                             Pagar (perfil ou módulo liberado acima).
                                         </p>
                                     </div>
+                                </div>
+                            )}
+
+                            {canEditPermissionsManagement && (
+                                <div className="rounded-xl border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/40 p-3">
+                                    <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.canManagePermissions}
+                                            onChange={(e) =>
+                                                setForm({
+                                                    ...form,
+                                                    canManagePermissions: e.target.checked,
+                                                })
+                                            }
+                                        />
+                                        Pode mexer em permissões de outros colaboradores
+                                    </label>
+                                    <p className="mt-1 text-xs text-zinc-500">
+                                        Visível só pra você (Admin Master). Quem tiver
+                                        isso marcado passa a ver e editar perfil,
+                                        aprovação de compras, módulos e esse mesmo
+                                        campo de outros colaboradores — igual um
+                                        Proprietário teria por padrão antes. Quem não
+                                        tiver, nem vê essas seções na tela de ninguém.
+                                    </p>
                                 </div>
                             )}
 

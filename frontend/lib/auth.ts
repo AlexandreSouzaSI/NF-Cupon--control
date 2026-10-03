@@ -56,6 +56,13 @@ export type AuthUser = {
     // Pagar — default true (não some pra ninguém até o Proprietário tirar
     // explicitamente). Espelha User.canViewPayrollBills no backend.
     canViewPayrollBills?: boolean;
+    // Libera essa pessoa a MEXER em permissões de outros colaboradores
+    // (role, canApprovePurchases, moduleAccess, canViewPayrollBills e esse
+    // próprio campo) — só o Admin Master pode conceder/tirar essa flag de
+    // alguém. Espelha User.canManagePermissions no backend. Ver
+    // canGrantApprovalPermission/canGrantModuleAccess/
+    // canGrantPermissionsManagement abaixo.
+    canManagePermissions?: boolean;
     // Conta de teste grátis (autocadastro em /demo). demoExpiresAt vem como
     // string ISO (serializado no cookie) — bloqueado depois desse horário,
     // ver app-layout.tsx (banner) e lib/api.ts (401 força logout).
@@ -103,23 +110,32 @@ export function canApprovePurchase(user: AuthUser | null) {
     return user.canApprovePurchases === true;
 }
 
-// Só Admin Master ou Proprietário podem conceder/tirar a permissão extra
-// canApprovePurchases de outro usuário — espelha
+// Só Admin Master ou quem tem canManagePermissions podem conceder/tirar a
+// permissão extra canApprovePurchases de outro usuário — espelha
 // ensureCanGrantApprovalPermission() do backend (users.service.ts).
 export function canGrantApprovalPermission(user: AuthUser | null) {
     if (!user) return false;
 
-    return Boolean(user.isAdminMaster) || user.role === 'PROPRIETARIO';
+    return Boolean(user.isAdminMaster) || user.canManagePermissions === true;
 }
 
-// Só Admin Master ou Proprietário podem editar moduleAccess/
-// canViewPayrollBills de outro colaborador — espelha
+// Só Admin Master ou quem tem canManagePermissions podem editar
+// moduleAccess/canViewPayrollBills de outro colaborador — espelha
 // ensureCanGrantModuleAccess() do backend (users.service.ts). Mesma regra
 // de canGrantApprovalPermission acima, campo diferente.
 export function canGrantModuleAccess(user: AuthUser | null) {
     if (!user) return false;
 
-    return Boolean(user.isAdminMaster) || user.role === 'PROPRIETARIO';
+    return Boolean(user.isAdminMaster) || user.canManagePermissions === true;
+}
+
+// Só o Admin Master pode conceder/tirar de alguém o poder de mexer em
+// permissões de outros colaboradores (canManagePermissions em si) — espelha
+// ensureCanGrantPermissionsManagement() do backend (users.service.ts). De
+// propósito mais restrito que as duas funções acima: ninguém delega esse
+// poder, nem o Proprietário.
+export function canGrantPermissionsManagement(user: AuthUser | null) {
+    return Boolean(user?.isAdminMaster);
 }
 
 // "Aceitar e gerar conta a pagar" (Conciliar NF, Criar Conta a Pagar a
