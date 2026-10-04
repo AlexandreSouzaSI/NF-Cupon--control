@@ -1,0 +1,1930 @@
+[
+  {
+    "produto": "CEVICHE DE SALMÃO",
+    "categoria": "ENTRADAS FRIAS"
+  },
+  {
+    "produto": "4 QUEIJOS",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ABACAXI",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ABACAXI COM HORTELÃ",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ABSOLUT",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ABSOLUT + 4 RED BULL",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "ABSOLUT DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "ABSOLUT GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "AGUA C/ GAS",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "AGUA DE COCO EM CUBOS 100ML",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "AGUA S/ GAS",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "AGUA TONICA",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "AGUA TONICA 0 ST. PIERRE",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "AGUA TONICA ZERO",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "ALAMOS CHARDONNAY",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "ALAMOS MALBEC",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "ALFAJOR DE COLHER",
+    "categoria": "SOBREMESAS"
+  },
+  {
+    "produto": "ALFAJOR DE COLHER (D)",
+    "categoria": "SOBREMESA EXPERIENCIA NU GALHO"
+  },
+  {
+    "produto": "ALHO PORO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ALMA NEGRA",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "ALUD",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "ALUD ROSE",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "AMARULA DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "AMORA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ANCHO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ANCHO 200G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ANCHO 350G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ANCHO 400G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ANCHO 400G COM FRITAS",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "ANCHO 400G COM MANDIOCA",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "ANGELICA ZAPATA",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "AO PONTO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "AO PONTO PRA BEM",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "AO PONTO PRA MAL",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "APEROL SPLITZ",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "ARRAIA NU GALHO",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "ARROZ BRANCO",
+    "categoria": "ACOMPANHAMENTO"
+  },
+  {
+    "produto": "ARROZ DE COSTELA NU GALHO",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "ARROZ DE COSTELA NU GALHO Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "ARROZ PIAMONTESE",
+    "categoria": "ACOMPANHAMENTO"
+  },
+  {
+    "produto": "ARROZ PIAMONTESE com Ancho ou Baby Beef (COMPARTILHADO)",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "ARROZ PIAMONTESE com Picanha ou File (COMPARTILHADO)",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "AURORA BOREAL",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "BABY BEEF",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "BABY BEEF 200G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "BABY BEEF 350G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "BABY BEEF 400G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "BABY BEEF COM FRITAS",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "BABY BEEF COM MANDIOCA",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "BACKER LIGHT 600M",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "BACKER PILSEN",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "BACKER TRIGO 600ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "BACON",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "BAHIA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "BAILEYS DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "BALDE DE GELO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "Bamboo Drink",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "BATATA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "BATATA ( ENTRADA )",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "BATATA ( ENTRADA ) (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "BATATA (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "BATATA FRITA COM CHEEDAR E BACON",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "BELVEDERE + 4 ENERGETICOS",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "BELVEDERE GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "BEM PASSADO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "BIFE A CAVALO",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "BIFE A CAVALO ANCHO OU BABY BEEF (COMPARTILHADO)",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "BIFE A CAVALO PICANHA OU FILE (COMPARTILHADO)",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "BLACK LABEL + 4 RED BULL",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "BLACK LABEL DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "BLACK LABEL GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "BLUE LABEL + 6 ENERGETICOS OU AGUA TONICA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "BMW DRINK",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "BOLINHO DE BACALHAU",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "BOLINHO DE BACALHAU (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "BOLINHO DE BACALHAU (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "BOLINHO NU GALHO",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "BOLINHO NU GALHO (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "BOLINHO NU GALHO (DEGUSTAÇÃO)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "BRUSCHETTA CAPRESE",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "BRUSCHETTA CAPRESE (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "BRUSCHETTA CAPRESE (DEGUSTAÇÃO)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "BRUSCHETTA CARNE SECA DESFIADA",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "BRUSCHETTA CARNE SECA DESFIADA (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "BRUSCHETTA CARNE SECA DESFIADA (DEGUSTAÇÃO)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "BURRATA NUGALHO",
+    "categoria": "ENTRADAS FRIAS"
+  },
+  {
+    "produto": "CACAU",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "CACAU NU GALHO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "CACAU STRAWBERRY",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "CACHAÇA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "CACHACA SALINAS",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "CACHACA SELETA",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "CACHACA SO CHICO",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "CACHACA VALE VERDE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "CAFE EXPRESSO TRES CORACOES SABORES DECAF / SUPREMO / VIBRANTE / FORZA / ATENTO",
+    "categoria": "CAFE"
+  },
+  {
+    "produto": "CAFE TRADICIONAL",
+    "categoria": "CAFE"
+  },
+  {
+    "produto": "CAIP ABSOLUT",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CAIP CACHAÇA",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CAIP ESPECIAL ABSOLUT",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CAIP ESPECIAL CACHAÇA",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CAIP ESPECIAL GIN IMPORTADA",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CAIP ESPECIAL SMIRNOFF",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CAIP GIN IMPORTADO",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CAIP GIN NACIONAL",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CAIP MASTER",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "CAIP SMIRNOFF",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "Caldo individual",
+    "categoria": "OUTROS"
+  },
+  {
+    "produto": "CAMAFEU RECHEADO COM CATUPIRY",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "CAMAFEU RECHEADO COM CATUPIRY (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "CAMAFEU RECHEADO COM CATUPIRY (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "CAMARÃO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "CAMARÃO A DORÊ (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "CAMARÃO A DORÊ 200G (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "CAMARÃO A DORÊ 400G",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "CAMARAO EMPANADO 200G COM MOLHO TARTARO (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "CAMARAO EMPANADO 350GM COM MOLHO TARTARO",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "CAMARAO EMPANADO COM MOLHO TARTARO (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "CAMISA DA SELEÇÃO",
+    "categoria": "OUTROS"
+  },
+  {
+    "produto": "CAMPARI DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "CAMPARI GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "CAPITAO AMBER",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "CAPITAO PILSEN 600ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "CAPITAO SESSION IPA",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "CAPITOLIO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "CARNE COZIDA COM BACON",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "CARNE COZIDA COM BACON (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "CARNE COZIDA COM BACON (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "CARPÁCCIO",
+    "categoria": "ENTRADAS FRIAS"
+  },
+  {
+    "produto": "CEVICHE DE TILAPIA",
+    "categoria": "ENTRADAS FRIAS"
+  },
+  {
+    "produto": "CHANDON BRUT",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "CHANDON GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "CHANDON ROSE",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "CHANDON ROSE GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "CHAPA DE FILE COM FRITAS",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "CHAPA DE PICANHA NU GALHO - FAMILIA",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "CHEDDAR",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "CHEEDAR",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "CHEEDAR E BACON",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "CHOCO TRIO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "CHOKITO BITES",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "CHOOP IPA",
+    "categoria": "CHOPP"
+  },
+  {
+    "produto": "CHOPP BHAMA BLACK",
+    "categoria": "CHOPP"
+  },
+  {
+    "produto": "CHOPP KAISER 300ML",
+    "categoria": "CHOPP"
+  },
+  {
+    "produto": "CHOPP KAISER 300ML, PROMOÇÃO TERÇA A QUINTA",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CHOPP KAISER 300ML, SEXTA A DOMINGO",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "CHOPP PATAGÔNIA IPA",
+    "categoria": "CHOPP"
+  },
+  {
+    "produto": "CHORIZO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "CHUVA DE VERÃO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "CIGARRO MAÇO",
+    "categoria": "CIGARRO"
+  },
+  {
+    "produto": "CIGARRO PICADO",
+    "categoria": "CIGARRO"
+  },
+  {
+    "produto": "CLERICOT",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "COCA KS 250ML",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "COCA ZERO KS 250ML",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "COCO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "COCO VERDE",
+    "categoria": "SUCOS NATURAIS"
+  },
+  {
+    "produto": "COM AÇUCAR",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "COMBO BUCHANA S DELUXE",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "COMBO DE FRUTAS",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "COMBO MORANGO",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "COMBO VINHO MATEUS",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "CONHAQUE DOMECQ DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "CONTAGEM",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "COPO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "COPO E GELO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "CORONA 330 ZERO",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "CORONA 330ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "CORONA 600ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "CORONITA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "COSTELINHA SUINA",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "COSTELINHA SUINA (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "COUVERT ARTISTICO E ENTRADA P/ PESSOA",
+    "categoria": "COUVERT"
+  },
+  {
+    "produto": "COUVERT ARTISTICO P/ PESSOA",
+    "categoria": "COUVERT"
+  },
+  {
+    "produto": "Coxinha de Costela Nu Galho",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "Coxinha de Costela Nu Galho (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "Coxinha de Costela Nu Galho (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "COZUMEL",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "CROQUETE DE TIPÁLIA COM MOLHO ESPECIAL DA CASA",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "D. V. CATENA MALBEC",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "DIAMANTE NEGRO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "DV CATENA CABERNET CHARDONNAY",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "EISENBAHN 600ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "ELDORADO PILSEN",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "EMBALAGENS",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "ESPAGUETE",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ESPUMA",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "ESPUMANTE ZERO ALCOOL ROSE",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "FAROFA BACON",
+    "categoria": "ACOMPANHAMENTO"
+  },
+  {
+    "produto": "FEIJAO CARIOCA",
+    "categoria": "ACOMPANHAMENTO"
+  },
+  {
+    "produto": "Feijuca Nugalho",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "Feijuca Nugalho meia",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "FETTUCCINE DE CAMARAO",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "FETTUCCINE DE CAMARAO Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "FETTUCINE DE ANCHO",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "FETTUCINE DE ANCHO (Experiencia)",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "FETTUCINE DE FILE MIGON",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "FETTUCINE DE FILE MIGON Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "FETTUCINE DE SALMAO",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "FETTUCINE DE SALMAO Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "FETUCCINE",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "FILE AO MOLHO MADEIRA (COMPARTILHADO)",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "Filé de Salmão",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "FILE MIGNON A PARMEGIANA",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "FILE MIGNON AO MOLHO 4 QUEIJOS",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "FILE MIGNON AO MOLHO 4 QUEIJOS (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "FILE MIGNON AO MOLHO 4 QUEIJOS (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "FILE MIGNON AO MOLHO MADEIRA",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "FILE MIGON",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "FINI TUBES DENTADURAS",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "FINI TUBES MORANGO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "FINI TUBES TUTTI-FRUTTI",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "FRANGO COM CATUPIRY",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "FRANGO COM CATUPIRY (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "FRANGO COM CATUPIRY (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "FRITA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "FUZILE",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "GALHO LOUCO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GANACHE E CHOCOLATE",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "GAROTO BATON",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "GAROTO BOMBOM",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "GAROTO BOMBOMZIN",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "GAROTO CARIBE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "GAROTO CONE CROCANTE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "GAROTO CROCANTE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "GAROTO SKIMO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "GELO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "GELO DE COCO VERDE 180G",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "GELO E LIMÃO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "GENGIBRE",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "GIN BEEFEATER + 4 RED BULL",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "GIN HONEY",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GIN MELANCIA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GIN NACIONAL",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "GIN PASSION",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GIN ROYALE PITAYA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GIN ROYALE PITAYA COM ENERGETICO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GIN TANGERINA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GIN TANQUERAY + 4 RED BULL TROPICAL",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "GIN TANQUERAY DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "GIN TANQUERAY GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "GIN TONICA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GIN TROPICAL",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GOLD LABEL + 4 ENERGETICOS",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "GOLD LABEL DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "GOLD LABEL GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "GRAMADO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GREEN LABEL + 4 ENERGETICOS",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "GREEN LABEL GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "GROOT",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "GUARANA ANTARTICA",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "GUARANA ZERO",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "HEINEKEN 600ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "HEINEKEN LONG NECK",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "HEINEKEN ZERO 330ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "HORTELÃ",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "ITAMBE",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "JACK DANIEL CANELA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "JACK DANIEL DE MEL",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "JACK DANIEL MAÇÃ VERDE",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "JACK DANIEL TRADICIONAL",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "JACK DANIELS + 4 RED BULL",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "JACK DANIELS CANELA",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "JACK DANIELS OLD DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "JACK HONEY DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "JAGER CARIBE",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "JAGER MINT",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "JAGERMEISTER",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "JAGUER FIRA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "JARRA DE CLERICOLT",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "JIM BEAM BOURBON + 4 RED BULL",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "KIDS",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "KIR NUGALHO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "KIT KAT",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "KIT KAT CONE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "KIT KAT GOLD",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "KIWI",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "LA FRUTTA COCO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "LA FRUTTA LIMÃO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "LA FRUTTA MANGA",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "LA FRUTTA MORANGO AO LEITE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "LA FRUTTA UVA",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "LAKA",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "LAKA OREO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "LARANJA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "LEGUMES",
+    "categoria": "ACOMPANHAMENTO"
+  },
+  {
+    "produto": "LEMON 43",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "LICOR 43 DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "LICOR 43 GARRAGA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "LICOR AMARETO DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "LICOR DE DOCE DE LEITE",
+    "categoria": "SHOT"
+  },
+  {
+    "produto": "LIMÃO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "LIMÃO SICILIANO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "LIMONADA SUICA",
+    "categoria": "SUCOS NATURAIS"
+  },
+  {
+    "produto": "LINGUICA ESPECIAL DE COSTELA",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "LINGUICA ESPECIAL DE COSTELA (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "LINGUICA ESPECIAL DE COSTELA (Degustação))",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "LUPILA LAMENTOSA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "MAÇA VERDE",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MAIONESE GRILL",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "MAL PASSADO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MALIBU DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "MANDIOCA",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "MANDIOCA FRITA ENTRADA",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "MANDIOCA FRITA ENTRADA (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "MANDIOCA FRITA ENTRADA (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "MANDIOCA NA MANTEIGA (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "MANDIOCA NA MANTEIGA 400G",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "MANDIOCA NA MANTEIGA 400G (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "MANGA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MANJERICÃO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MARACUJÁ",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MARGARITA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "MASSINHA DE BISCOITO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MAYOS JOVEM ROSE",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "MEGA AMÊNDOAS",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "MEGA CLASSICO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "MEGA PISTACHE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "MEGA TRUFA BRANCO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "MEIO ARRAIA NU GALHO",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "MELANCIA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MEXIDÃO NU GALHO",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "MOÇA BRIGADEIRO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "MOJITO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "MOJITO TANGERINA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "MOLHO ALHO E OLEO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MOLHO BECHAMEL BRANCO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MOLHO BOLANHESA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MOLHO SUGO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MOLHOS",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "MORANGO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "MOSCOW GIN",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "MOSCOW MULE",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "MUSSARELA",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "MUSSARELA E BACON",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "NA MANTEIGA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "Na Praia",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "NEGRONI",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "NESTLE CHAMBINHO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "NESTLE MALTE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "NOITE DELICIA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "NU GALHO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "NUGALHO PIEMONTESE (COMPARTILHADO)",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "NUTELLA SHAKE",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "O BRASILEIRINHO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "OLD PAR",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "OLD PAR + 4 ENERGETICOS",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "OREO BITES",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "OREO MINI PICOLE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "OREO PICOLE",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "OREO SANDWICH BAUNILHA",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "ORIGINAL 600ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "Ovo frito",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "PAES",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "PANHOCA NUGALHO",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "PANHOCA NUGALHO (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "PAO DE QUEIJO C COSTELA 5UN",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "PARMEGIANA DE FILE MIGNON (COMPARTILHADO)",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "PARMESÃO",
+    "categoria": "ACRESCIMOS"
+  },
+  {
+    "produto": "PASTEL DE CAMARAO",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "PASTEL DE CAMARAO (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "PASTEL DE CAMARAO (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "PASTEL DE CARNE SECA COM CATUPIRY",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "PASTEL DE CARNE SECA COM CATUPIRY (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "PASTEL DE CARNE SECA COM CATUPIRY (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "PASTEL DE QUEIJO",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "PASTEL DE QUEIJO (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "PASTEL DE QUEIJO (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "PELE VERMELHA",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "PENNE",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "PETIT DE DOCE DE LEITE",
+    "categoria": "SOBREMESAS"
+  },
+  {
+    "produto": "PETIT CHOCOLATE",
+    "categoria": "SOBREMESAS"
+  },
+  {
+    "produto": "PETIT CHOCOLATE (D)",
+    "categoria": "SOBREMESA EXPERIENCIA NU GALHO"
+  },
+  {
+    "produto": "PICANHA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "PICANHA 400G COM FRITAS",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "PICANHA 200G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "PICANHA 350G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "PICANHA 400 GR",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "PICANHA 400G",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "PICANHA 400G COM MANDIOCA",
+    "categoria": "GRELHADOS"
+  },
+  {
+    "produto": "PINA COLADA",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "PINK LIMON",
+    "categoria": "DRINKS NAO ALCOOLICOS"
+  },
+  {
+    "produto": "PLAYGROUND",
+    "categoria": "OUTROS"
+  },
+  {
+    "produto": "PORÇÃO DE 100 GRAMAS",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "PORÇÃO DE 200 GRAMAS",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "PORÇÃO DE 300 GRAMAS",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "PRESTIGIO",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "PROMOÇÃO DE TERÇA A QUINTA, PAGUE 3 CORONAS, E LEVE 4",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "RED BULL AÇAI",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "RED BULL COCO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "RED BULL MELANCIA",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "RED BULL MORANGO E PESSEGO",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "RED BULL PITAYA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "RED BULL SUGAR FREE",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "RED BULL TRADICIONAL",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "RED BULL TROPICAL",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "RED LABEL + 4 RED BULL",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "RED LABEL DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "RED LABEL GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "RISOTO (ANCHO)",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "RISOTO (ANCHO) Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "RISOTO (FILE)",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "RISOTO (FILE) Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "RISOTO A ESCOLHA",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "RISOTO A ESCOLHA Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "RISOTO DE CAMARAO",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "RISOTO DE CAMARAO Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "RISOTO DE COGUMELOS",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "RISOTO DE COGUMELOS Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "RISOTO DE LIMAO SICILIANO COM TILAPIA GRELHADA",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "RISOTO DE LIMAO SICILIANO COM TILAPIA GRELHADA Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "RISOTO DE SALMAO",
+    "categoria": "RISOTO/MASSAS"
+  },
+  {
+    "produto": "RISOTO DE SALMAO Experiencia NuGalho",
+    "categoria": "PRATOS PRINCIPAIS DA EXPERIENCIA NUGALHO"
+  },
+  {
+    "produto": "ROLHA VINHO/ESPUMANTE",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "ROLHA WHISKY",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "ROMÃ",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "SALADA",
+    "categoria": "ACOMPANHAMENTO"
+  },
+  {
+    "produto": "SALADA MÉDIA",
+    "categoria": "ACOMPANHAMENTO"
+  },
+  {
+    "produto": "SALMÃO",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "SALMAO AO MOLHO DE ALCAPARRAS PRATO EXECUTIVO",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "SCHWEPPES CITRUS",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "SCHWEPPES TONICA",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "SCHWEPPS CITRUS LATA",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "SEM AÇUCAR",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "SERENATA DE AMOR",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "SEX ON THE BEACH",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "SHOT AMARULA COFFE",
+    "categoria": "SHOT"
+  },
+  {
+    "produto": "SHOT DE LARANJA",
+    "categoria": "SHOT"
+  },
+  {
+    "produto": "SHOT DE LIMAO",
+    "categoria": "SHOT"
+  },
+  {
+    "produto": "SKY BLUE",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "SMIRNOFF",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "SMIRNOFF DOSE",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "SODA ITALIANA",
+    "categoria": "DRINKS NAO ALCOOLICOS"
+  },
+  {
+    "produto": "SONHO DE VALSA",
+    "categoria": "PICOLE"
+  },
+  {
+    "produto": "SORVETE DE CREME",
+    "categoria": "SOBREMESAS"
+  },
+  {
+    "produto": "SORVETE DE CREME (D)",
+    "categoria": "SOBREMESA EXPERIENCIA NU GALHO"
+  },
+  {
+    "produto": "SPRITE",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "SPRITE ZERO",
+    "categoria": "BEBIDAS"
+  },
+  {
+    "produto": "SPRITZ AMARENA",
+    "categoria": "DRINKS NAO ALCOOLICOS"
+  },
+  {
+    "produto": "SPRITZ BLACK ROSSINI SEM ALCOOL",
+    "categoria": "DRINKS NAO ALCOOLICOS"
+  },
+  {
+    "produto": "SPRITZ MACA VERDE SEM ALCOOL",
+    "categoria": "DRINKS NAO ALCOOLICOS"
+  },
+  {
+    "produto": "SPRITZ SABUGUEIRO SEM ALCOOL",
+    "categoria": "DRINKS NAO ALCOOLICOS"
+  },
+  {
+    "produto": "STELLA ARTOIS 600ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "STELLA GOLD 330ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "STELLA GOLD 600ML",
+    "categoria": "CERVEJA"
+  },
+  {
+    "produto": "STRAWBERRY MULE",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "SUCO 2 SABORES",
+    "categoria": "SUCOS NATURAIS"
+  },
+  {
+    "produto": "Suco de Uva",
+    "categoria": "SUCOS NATURAIS"
+  },
+  {
+    "produto": "SUCO SABORES",
+    "categoria": "SUCOS NATURAIS"
+  },
+  {
+    "produto": "TABUA DE FRIOS",
+    "categoria": "ENTRADAS FRIAS"
+  },
+  {
+    "produto": "TAÇA BORDA DE SAL E LIMÃO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "TAÇA DE CLERICOLT",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "TACA NU GALHO",
+    "categoria": "SOBREMESAS"
+  },
+  {
+    "produto": "TANGERINA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "TANGERINA COM MANGA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "TEQUILA JOSE CUERVO OURO",
+    "categoria": "DOSES"
+  },
+  {
+    "produto": "TILAPIA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "TILAPIA A PARMEGIANA (COMPARTIHADO)",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "TILAPIA A PARMEGIANA A MODA DA CASA",
+    "categoria": "ALMOÇO NU GALHO DE SEXTA A DOMINGO 1130 AS 1600"
+  },
+  {
+    "produto": "TILAPIA CROCANTE",
+    "categoria": "DELICIAS NUGALHO"
+  },
+  {
+    "produto": "TILAPIA CROCANTE (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "TILAPIA CROCANTE (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "TOMARA Q CAIA AURORA BOREAL",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "TOMARA QUE CAIA MARACUJÁ",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "TOMARA QUE CAIA MORANGO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "TORANJA",
+    "categoria": "COMPLEMENTOS"
+  },
+  {
+    "produto": "Torresmo Nugalho",
+    "categoria": "OS QUERIDINHOS DA GALERA"
+  },
+  {
+    "produto": "Torresmo Nugalho (D)",
+    "categoria": "ENTRADAS EXPERIENCIA"
+  },
+  {
+    "produto": "Torresmo Nugalho (Degustação)",
+    "categoria": "MENU DEGUSTAÇÃO"
+  },
+  {
+    "produto": "TRIDENT",
+    "categoria": "BOMBONIERE"
+  },
+  {
+    "produto": "TROPICAL GIN IMPORTADO",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "VERAO TROPICAL",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "VICOSA DRINK",
+    "categoria": "DRINKS"
+  },
+  {
+    "produto": "VINAGRETE",
+    "categoria": "ACOMPANHAMENTO"
+  },
+  {
+    "produto": "VINHO ANGELICA ZAPATA CHARDONNAY 2021",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "VINHO MATHEUS",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "VINHO MAYOS BRANCO SECO",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "VINHO PARDALITO",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "VINHO SOL DE CHILE",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "VINHO VILA ROSA ROSE",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "VINHO VILLA ROSA TINTO",
+    "categoria": "VINHOS/ESPUM"
+  },
+  {
+    "produto": "VODKA CIROC + 4 ENERGETICOS",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "VODKA CIROC GARRAFA",
+    "categoria": "COMBOS"
+  },
+  {
+    "produto": "VULCAO",
+    "categoria": "SHOT"
+  }
+]

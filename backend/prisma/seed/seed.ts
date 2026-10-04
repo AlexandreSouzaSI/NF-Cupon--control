@@ -51,10 +51,13 @@ async function main() {
     // ficar consistente com bancos que já rodaram o backfill manualmente.
     const empresaNugalho = await prisma.empresa.upsert({
         where: { id: 'empresa-nugalho' },
-        update: {},
+        // Nugalho é a empresa do dono do sistema: nunca vê planos nem é
+        // bloqueada por cobrança (Empresa.planExempt).
+        update: { planExempt: true },
         create: {
             id: 'empresa-nugalho',
             name: 'Nugalho',
+            planExempt: true,
         },
     });
 

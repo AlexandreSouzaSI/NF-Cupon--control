@@ -44,21 +44,15 @@ export default function DemoSignupPage() {
 
             router.push('/home');
         } catch (error: any) {
-            const status = error?.response?.status;
             const rawMessage = error?.response?.data?.message;
             const message = Array.isArray(rawMessage)
                 ? rawMessage.join(', ')
                 : rawMessage || 'Não foi possível iniciar o teste.';
 
-            if (status === 409) {
-                // E-mail já usado num teste anterior — a pessoa precisa
-                // entrar com a conta que já existe, não criar outra.
-                toast.error(
-                    'Esse e-mail já tem um teste criado. Use o botão "Entrar" abaixo com a senha que você definiu.',
-                );
-            } else {
-                toast.error(message);
-            }
+            // Em 409 (e-mail já usado) a mensagem do servidor já explica se o
+            // teste ainda está rolando ou se já venceu (aí é só entrar e
+            // conhecer os planos).
+            toast.error(message);
         } finally {
             setLoading(false);
         }
@@ -79,8 +73,8 @@ export default function DemoSignupPage() {
 
                     <p className="mt-2 text-zinc-600 dark:text-zinc-400">
                         Crie um acesso temporário pra explorar o sistema com
-                        dados de demonstração. Sem cartão, sem compromisso —
-                        e some sozinho depois de 1h.
+                        dados de demonstração. Sem cartão, sem compromisso. Passou
+                        a 1h, é só escolher um plano pra continuar.
                     </p>
                 </div>
 

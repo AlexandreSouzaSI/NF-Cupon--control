@@ -6,6 +6,7 @@ import {
     businessDayStartUtc,
     businessDayEndUtc,
 } from '../common/business-day.util';
+import { meepItemValue, normalizarProdutoChave } from '../common/meep-item-value.util';
 import {
     buildCashConciliationPdf,
     type CashConciliationReportRow,
@@ -84,17 +85,30 @@ export class MeepQueryService {
             },
         });
 
-        const byDay = new Map<string, Map<string, { quantidade: number; valor: number }>>();
+        // Agrupa pela MESMA chave de produto e a MESMA fórmula de valor que
+        // o Venda/Lista (ver meep-item-value.util.ts) — antes agrupava pelo
+        // nome cru e somava só `total ?? unitValue` (sem multiplicar por
+        // quantidade), então as duas telas podiam divergir lendo os mesmos
+        // itens.
+        const byDay = new Map<
+            string,
+            Map<string, { nome: string; quantidade: number; valor: number }>
+        >();
 
         for (const item of items) {
             const day = this.businessDayKey(item.order.orderDateUtc);
             if (!byDay.has(day)) byDay.set(day, new Map());
 
             const dayMap = byDay.get(day)!;
-            const current = dayMap.get(item.productName) || { quantidade: 0, valor: 0 };
+            const chave = normalizarProdutoChave(item.productName || '');
+            const current = dayMap.get(chave) || {
+                nome: (item.productName || '').trim(),
+                quantidade: 0,
+                valor: 0,
+            };
             current.quantidade += Number(item.quantity);
-            current.valor += Number(item.total ?? item.unitValue ?? 0);
-            dayMap.set(item.productName, current);
+            current.valor += meepItemValue(item);
+            dayMap.set(chave, current);
         }
 
         return Array.from(byDay.entries())
@@ -102,8 +116,8 @@ export class MeepQueryService {
             .map(([dia, produtos]) => ({
                 dia,
                 aguardandoConfirmacao: dia === diaDeHoje,
-                produtos: Array.from(produtos.entries())
-                    .map(([nome, dados]) => ({ nome, ...dados }))
+                produtos: Array.from(produtos.values())
+                    .map((dados) => ({ ...dados }))
                     .sort((a, b) => b.valor - a.valor),
             }));
     }

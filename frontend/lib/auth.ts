@@ -170,6 +170,15 @@ export function canDeleteForever(user: AuthUser | null) {
     return Boolean(user?.isAdminMaster);
 }
 
+// Gerenciar o catálogo de produtos/categoria da Ficha Técnica (importar PDF
+// da Meep, excluir prato da lista, zerar a lista) — restrito só à conta
+// Admin Master, igual canDeleteForever acima. Quem só tem acesso à Ficha
+// Técnica (módulo Produtos) continua podendo apenas configurar ingredientes
+// de cada prato, nada além disso.
+export function canManageProductCatalog(user: AuthUser | null) {
+    return Boolean(user?.isAdminMaster);
+}
+
 // Editar cadastro de Fornecedor (nome/CNPJ/telefone) — Administrativo e
 // Proprietário, além do Admin Master. Espelha o que o backend já aceita em
 // PUT /suppliers/:id (sem restrição de role lá, então o controle é só

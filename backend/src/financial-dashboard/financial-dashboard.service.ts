@@ -6,6 +6,7 @@ import {
     resolveAllowedStoreIds,
     ensureStoreAccessScoped,
 } from '../common/store-scope.util';
+import { brasiliaDueDateRanges } from '../common/brasilia-date.util';
 
 // Dashboard Financeiro — só Contas a Pagar (NF de entrada/serviço e Perdas
 // já têm tela própria, tirado daqui de propósito). Os buckets de
@@ -184,6 +185,128 @@ export class FinancialDashboardService {
                 categoria: bill.category?.name || null,
                 fornecedor: bill.supplier?.name || null,
             })),
+        };
+    }
+
+    // Visão enxuta pra loja Pessoa Física (só Contas a Pagar): quatro
+    // números em destaque — Atrasadas, Hoje, Próximos 7 dias e Restante do
+    // mês — mais as próximas contas em aberto. Diferente do summary()
+    // acima, aqui só entra conta EM ABERTO (OPEN/OVERDUE), os recortes são
+    // calculados no fuso de Brasília e o "Hoje" segue a mesma regra da tela
+    // de Contas a Pagar: vence hoje + vencidas que alguém colocou na fila
+    // de hoje (queuedForPaymentAt). Essas vencidas continuam também em
+    // "Atrasadas" (é a mesma conta vista por dois ângulos), por isso o
+    // "hoje" devolve o detalhamento pra a tela poder avisar disso.
+    // Bill não tem pagamento parcial neste projeto (PARCIAL é do Controle
+    // Rota), então o valor somado é sempre o valor cheio da conta.
+    async overviewFisica(user: any, storeId: string) {
+        await this.ensureStoreAccess(storeId, user);
+
+        const { todayStart, tomorrowStart, weekEnd, monthEnd } =
+            brasiliaDueDateRanges();
+
+        // Mesma regra de bills.service.ts (payrollCategoryFilter): quem não
+        // tem canViewPayrollBills não enxerga conta de Funcionários/Freelancer,
+        // nem somada nos totais.
+        const payrollFilter =
+            user.canViewPayrollBills === false
+                ? {
+                    NOT: {
+                        category: {
+                            OR: [
+                                { nameNormalized: { contains: 'funcionario' } },
+                                { nameNormalized: { contains: 'freelance' } },
+                            ],
+                        },
+                    },
+                }
+                : {};
+
+        const open = {
+            storeId,
+            status: { in: [BillStatus.OPEN, BillStatus.OVERDUE] },
+            ...payrollFilter,
+        };
+
+        const sum = (dueDate: { gte?: Date; lt?: Date }, extra: object = {}) =>
+            this.prisma.bill.aggregate({
+                where: { ...open, dueDate, ...extra },
+                _sum: { value: true },
+                _count: true,
+            });
+
+        const fmt = (r: { _sum: { value: any }; _count: number }) => ({
+            count: r._count,
+            value: Number(r._sum.value || 0),
+        });
+
+        // 6 agregações + 1 lista limitada, todas em paralelo (sem N+1).
+        const [atrasadas, hojeVencendo, hojeFila, semana, mes, proximas] =
+            await Promise.all([
+                sum({ lt: todayStart }),
+                sum({ gte: todayStart, lt: tomorrowStart }),
+                sum({ lt: todayStart }, { queuedForPaymentAt: { not: null } }),
+                sum({ gte: todayStart, lt: weekEnd }),
+                sum({ gte: todayStart, lt: monthEnd }),
+                this.prisma.bill.findMany({
+                    where: open,
+                    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+                    take: 10,
+                    select: {
+                        id: true,
+                        description: true,
+                        value: true,
+                        dueDate: true,
+                        status: true,
+                        queuedForPaymentAt: true,
+                        supplier: { select: { name: true } },
+                        category: { select: { name: true } },
+                    },
+                }),
+            ]);
+
+        const vencendo = fmt(hojeVencendo);
+        const fila = fmt(hojeFila);
+
+        return {
+            referencia: {
+                hoje: todayStart.toISOString().slice(0, 10),
+                semanaAte: new Date(weekEnd.getTime() - 86400000)
+                    .toISOString()
+                    .slice(0, 10),
+                mesAte: new Date(monthEnd.getTime() - 86400000)
+                    .toISOString()
+                    .slice(0, 10),
+            },
+            atrasadas: fmt(atrasadas),
+            hoje: {
+                count: vencendo.count + fila.count,
+                value: vencendo.value + fila.value,
+                vencendoHoje: vencendo,
+                atrasadasNaFila: fila,
+            },
+            semana: fmt(semana),
+            mes: fmt(mes),
+            proximas: proximas.map((bill) => {
+                const due = bill.dueDate.toISOString().slice(0, 10);
+                const today = todayStart.toISOString().slice(0, 10);
+
+                return {
+                    id: bill.id,
+                    description: bill.description,
+                    value: Number(bill.value),
+                    dueDate: bill.dueDate,
+                    fornecedor: bill.supplier?.name || null,
+                    categoria: bill.category?.name || null,
+                    queuedForPaymentAt: bill.queuedForPaymentAt,
+                    situacao:
+                        due < today
+                            ? 'ATRASADA'
+                            : due === today
+                                ? 'HOJE'
+                                : 'A_VENCER',
+                };
+            }),
         };
     }
 }

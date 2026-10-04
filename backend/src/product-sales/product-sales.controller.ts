@@ -23,6 +23,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequiresModule } from '../auth/requires-module.decorator';
 import { ModuleAccessGuard } from '../auth/module-access.guard';
+import { AdminMasterGuard } from '../auth/admin-master.guard';
 
 import { ProductSalesService } from './product-sales.service';
 
@@ -116,6 +117,65 @@ export class ProductSalesController {
             file,
             user,
         );
+    }
+
+    // Importa o PDF de "Produtos" exportado do painel da Meep (categoria
+    // por produto) pra montar/atualizar o catálogo desta loja — mesmo
+    // fluxo reutilizável pra Contagem/Anchieta/Raiz, só muda o PDF e a
+    // loja ativa. Ver product-sales.service.ts#importarCatalogoPdf.
+    @Post('catalog/import-pdf')
+    @UseGuards(AdminMasterGuard)
+    @UseInterceptors(
+        FileInterceptor('file', {
+            storage: memoryStorage(),
+            limits: { fileSize: 15 * 1024 * 1024 },
+            fileFilter: (_req, file, callback) => {
+                const nomeOk = file.originalname.toLowerCase().endsWith('.pdf');
+
+                if (!nomeOk) {
+                    return callback(new Error('Envie um arquivo .pdf.'), false);
+                }
+
+                callback(null, true);
+            },
+        }),
+    )
+    async importarCatalogoPdf(
+        @UploadedFile() file: Express.Multer.File,
+        @CurrentUser() user: any,
+        @Body('storeId') storeId: string,
+    ) {
+        return this.productSalesService.importarCatalogoPdf(storeId, file, user);
+    }
+
+    // "Lixeirinha" da aba Ficha Técnica — esconde um prato da lista (não
+    // apaga venda real nem ficha técnica, ver removerItemCatalogo no
+    // service). Restrito ao Admin Master, igual o resto dos cadastros
+    // "excluir definitivamente".
+    @Delete('catalog/item')
+    @UseGuards(AdminMasterGuard)
+    async removerItemCatalogo(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+        @Query('produtoChave') produtoChave: string,
+    ) {
+        return this.productSalesService.removerItemCatalogo(
+            storeId,
+            produtoChave,
+            user,
+        );
+    }
+
+    // "Excluir toda a lista" — esconde de uma vez todo prato hoje visível
+    // na Ficha Técnica/Produtos desta loja (ver limparListaFichaTecnica no
+    // service). Mesma restrição de Admin Master.
+    @Delete('catalog/all')
+    @UseGuards(AdminMasterGuard)
+    async limparListaFichaTecnica(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+    ) {
+        return this.productSalesService.limparListaFichaTecnica(storeId, user);
     }
 
     // Visão geral pra aba Ficha Técnica: todo prato conhecido da loja com

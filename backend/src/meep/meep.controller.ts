@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { StoreModule, UserRole } from '@prisma/client';
 
@@ -94,6 +94,28 @@ export class MeepController {
         res.send(buffer);
     }
 
+    // Conferência Meep x Venda/Lista de um dia comercial: compara o que o
+    // "Itens por Dia" mostra (MeepOrderItem) com o que o Venda/Lista lê
+    // (ProductSalesEntry) e devolve a diferença. Só leitura. Restrito a
+    // Proprietário/Admin Master (o guard já deixa o Admin Master passar por
+    // qualquer @Roles). Ex:
+    //   GET /meep/product-sales-check?storeId=<id>&date=2026-10-02
+    @Get('product-sales-check')
+    @Roles(UserRole.PROPRIETARIO)
+    async productSalesCheck(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+        @Query('date') date?: string,
+    ) {
+        await ensureStoreAccessScoped(this.prisma, storeId, user);
+
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            throw new BadRequestException('Informe date no formato AAAA-MM-DD.');
+        }
+
+        return this.meepProductSalesSync.checkBusinessDay(storeId, date);
+    }
+
     @Get('sync-logs')
     async syncLogs(@CurrentUser() user: any, @Query('storeId') storeId: string) {
         return this.meepQueryService.syncLogs(storeId, user);
@@ -123,7 +145,16 @@ export class MeepController {
         // funcionando) nunca vê CFOP/NCM aparecer.
         await this.meepSyncService.syncSales(storeId, credential.id, null);
 
-        return { success: true };
+        // O GetSales acima regrava os itens dos últimos 3 dias — sem isso o
+        // Venda/Lista só acompanharia no próximo sync horário. Reconcilia
+        // agora, e devolve os erros (se houver) pro botão mostrar.
+        const rebuild = await this.meepProductSalesSync.rebuildRange(
+            storeId,
+            new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+            new Date(),
+        );
+
+        return { success: true, rebuildErros: rebuild.erros };
     }
 
     // Reconstrói o Venda/Lista (ProductSalesImport origem=MEEP) a partir
@@ -151,17 +182,25 @@ export class MeepController {
             return { success: false, message: 'Nenhuma credencial Meep cadastrada para essa loja.' };
         }
 
-        const to = dateTo ? new Date(`${dateTo}T23:59:59`) : new Date();
+        // Com data informada, usa a janela do DIA COMERCIAL (08h-04h do dia
+        // seguinte) — a mesma que o Itens por Dia e o Venda/Lista usam —
+        // em vez de 00h-23h59 de calendário, que no fuso do servidor podia
+        // pegar/perder o começo e o fim do dia.
+        const to = dateTo ? businessDayEndUtc(dateTo) : new Date();
         // Não usa credential.createdAt como piso: se a credencial foi
         // editada/resalva depois dos primeiros pedidos sincronizados
         // (comum — foi o caso real), createdAt fica DEPOIS desses
         // pedidos e o backfill nunca os alcançaria. 90 dias cobre
         // qualquer backfill razoável sem depender desse campo.
         const from = dateFrom
-            ? new Date(`${dateFrom}T00:00:00`)
+            ? businessDayStartUtc(dateFrom)
             : new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-        const resultado = await this.meepProductSalesSync.rebuildRange(storeId, from, to);
+        // force: é um pedido manual — reescreve mesmo se o rebuild achar
+        // que "nada mudou" (garante sair de um estado estranho).
+        const resultado = await this.meepProductSalesSync.rebuildRange(storeId, from, to, {
+            force: true,
+        });
 
         return { success: true, ...resultado };
     }

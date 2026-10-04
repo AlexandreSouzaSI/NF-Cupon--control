@@ -24,13 +24,24 @@ function formatMoney(value: number) {
     });
 }
 
-export function ItemsPerDayTab() {
+// `day`/`onDayChange` opcionais: a página Vendas Meep levanta o dia pra
+// cima pro botão "Reconstruir Venda/Lista deste dia" usar o mesmo dia
+// que está filtrado aqui. Sem as props, a aba controla o próprio dia.
+export function ItemsPerDayTab({
+    day: dayProp,
+    onDayChange,
+}: {
+    day?: string;
+    onDayChange?: (day: string) => void;
+} = {}) {
     const store = getActiveStore();
 
     const [loading, setLoading] = useState(true);
     const [days, setDays] = useState<DayGroup[]>([]);
     const [openDay, setOpenDay] = useState<string | null>(null);
-    const [day, setDay] = useState('');
+    const [dayState, setDayState] = useState('');
+    const day = dayProp ?? dayState;
+    const setDay = onDayChange ?? setDayState;
 
     async function load() {
         if (!store) return;

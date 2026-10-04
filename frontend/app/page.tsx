@@ -10,11 +10,13 @@ import {
   Landmark,
   Bell,
   ArrowRight,
-  CheckCircle2,
   ClipboardCheck,
   ScanLine,
   BadgeCheck,
 } from 'lucide-react';
+
+import { PlansCtaLink } from '../src/components/plans/PlansCtaLink';
+import { LandingPlansSection } from '../src/components/plans/LandingPlansSection';
 
 // Página pública, sem 'use client' — não precisa de estado nem efeito, só
 // navegação (Link) e <details>/<summary> nativos pro FAQ (funcionam sem JS).
@@ -116,7 +118,7 @@ const faqs = [
   {
     question: 'Como funciona o teste?',
     answer:
-      'Você cadastra uma loja de demonstração e usa o sistema completo por tempo limitado, sem compromisso. Depois é só falar com a gente pra seguir com a sua empresa de verdade.',
+      'Você cadastra uma loja de demonstração e usa o sistema completo por 1 hora, sem compromisso. Se gostar, é só escolher um plano e pagar por Pix, boleto ou cartão — a conta de teste vira a sua empresa de verdade, com os dados que você já cadastrou.',
   },
 ];
 
@@ -131,6 +133,10 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <PlansCtaLink className="hidden rounded-xl px-4 py-2 text-sm font-semibold text-blue-500 transition hover:bg-blue-500/10 sm:inline-flex">
+              Conhecer os planos
+            </PlansCtaLink>
+
             <Link
               href="/login"
               className="rounded-xl px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-100 dark:hover:bg-zinc-900"
@@ -175,6 +181,10 @@ export default function LandingPage() {
             Testar grátis
             <ArrowRight size={18} />
           </Link>
+
+          <PlansCtaLink className="flex h-12 w-full items-center justify-center rounded-xl border border-blue-500/40 px-6 font-semibold text-blue-500 transition hover:bg-blue-500/10 sm:w-auto">
+            Conhecer os planos
+          </PlansCtaLink>
 
           <Link
             href="/login"
@@ -245,51 +255,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Planos */}
-      <section
-        id="planos"
-        className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40"
-      >
-        <div className="mx-auto max-w-4xl px-4 py-16 text-center">
-          <h2 className="text-3xl font-bold">Um plano do tamanho da sua rede</h2>
-
-          <p className="mx-auto mt-3 max-w-xl text-zinc-600 dark:text-zinc-400">
-            Cada empresa do seu grupo entra separadamente, com o que ela
-            usa. Sem pacote fechado, sem módulo que você não precisa.
-          </p>
-
-          <div className="mx-auto mt-10 max-w-md rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-8 text-left">
-            <p className="text-sm font-semibold text-blue-500">
-              Sob medida por empresa
-            </p>
-
-            <ul className="mt-4 space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
-              {[
-                'Compras, recebimento e conta a pagar',
-                'Nota fiscal de entrada, saída e de baixa por perda',
-                'Tarefas, RH e controle de tributos',
-                'Notificação por push e WhatsApp',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2">
-                  <CheckCircle2
-                    size={18}
-                    className="mt-0.5 shrink-0 text-blue-400"
-                  />
-                  {item}
-                </li>
-              ))}
-            </ul>
-
-            <Link
-              href="/demo"
-              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-500 font-semibold text-white transition hover:bg-blue-600"
-            >
-              Testar grátis
-              <ArrowRight size={18} />
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* Planos — busca os planos reais (/plans) e some pra empresa isenta */}
+      <LandingPlansSection />
 
       {/* Confiança */}
       <section className="mx-auto max-w-6xl px-4 py-16">
@@ -385,6 +352,10 @@ export default function LandingPage() {
             Testar grátis
             <ArrowRight size={18} />
           </Link>
+
+          <PlansCtaLink className="flex h-12 w-full items-center justify-center rounded-xl border border-blue-500/40 px-6 font-semibold text-blue-500 transition hover:bg-blue-500/10 sm:w-auto">
+            Conhecer os planos
+          </PlansCtaLink>
 
           <Link
             href="/login"

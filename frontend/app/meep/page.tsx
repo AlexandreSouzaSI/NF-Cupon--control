@@ -6,7 +6,7 @@ import { getUser, type UserRole } from '@/lib/auth';
 import { getActiveStore } from '@/lib/active-store';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { ShoppingBag, Receipt, History, RefreshCw, Loader2 } from 'lucide-react';
+import { ShoppingBag, Receipt, History, RefreshCw, Loader2, DatabaseZap } from 'lucide-react';
 
 import { ItemsPerDayTab } from '../../src/components/meep/ItemsPerDayTab';
 import { TaxSalesTab } from '../../src/components/meep/TaxSalesTab';
@@ -52,6 +52,11 @@ export default function MeepPage() {
     );
 
     const [syncing, setSyncing] = useState(false);
+    const [rebuilding, setRebuilding] = useState(false);
+
+    // Dia filtrado em "Itens por Dia" — também é o dia que o botão
+    // "Reconstruir Venda/Lista deste dia" reconstrói/confere.
+    const [diaItens, setDiaItens] = useState('');
 
     // Bump pra forçar as abas (ItemsPerDayTab/TaxSalesTab/SyncLogsTab) a
     // remontar e recarregar os dados depois de um sync manual — sem isso,
@@ -75,12 +80,22 @@ export default function MeepPage() {
             const result = response.data as {
                 success: boolean;
                 message?: string;
+                rebuildErros?: string[];
             };
 
             if (result.success) {
                 toast.success(
                     'Sincronização disparada — itens, impostos e conciliação já estão sendo buscados de novo na Meep.',
                 );
+                // Falha ao atualizar o Venda/Lista não pode ficar muda.
+                if (result.rebuildErros && result.rebuildErros.length > 0) {
+                    toast.error(
+                        `Venda/Lista não atualizou em ${result.rebuildErros.length} dia(s): ${result.rebuildErros
+                            .slice(0, 3)
+                            .join(' | ')}`,
+                        { duration: 15000 },
+                    );
+                }
                 setRefreshKey((key) => key + 1);
             } else {
                 toast.error(
@@ -95,6 +110,84 @@ export default function MeepPage() {
             );
         } finally {
             setSyncing(false);
+        }
+    }
+
+    // Reconstrói o Venda/Lista do dia filtrado a partir dos pedidos que já
+    // estão no banco (sem chamar a Meep) e, em seguida, confere Meep x
+    // Venda/Lista daquele dia (a conferência é só pra Proprietário/Admin
+    // Master — pra os outros o endpoint nega e a conferência é omitida).
+    async function handleRebuildDay() {
+        if (!activeStore) {
+            toast.error('Não foi possível identificar a loja ativa.');
+            return;
+        }
+
+        if (!diaItens) {
+            toast.error('Escolha um dia em "Itens por Dia" pra reconstruir o Venda/Lista dele.');
+            return;
+        }
+
+        try {
+            setRebuilding(true);
+
+            const response = await api.post(
+                `/meep/${activeStore.id}/rebuild-product-sales`,
+                null,
+                { params: { dateFrom: diaItens, dateTo: diaItens } },
+            );
+
+            const result = response.data as {
+                success: boolean;
+                message?: string;
+                totalItensEncontrados?: number;
+                diasAlterados?: number;
+                erros?: string[];
+            };
+
+            if (result.success === false) {
+                toast.error(result.message || 'Não foi possível reconstruir agora.');
+                return;
+            }
+
+            if (result.erros && result.erros.length > 0) {
+                toast.error(
+                    `Falhou ao reconstruir: ${result.erros.slice(0, 3).join(' | ')}`,
+                    { duration: 15000 },
+                );
+            } else {
+                toast.success(
+                    `Venda/Lista de ${diaItens.split('-').reverse().join('/')} reconstruído (${result.totalItensEncontrados ?? 0} item(ns) da Meep).`,
+                );
+            }
+
+            try {
+                const check = await api.get('/meep/product-sales-check', {
+                    params: { storeId: activeStore.id, date: diaItens },
+                });
+                const c = check.data as {
+                    meep: { semTaxaECouvert: { produtosDistintos: number; valor: number } };
+                    vendaLista: { produtosDistintos: number; valor: number };
+                    diferenca: { produtosDistintos: number; valor: number };
+                    defasado: boolean;
+                };
+                const money = (v: number) =>
+                    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                const mensagem = `Meep: ${c.meep.semTaxaECouvert.produtosDistintos} produtos / ${money(c.meep.semTaxaECouvert.valor)} · Venda/Lista: ${c.vendaLista.produtosDistintos} produtos / ${money(c.vendaLista.valor)} (sem taxa de serviço/couvert).`;
+                if (c.defasado) {
+                    toast.error(`Ainda difere: ${mensagem}`, { duration: 15000 });
+                } else {
+                    toast.success(`Conferido, bate: ${mensagem}`, { duration: 10000 });
+                }
+            } catch {
+                // Sem permissão pra conferência (ou falha dela) — o
+                // rebuild em si já foi reportado acima.
+            }
+        } catch (error: any) {
+            const message = error?.response?.data?.message || 'Erro ao reconstruir o Venda/Lista.';
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setRebuilding(false);
         }
     }
 
@@ -113,6 +206,25 @@ export default function MeepPage() {
                         </p>
                     </div>
 
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <button
+                        onClick={handleRebuildDay}
+                        disabled={rebuilding || !diaItens}
+                        title={
+                            diaItens
+                                ? 'Recalcula o Venda/Lista só desse dia, a partir dos pedidos já salvos (não chama a Meep), e confere se bate com Itens por Dia'
+                                : 'Escolha um dia em "Itens por Dia" pra habilitar'
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                        {rebuilding ? (
+                            <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                            <DatabaseZap size={14} />
+                        )}
+                        Reconstruir Venda/Lista deste dia
+                    </button>
+
                     <button
                         onClick={handleSyncNow}
                         disabled={syncing}
@@ -129,6 +241,7 @@ export default function MeepPage() {
                         )}
                         Sincronizar agora
                     </button>
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2">
@@ -153,7 +266,11 @@ export default function MeepPage() {
                 </div>
 
                 {activeTab === 'itens' && (
-                    <ItemsPerDayTab key={`itens-${refreshKey}`} />
+                    <ItemsPerDayTab
+                        key={`itens-${refreshKey}`}
+                        day={diaItens}
+                        onDayChange={setDiaItens}
+                    />
                 )}
                 {activeTab === 'impostos' && (
                     <TaxSalesTab key={`impostos-${refreshKey}`} />

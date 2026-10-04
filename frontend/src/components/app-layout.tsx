@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
+    AlertTriangle,
     Bell,
     Building2,
     ChevronDown,
+    CreditCard,
     FileText,
     LogOut,
     Menu,
@@ -26,8 +28,11 @@ import {
     type ActiveStore,
 } from '@/lib/active-store';
 import { getTheme, toggleTheme, type Theme } from '@/lib/theme';
+import { useBillingStatus } from '@/lib/billing';
 import {
     canAccessHref,
+    getHomeHref,
+    isItemAllowedForFisica,
     isModuleEnabled,
     menu,
     menuColorStyles,
@@ -137,6 +142,15 @@ export function AppLayout({ children, title }: AppLayoutProps) {
     // não é conta de teste, então o banner nem aparece.
     const [demoSecondsLeft, setDemoSecondsLeft] = useState<number | null>(null);
 
+    // Estado de cobrança (planos): decide se aparece "Planos" no menu, o
+    // link "Conhecer os planos" do banner do teste e o aviso de assinatura
+    // vencida. Empresa isenta (Nugalho) e Admin Master recebem exempt:true e
+    // nada disso é mostrado.
+    const billing = useBillingStatus();
+    const billingMe = billing.me && !billing.me.exempt ? billing.me : null;
+    const showPlansMenu = billing.loaded && billing.loggedIn && billingMe !== null;
+    const subscriptionPastDue = billingMe?.subscription?.status === 'PAST_DUE';
+
     function handleToggleTheme() {
         setThemeState(toggleTheme());
     }
@@ -180,6 +194,9 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                 id: store.id,
                 name: store.name,
                 enabledModules: store.enabledModules,
+                // Sem isso o cookie da loja ativa nunca sabia se era Pessoa
+                // Física e o menu/guard de Física não tinha como agir.
+                tipoPessoa: store.tipoPessoa,
                 empresaId: store.empresaId,
                 empresaName: store.empresaName,
             }));
@@ -265,8 +282,10 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             setDemoSecondsLeft(secondsLeft);
 
             if (secondsLeft <= 0) {
+                // Em vez de deslogar, leva pros planos: o teste vencido
+                // vira venda (a API só libera /plans e /billing agora).
                 toast.error('Seu teste grátis de 1h expirou.');
-                handleLogout();
+                window.location.href = '/planos?motivo=teste-expirado';
             }
         }
 
@@ -292,37 +311,63 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             user.isDemo,
             activeStore?.enabledModules,
             user.moduleAccess,
+            activeStore?.tipoPessoa,
         );
 
         if (!allowed) {
-            toast.error('Seu perfil não tem acesso a essa tela.');
-            router.replace('/home');
+            const isFisica = activeStore?.tipoPessoa === 'FISICA';
+
+            // Loja Pessoa Física não tem Início/Dashboard operacional: cair
+            // neles (pós-login, link salvo, troca de loja CNPJ → Física) não
+            // é erro de permissão, é só "essa tela não existe pra essa
+            // loja" — redireciona em silêncio, sem toast vermelho.
+            const silent =
+                isFisica && (pathname === '/home' || pathname === '/dashboard');
+
+            if (!silent) {
+                toast.error('Seu perfil não tem acesso a essa tela.');
+            }
+
+            router.replace(
+                getHomeHref(
+                    user.role,
+                    activeStore?.tipoPessoa,
+                    user.isDemo,
+                    activeStore?.enabledModules,
+                    user.moduleAccess,
+                ),
+            );
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, pathname, storeStatus, activeStore]);
 
-    // Loja Pessoa Física (ver Store.tipoPessoa) só usa Dashboard Financeiro
-    // + Contas a Pagar — Início e o Dashboard operacional (módulo de
-    // Compras/NF/Perdas) não têm módulo associado, então canAccessHref
-    // acima deixa passar; manda direto pro Dashboard Financeiro em vez de
-    // deixar essas duas telas genéricas abrirem vazias/confusas.
-    useEffect(() => {
-        if (storeStatus !== 'ready') return;
-        if (activeStore?.tipoPessoa !== 'FISICA') return;
-
-        if (pathname === '/home' || pathname === '/dashboard') {
-            router.replace('/financial-dashboard');
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname, storeStatus, activeStore]);
-
     function handleSelectStore(store: StoreOption) {
+        const changedKind =
+            (store.tipoPessoa === 'FISICA') !==
+            (activeStore?.tipoPessoa === 'FISICA');
+
         setActiveStore(store);
         setActiveStoreState(store);
         setStoreStatus('ready');
         setStoreSwitcherOpen(false);
-        // Recarrega a página pra garantir que toda tela em uso já busque
-        // os dados considerando a nova loja ativa.
+        // Trocou entre Pessoa Física ⇄ loja normal: a página atual pode nem
+        // existir na outra (ex.: /tasks na Física, ou Início), então vai
+        // direto pra primeira tela da nova loja em vez de depender do guard.
+        // Mesmo tipo de loja: só recarrega, pra toda tela em uso buscar os
+        // dados considerando a nova loja ativa.
+        if (changedKind && user) {
+            window.location.assign(
+                getHomeHref(
+                    user.role,
+                    store.tipoPessoa,
+                    user.isDemo,
+                    store.enabledModules,
+                    user.moduleAccess,
+                ),
+            );
+            return;
+        }
+
         window.location.reload();
     }
 
@@ -339,33 +384,32 @@ export function AppLayout({ children, title }: AppLayoutProps) {
     }
 
     if (storeStatus === 'error') {
-        // Conta de teste sem loja quase sempre é teste vencido (a loja
-        // dele é desativada junto com a conta — ver cleanupExpiredTrials
-        // em demo.service.ts). Pra quem veio de fora pelo /demo, "fale com
-        // um Administrativo" não quer dizer nada — melhor mandar criar um
-        // teste novo direto.
+        // Conta de teste sem loja disponível = teste vencido (a API recusa
+        // o resto do sistema com 403 TRIAL_EXPIRED, ver jwt.strategy.ts).
+        // Em vez de beco sem saída, o CTA principal leva pros planos: pagando,
+        // essa mesma conta vira a empresa real, com os dados do teste.
         return (
             <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-50 dark:bg-zinc-950 px-4 text-center text-zinc-900 dark:text-white">
                 <Building2 size={40} className="text-zinc-600" />
                 <div>
                     <h1 className="text-lg font-bold">
                         {user.isDemo
-                            ? 'Seu teste expirou'
+                            ? 'Seu teste grátis acabou'
                             : 'Nenhuma loja disponível'}
                     </h1>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                         {user.isDemo
-                            ? 'Esse teste grátis não está mais ativo. Crie um novo pra continuar explorando.'
+                            ? 'Gostou do sistema? Escolha um plano e continue de onde parou — tudo que você cadastrou no teste é mantido.'
                             : 'Seu usuário não está vinculado a nenhuma loja. Fale com um Administrativo ou Proprietário.'}
                     </p>
                 </div>
 
                 {user.isDemo && (
                     <button
-                        onClick={() => router.push('/demo')}
-                        className="rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600"
+                        onClick={() => router.push('/planos?motivo=teste-expirado')}
+                        className="rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600"
                     >
-                        Criar novo teste
+                        Conhecer os planos
                     </button>
                 )}
 
@@ -446,6 +490,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             user.isDemo,
             activeStore?.enabledModules,
             user.moduleAccess,
+            activeStore?.tipoPessoa,
         )
     ) {
         return (
@@ -468,6 +513,9 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                     (user.isDemo || item.roles.includes(user.role)) &&
                     !item.hidden &&
                     isModuleEnabled(item, activeStore?.enabledModules, user.moduleAccess) &&
+                    // Loja Pessoa Física: só o módulo financeiro (sem Início,
+                    // Dashboard operacional, Tarefas, Compras...).
+                    (activeStore?.tipoPessoa !== 'FISICA' || isItemAllowedForFisica(item)) &&
                     // Caso especial "Aprovações": o item de menu libera pra
                     // GERENTE (roles inclui GERENTE), mas o backend só deixa
                     // um Gerente aprovar de verdade se ele tiver a permissão
@@ -498,9 +546,36 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white">
             <div className="sticky top-0 z-30">
                 {demoTimeLabel && (
-                    <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-center text-sm font-semibold text-zinc-900">
-                        <TimerReset size={16} />
-                        Você está no teste grátis — tempo restante: {demoTimeLabel}
+                    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-500 px-4 py-2 text-center text-sm font-semibold text-zinc-900">
+                        <span className="flex items-center gap-2">
+                            <TimerReset size={16} />
+                            Você está no teste grátis — tempo restante: {demoTimeLabel}
+                        </span>
+
+                        {/* Conta de teste nunca é isenta, então o link
+                            aparece sem esperar a resposta de /billing/me. */}
+                        <button
+                            onClick={() => router.push('/planos')}
+                            className="rounded-lg bg-zinc-900 px-3 py-1 text-xs font-semibold text-white hover:bg-zinc-800"
+                        >
+                            Conhecer os planos
+                        </button>
+                    </div>
+                )}
+
+                {subscriptionPastDue && (
+                    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-red-600 px-4 py-2 text-center text-sm font-semibold text-white">
+                        <span className="flex items-center gap-2">
+                            <AlertTriangle size={16} />
+                            Assinatura vencida — os módulos do plano estão pausados.
+                        </span>
+
+                        <button
+                            onClick={() => router.push('/planos')}
+                            className="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        >
+                            Regularizar pagamento
+                        </button>
                     </div>
                 )}
 
@@ -702,6 +777,28 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                             );
                         })}
 
+                        {showPlansMenu && (
+                            <div>
+                                <button
+                                    onClick={() => router.push('/planos')}
+                                    className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                >
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                                        <CreditCard size={18} />
+                                    </span>
+                                    <span className="flex-1">
+                                        {billingMe?.subscription ? 'Meu plano' : 'Planos'}
+                                    </span>
+
+                                    {subscriptionPastDue && (
+                                        <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                                            !
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
+                        )}
+
                         {user.isAdminMaster && (
                             <div>
                                 <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -726,6 +823,16 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                         <ShieldCheck size={18} />
                                     </span>
                                     <span className="flex-1">Módulos por loja</span>
+                                </button>
+
+                                <button
+                                    onClick={() => router.push('/admin/planos')}
+                                    className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                >
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+                                        <CreditCard size={18} />
+                                    </span>
+                                    <span className="flex-1">Planos e assinaturas</span>
                                 </button>
                             </div>
                         )}
@@ -852,6 +959,25 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                     );
                                 })}
 
+                                {showPlansMenu && (
+                                    <div>
+                                        <button
+                                            onClick={() => {
+                                                setMenuOpen(false);
+                                                router.push('/planos');
+                                            }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                        >
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                                                <CreditCard size={18} />
+                                            </span>
+                                            <span className="flex-1">
+                                                {billingMe?.subscription ? 'Meu plano' : 'Planos'}
+                                            </span>
+                                        </button>
+                                    </div>
+                                )}
+
                                 {user.isAdminMaster && (
                                     <div>
                                         <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -882,6 +1008,19 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                                                 <ShieldCheck size={18} />
                                             </span>
                                             <span className="flex-1">Módulos por loja</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                setMenuOpen(false);
+                                                router.push('/admin/planos');
+                                            }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white"
+                                        >
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+                                                <CreditCard size={18} />
+                                            </span>
+                                            <span className="flex-1">Planos e assinaturas</span>
                                         </button>
                                     </div>
                                 )}

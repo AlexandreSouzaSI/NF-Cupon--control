@@ -110,6 +110,11 @@ export const menuColorStyles: Record<
     violet: { bg: 'bg-violet-500/10', text: 'text-violet-500' },
 };
 
+// Mesmo tipo de Store.tipoPessoa no backend. FISICA = loja pessoal do
+// proprietário, que só usa o módulo financeiro (Dashboard Financeiro +
+// Contas a Pagar). undefined/JURIDICA = loja de negócio normal.
+export type TipoPessoaStore = 'JURIDICA' | 'FISICA';
+
 export type MenuItem = {
     label: string;
     href: string;
@@ -135,6 +140,10 @@ export type MenuItem = {
     // marcado à parte mesmo já liberando pelos módulos "de verdade" do
     // grupo.
     groupModules?: StoreModuleKey[];
+    // Item de estrutura (sem "module") que não faz sentido numa loja
+    // Pessoa Física — Início (atalhos de tarefas/compras) e Dashboard
+    // operacional. Quem tem módulo já é filtrado por FISICA_MODULES.
+    hideForFisica?: boolean;
 };
 
 export type MenuGroup = {
@@ -169,6 +178,7 @@ export const menu: MenuGroup[] = [
                 icon: Home,
                 roles: ALL_ROLES,
                 color: 'slate',
+                hideForFisica: true,
             },
             {
                 label: 'Dashboard',
@@ -176,6 +186,7 @@ export const menu: MenuGroup[] = [
                 icon: LayoutDashboard,
                 roles: ALL_ROLES,
                 color: 'sky',
+                hideForFisica: true,
             },
         ],
     },
@@ -600,12 +611,69 @@ export function isModuleEnabled(
     return true;
 }
 
+// Única família de módulos que uma loja Pessoa Física usa. O backend já
+// trava enabledModules dela em [CONTAS_A_PAGAR] (stores.service.ts), mas
+// aqui repetimos a regra pra o menu não depender de o cookie da loja já
+// ter a lista de módulos atualizada.
+export const FISICA_MODULES: StoreModuleKey[] = ['CONTAS_A_PAGAR'];
+
+// Decide se um item de menu existe pra loja Pessoa Física: item de
+// estrutura só aparece se não for marcado hideForFisica; item de módulo só
+// aparece se algum dos seus módulos estiver em FISICA_MODULES (por isso
+// Conciliação de Caixa, Meep, Compras etc. somem, e o Dashboard Financeiro
+// — groupModules inclui CONTAS_A_PAGAR — fica).
+export function isItemAllowedForFisica(
+    item: Pick<MenuItem, 'module' | 'groupModules' | 'hideForFisica'>,
+): boolean {
+    if (item.hideForFisica) return false;
+
+    const candidates = item.groupModules ?? (item.module ? [item.module] : []);
+
+    if (candidates.length === 0) return true;
+
+    return candidates.some((module) => FISICA_MODULES.includes(module));
+}
+
+// Primeira tela do usuário: Início pra loja normal, Dashboard Financeiro
+// pra loja Pessoa Física (que não tem Início). Usada no pós-login, no
+// guard central e na troca de loja. Se o perfil não puder ver o Dashboard
+// Financeiro (ex.: Gerente vinculado à loja Física), cai em Contas a Pagar
+// e por último em Dúvidas, pra nunca devolver uma rota proibida (loop de
+// redirect).
+export function getHomeHref(
+    role: MenuRole,
+    tipoPessoa?: TipoPessoaStore | null,
+    isDemo?: boolean,
+    enabledModules?: StoreModuleKey[] | null,
+    userModuleAccess?: StoreModuleKey[] | string[] | null,
+): string {
+    if (tipoPessoa !== 'FISICA') return '/home';
+
+    for (const href of ['/financial-dashboard', '/bills']) {
+        if (
+            canAccessHref(
+                role,
+                href,
+                isDemo,
+                enabledModules,
+                userModuleAccess,
+                tipoPessoa,
+            )
+        ) {
+            return href;
+        }
+    }
+
+    return '/help';
+}
+
 export function canAccessHref(
     role: MenuRole,
     href: string,
     isDemo?: boolean,
     enabledModules?: StoreModuleKey[] | null,
     userModuleAccess?: StoreModuleKey[] | string[] | null,
+    tipoPessoa?: TipoPessoaStore | null,
 ): boolean {
     if (isDemo) return true;
 
@@ -617,6 +685,12 @@ export function canAccessHref(
     );
 
     if (!matchedItem) return true;
+
+    // Loja Pessoa Física: Início, Dashboard operacional e qualquer módulo
+    // de negócio ficam fora, mesmo digitando a URL.
+    if (tipoPessoa === 'FISICA' && !isItemAllowedForFisica(matchedItem)) {
+        return false;
+    }
 
     return (
         matchedItem.roles.includes(role) &&

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
+import { getUser, canManageProductCatalog } from '@/lib/auth';
 import { toast } from 'sonner';
 import {
     Check,
@@ -12,6 +13,7 @@ import {
     Plus,
     Search,
     Trash2,
+    Upload,
     X,
 } from 'lucide-react';
 import { AutocompleteInput } from '../ui/AutocompleteInput';
@@ -27,6 +29,14 @@ type PratoOverview = {
     produto: string;
     produtoChave: string;
     itens: ItemOverview[];
+    // Categoria vinda do catálogo importado do PDF de Produtos da Meep
+    // (ver ProductCatalogItem) — só vem preenchida quando a loja já
+    // importou esse PDF. origemCatalogo não decide mais se a lixeirinha
+    // aparece (ela agora aparece em QUALQUER prato pro Admin Master, ver
+    // canManageProductCatalog) — mantido só porque pode ser útil pra
+    // outra coisa no futuro.
+    categoria?: string;
+    origemCatalogo: boolean;
 };
 
 type StockItemOption = { id: string; nome: string; unidadeMedida: 'KG' | 'LITRO' | 'UNIDADE' };
@@ -68,6 +78,16 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
     const [editandoChave, setEditandoChave] = useState<string | null>(null);
     const [linhas, setLinhas] = useState<LinhaEdicao[]>([]);
     const [salvando, setSalvando] = useState(false);
+    const [removendoChave, setRemovendoChave] = useState<string | null>(null);
+    const [importandoCatalogo, setImportandoCatalogo] = useState(false);
+    const [limpandoLista, setLimpandoLista] = useState(false);
+
+    // Importar PDF, excluir prato da lista e "excluir toda a lista" são
+    // ações restritas ao Admin Master (dono do sistema) — quem só tem
+    // acesso à Ficha Técnica continua vendo/usando só o botão
+    // "Configurar" de cada prato (ver canManageProductCatalog em
+    // lib/auth.ts, mesmo padrão de canDeleteForever).
+    const podeGerenciarCatalogo = canManageProductCatalog(getUser());
 
     async function load() {
         const store = getActiveStore();
@@ -277,6 +297,95 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
         }
     }
 
+    // "Excluir toda a lista" — esconde de uma vez todo prato hoje visível
+    // nesta loja (curado, com venda real ou do catálogo). Não apaga
+    // histórico de venda nenhum, só pedido explícito de zerar a lista; só
+    // volta reimportando o catálogo (PDF) ou, pros curados/vendidos, não
+    // tem botão de desfazer por ora — por isso a confirmação é mais forte
+    // que a de excluir um item só.
+    async function limparLista() {
+        const store = getActiveStore();
+        if (!store) return;
+
+        const confirmado = window.confirm(
+            'Isso vai remover TODOS os pratos dessa lista (menos o histórico de vendas, que fica intacto). Essa ação não pode ser desfeita por aqui — só reimportando o catálogo. Continuar?',
+        );
+        if (!confirmado) return;
+
+        try {
+            setLimpandoLista(true);
+            const { data } = await api.delete('/product-sales/catalog/all', {
+                params: { storeId: store.id },
+            });
+            toast.success(`${data.ocultados} prato(s) removido(s) da lista.`);
+            await load();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao excluir a lista.';
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setLimpandoLista(false);
+        }
+    }
+
+    // Exclui (esconde) um prato da lista — Admin Master, pra QUALQUER
+    // prato (curado, com venda real ou do catálogo importado). Não apaga
+    // nenhum histórico de venda nem ficha técnica, só some da lista daqui
+    // pra frente (ver HiddenProductDish no backend).
+    async function removerDoCatalogo(prato: PratoOverview) {
+        const store = getActiveStore();
+        if (!store) return;
+
+        const confirmado = window.confirm(
+            `Remover "${prato.produto}" da lista? Ele some da aba Produtos e da Ficha Técnica até ser vendido ou importado de novo.`,
+        );
+        if (!confirmado) return;
+
+        try {
+            setRemovendoChave(prato.produtoChave);
+            await api.delete('/product-sales/catalog/item', {
+                params: { storeId: store.id, produtoChave: prato.produtoChave },
+            });
+            toast.success('Item removido da lista.');
+            await load();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao remover o item.';
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setRemovendoChave(null);
+        }
+    }
+
+    // Importa o PDF de "Produtos" exportado do painel da Meep — ele traz
+    // a categoria real de cada item (a API de vendas não traz). Usado
+    // pra classificar os itens que hoje caem todos em "Vendas Meep".
+    async function importarCatalogoPdf(file: File) {
+        const store = getActiveStore();
+        if (!store) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('storeId', store.id);
+
+        try {
+            setImportandoCatalogo(true);
+            const { data } = await api.post('/product-sales/catalog/import-pdf', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            toast.success(
+                `Catálogo importado: ${data.total} produtos (${data.novos} novos, ${data.atualizados} atualizados).`,
+            );
+            await load();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao importar o catálogo em PDF.';
+            toast.error(Array.isArray(message) ? message.join(', ') : message);
+        } finally {
+            setImportandoCatalogo(false);
+        }
+    }
+
     if (!getActiveStore()) {
         return (
             <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
@@ -306,6 +415,51 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    {podeGerenciarCatalogo && (
+                        <>
+                            <label
+                                title="Importa o PDF de 'Produtos' exportado do painel da Meep — ele traz a categoria real de cada item, que a venda sincronizada automaticamente não traz"
+                                className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                                    importandoCatalogo
+                                        ? 'cursor-not-allowed border-zinc-200 text-zinc-400 dark:border-zinc-700'
+                                        : 'border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                                }`}
+                            >
+                                {importandoCatalogo ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                    <Upload size={14} />
+                                )}
+                                Importar catálogo Meep (PDF)
+                                <input
+                                    type="file"
+                                    accept="application/pdf"
+                                    className="hidden"
+                                    disabled={importandoCatalogo}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        e.target.value = '';
+                                        if (file) importarCatalogoPdf(file);
+                                    }}
+                                />
+                            </label>
+
+                            <button
+                                onClick={limparLista}
+                                disabled={limpandoLista}
+                                title="Remove TODOS os pratos da lista (não apaga histórico de vendas) — só volta reimportando o catálogo"
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-red-400/60 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+                            >
+                                {limpandoLista ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                    <Trash2 size={14} />
+                                )}
+                                Excluir toda a lista
+                            </button>
+                        </>
+                    )}
+
                     <button
                         onClick={() => setSomenteSemIngredientes((v) => !v)}
                         title="Mostrar só os pratos que ainda não têm nenhum ingrediente configurado"
@@ -354,9 +508,16 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                 <div key={prato.produtoChave} className="p-4">
                                     <div className="flex flex-wrap items-start justify-between gap-3">
                                         <div className="min-w-[200px]">
-                                            <p className="font-medium text-zinc-900 dark:text-white">
-                                                {prato.produto}
-                                            </p>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <p className="font-medium text-zinc-900 dark:text-white">
+                                                    {prato.produto}
+                                                </p>
+                                                {prato.categoria && (
+                                                    <span className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                                        {prato.categoria}
+                                                    </span>
+                                                )}
+                                            </div>
                                             {!editando && (
                                                 <div className="mt-1 flex flex-wrap gap-1.5">
                                                     {prato.itens.length === 0 ? (
@@ -402,12 +563,28 @@ export function FichaTecnicaTab({ refreshKey }: { refreshKey?: number }) {
                                         </div>
 
                                         {!editando && (
-                                            <button
-                                                onClick={() => iniciarEdicao(prato)}
-                                                className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                                            >
-                                                Configurar
-                                            </button>
+                                            <div className="flex shrink-0 items-center gap-1.5">
+                                                <button
+                                                    onClick={() => iniciarEdicao(prato)}
+                                                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                                                >
+                                                    Configurar
+                                                </button>
+                                                {podeGerenciarCatalogo && (
+                                                    <button
+                                                        onClick={() => removerDoCatalogo(prato)}
+                                                        disabled={removendoChave === prato.produtoChave}
+                                                        title="Remover esse prato da lista (não apaga venda real nem ficha técnica, só some daqui pra frente)"
+                                                        className="rounded-lg p-2 text-zinc-400 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                                                    >
+                                                        {removendoChave === prato.produtoChave ? (
+                                                            <Loader2 size={16} className="animate-spin" />
+                                                        ) : (
+                                                            <Trash2 size={16} />
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
 

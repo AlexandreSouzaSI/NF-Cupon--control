@@ -29,6 +29,10 @@ import {
 } from '../common/events';
 import type { WhatsappTaskStartEvent } from '../common/events';
 import {
+    isBusinessDayBrasilia,
+    WEEKEND_TASK_MESSAGE,
+} from '../common/brasilia-weekday.util';
+import {
     resolveAllowedStoreIds,
     ensureStoreAccessScoped,
 } from '../common/store-scope.util';
@@ -546,6 +550,11 @@ export class TasksService implements OnModuleInit {
             },
         });
 
+        // Regra: nada relacionado a tarefas é enviado sábado/domingo (a
+        // ocorrência é criada normalmente, só não avisa ninguém — não
+        // acumula pra segunda).
+        if (!isBusinessDayBrasilia()) return occurrence;
+
         const dueDateLabel = dueDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
         await this.notificationsService.create({
@@ -635,6 +644,11 @@ export class TasksService implements OnModuleInit {
         for (const task of activeTasks) {
             await this.ensureNextOccurrence(task, today);
         }
+
+        // Fim de semana: não vira "Atrasada" nem avisa. A virada acontece
+        // (com o aviso único de sempre) na primeira execução em dia útil,
+        // já que o filtro é "PENDING com data anterior a hoje".
+        if (!isBusinessDayBrasilia(today)) return;
 
         await this.markOverdueOccurrences(today);
     }
@@ -917,7 +931,10 @@ export class TasksService implements OnModuleInit {
 
         // Avisa quem criou a tarefa (se não foi ela mesma quem confirmou)
         // que o responsável já concluiu.
-        if (occurrence.task.createdById !== user.id) {
+        if (
+            occurrence.task.createdById !== user.id &&
+            isBusinessDayBrasilia()
+        ) {
             await this.notificationsService.create({
                 title: 'Tarefa confirmada',
                 message: `"${occurrence.task.title}" foi confirmada por ${user.name}.`,
@@ -1009,6 +1026,10 @@ export class TasksService implements OnModuleInit {
     // (TasksService não sabe nada sobre WhatsApp, de propósito).
     async notifyAssigneeWhatsapp(id: string, user: any) {
         this.ensureCanManage(user);
+
+        if (!isBusinessDayBrasilia()) {
+            throw new BadRequestException(WEEKEND_TASK_MESSAGE);
+        }
 
         const occurrence = await this.prisma.taskOccurrence.findUnique({
             where: { id },

@@ -4,6 +4,7 @@ import { WhatsappMessageKind } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizePhone } from '../common/phone.util';
+import { isBusinessDayBrasilia } from '../common/brasilia-weekday.util';
 import {
     ACCOUNT_ACTIVATION_INVITE_EVENT,
     PASSWORD_RESET_REQUESTED_WHATSAPP_EVENT,
@@ -68,6 +69,7 @@ export class WhatsappService {
     // sem se conhecerem (ver src/common/events.ts).
     @OnEvent(TASK_OCCURRENCE_CREATED_EVENT)
     async handleTaskOccurrenceCreated(payload: TaskOccurrenceCreatedEvent) {
+        if (this.skipTaskMessageOnWeekend('atribuição')) return;
         await this.sendTaskAssigned(payload);
     }
 
@@ -75,6 +77,7 @@ export class WhatsappService {
     // uma ocorrência pendente pra "Atrasada" (ver src/common/events.ts).
     @OnEvent(TASK_OCCURRENCE_OVERDUE_EVENT)
     async handleTaskOccurrenceOverdue(payload: TaskOccurrenceOverdueEvent) {
+        if (this.skipTaskMessageOnWeekend('atraso')) return;
         await this.sendTaskOverdue(payload);
     }
 
@@ -82,7 +85,22 @@ export class WhatsappService {
     // WhatsApp" no card da ocorrência (ver src/common/events.ts).
     @OnEvent(TASK_OCCURRENCE_REMINDER_EVENT)
     async handleTaskOccurrenceReminder(payload: TaskOccurrenceReminderEvent) {
+        if (this.skipTaskMessageOnWeekend('lembrete')) return;
         await this.sendTaskReminder(payload);
+    }
+
+    // Regra única: WhatsApp de tarefas só de segunda a sexta (Brasília).
+    // Defesa em profundidade — TasksService já não emite no fim de semana,
+    // mas qualquer outro emissor desses eventos também é barrado aqui.
+    // Mensagem do fim de semana é descartada, não vai pra fila.
+    private skipTaskMessageOnWeekend(kind: string): boolean {
+        if (isBusinessDayBrasilia()) return false;
+
+        this.logger.log(
+            `WhatsApp de ${kind} de tarefa não enviado: fim de semana (só segunda a sexta).`,
+        );
+
+        return true;
     }
 
     // Cotação: um fornecedor foi convidado pra preencher preço (Fase 3 —

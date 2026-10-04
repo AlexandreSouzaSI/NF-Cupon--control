@@ -23,6 +23,7 @@ import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { ColumnChart } from '../../src/components/product-sales/charts/ColumnChart';
 import { DonutChart } from '../../src/components/product-sales/charts/DonutChart';
+import { FisicaOverview } from '../../src/components/financial/FisicaOverview';
 
 type Bucket = {
     pagas: { count: number; value: number };
@@ -97,7 +98,28 @@ function currentMonthYear() {
     return { month: now.getMonth() + 1, year: now.getFullYear() };
 }
 
+// Escolhe o dashboard pela loja ativa. Fica como filho do AppLayout (só
+// monta depois que a loja ativa foi resolvida) pra ler tipoPessoa do cookie
+// já atualizado — antes disso o cookie podia ser de uma versão antiga, sem
+// esse campo. Loja Pessoa Física abre direto na visão "o que pagar";
+// loja normal mantém o dashboard completo de sempre.
 export default function FinancialDashboardPage() {
+    return (
+        <AppLayout title="Dashboard Financeiro">
+            <DashboardPorLoja />
+        </AppLayout>
+    );
+}
+
+function DashboardPorLoja() {
+    return getActiveStore()?.tipoPessoa === 'FISICA' ? (
+        <FisicaOverview />
+    ) : (
+        <CnpjDashboard />
+    );
+}
+
+function CnpjDashboard() {
     const router = useRouter();
     const [monthYear, setMonthYear] = useState(currentMonthYear());
     const [summary, setSummary] = useState<Summary | null>(null);
@@ -221,16 +243,16 @@ export default function FinancialDashboardPage() {
 
     if (!getActiveStore()) {
         return (
-            <AppLayout title="Dashboard Financeiro">
+            <>
                 <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
                     Selecione uma loja ativa no topo do sistema.
                 </div>
-            </AppLayout>
+            </>
         );
     }
 
     return (
-        <AppLayout title="Dashboard Financeiro">
+        <>
             <div className="space-y-6">
                 <div>
                     <h2 className="text-2xl font-bold">
@@ -679,7 +701,7 @@ export default function FinancialDashboardPage() {
                     </>
                 )}
             </div>
-        </AppLayout>
+        </>
     );
 }
 

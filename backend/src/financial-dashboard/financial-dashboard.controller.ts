@@ -37,4 +37,15 @@ export class FinancialDashboardController {
             year: year ? Number(year) : now.getFullYear(),
         });
     }
+
+    // Visão da loja Pessoa Física (Atrasadas/Hoje/7 dias/Mês + próximas
+    // contas). Mesmos guards do controller: perfil + módulo + escopo de loja
+    // (checado no service).
+    @Get('overview-fisica')
+    async overviewFisica(
+        @CurrentUser() user: any,
+        @Query('storeId') storeId: string,
+    ) {
+        return this.financialDashboardService.overviewFisica(user, storeId);
+    }
 }

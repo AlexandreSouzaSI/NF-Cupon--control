@@ -14,6 +14,8 @@ import {
     type ProductSalesImportedEvent,
 } from '../common/events';
 import { LISTAS_CURADAS_POR_LOJA } from './recipe-template-dish-lists';
+import { parseMeepCatalogPdf } from './meep-catalog-pdf-parser';
+import { PALAVRAS_EXCLUIDAS_DA_ANALISE } from '../common/meep-item-value.util';
 import {
     resolveAllowedStoreIds,
     ensureStoreAccessScoped,
@@ -75,7 +77,17 @@ function calcularUnidadesEquivalentes(
 // de ingrediente). Os dados originais continuam salvos no import, só
 // saem das consultas de análise. Usa "contains" (não igualdade exata)
 // pra pegar variações como "Taxa de Serviço 10%" ou "Couvert Artístico".
-const PALAVRAS_EXCLUIDAS_DA_ANALISE = ['TAXA DE SERVIÇO', 'COUVERT'];
+// A lista mora em common/meep-item-value.util.ts (compartilhada com o
+// diagnóstico de conferência Meep x Venda/Lista) — importada no topo.
+
+// Mesmo valor de CATEGORIA_PADRAO em meep-product-sales-sync.service.ts —
+// duplicado aqui de propósito (mesmo espírito de normalizarProduto, pra
+// não criar dependência entre ProductSalesModule e MeepModule). Usado em
+// productSummary() pra, na hora de montar o resumo por categoria,
+// substituir essa categoria "falsa" pela categoria real do catálogo
+// (ProductCatalogItem) quando ela existir — sem precisar de UPDATE em
+// massa nas entries que já foram sincronizadas.
+const CATEGORIA_PADRAO_MEEP = 'Vendas Meep';
 
 function filtroExcluirAnaliseWhere(): Prisma.ProductSalesEntryWhereInput {
     return {
@@ -740,11 +752,13 @@ export class ProductSalesService {
             where.importId = params.importId;
         }
 
-        if (params.categoria) {
-            where.categoria = params.categoria;
-        }
+        // Filtro de categoria NÃO entra no where do Prisma — a categoria
+        // visível pro usuário (e usada no filtro) pode ser a resolvida via
+        // catálogo (ver categoriaResolvida mais abaixo), não a coluna
+        // crua salva na entry (que pode estar com CATEGORIA_PADRAO_MEEP).
+        // O filtro real é aplicado em memória, depois de resolver.
 
-        const [entries, produtosComReceita] = await Promise.all([
+        const [entries, produtosComReceita, catalogo] = await Promise.all([
             this.prisma.productSalesEntry.findMany({
                 where,
                 select: {
@@ -760,7 +774,19 @@ export class ProductSalesService {
                 select: { produtoChave: true },
                 distinct: ['produtoChave'],
             }),
+            this.getCatalogoPorLoja(params.storeId),
         ]);
+
+        // Join em memória, sem mexer no dado salvo: entry sincronizada da
+        // Meep antes de existir catálogo pra essa loja caiu com a
+        // categoria fixa "Vendas Meep" (ver CATEGORIA_PADRAO em
+        // meep-product-sales-sync.service.ts) — se agora existe
+        // ProductCatalogItem pra esse produtoChave, usa a categoria real
+        // dele na agregação em vez da categoria "falsa" que ficou salva.
+        function categoriaResolvida(produtoChave: string, categoriaSalva: string) {
+            if (categoriaSalva !== CATEGORIA_PADRAO_MEEP) return categoriaSalva;
+            return catalogo.get(produtoChave)?.categoria ?? categoriaSalva;
+        }
 
         const chavesComReceita = new Set(
             produtosComReceita.map((p) => p.produtoChave),
@@ -777,6 +803,10 @@ export class ProductSalesService {
         >();
 
         for (const entry of entries) {
+            const categoria = categoriaResolvida(entry.produtoChave, entry.categoria);
+
+            if (params.categoria && categoria !== params.categoria) continue;
+
             const atual = porProduto.get(entry.produtoChave);
             const quantidade = Number(entry.quantidade);
             const valor = Number(entry.valor);
@@ -787,7 +817,7 @@ export class ProductSalesService {
             } else {
                 porProduto.set(entry.produtoChave, {
                     produto: entry.produto,
-                    categoria: entry.categoria,
+                    categoria,
                     quantidade,
                     valor,
                 });
@@ -804,7 +834,9 @@ export class ProductSalesService {
             .sort((a, b) => b.valor - a.valor);
 
         const categorias = Array.from(
-            new Set(entries.map((e) => e.categoria)),
+            new Set(
+                entries.map((e) => categoriaResolvida(e.produtoChave, e.categoria)),
+            ),
         ).sort();
 
         // Resumo por categoria — alimenta os "quadrados" da aba Produtos.
@@ -2032,6 +2064,173 @@ export class ProductSalesService {
         };
     }
 
+    // Só o Admin Master (dono do sistema) pode importar/excluir catálogo —
+    // mesmo padrão de canDeleteForever/AdminMasterGuard usado nos outros
+    // cadastros (Fornecedores, Lojas, Usuários...). Quem só tem acesso à
+    // Ficha Técnica continua podendo configurar ingrediente de cada
+    // prato, nada além disso. Checagem manual aqui (em vez de guard no
+    // controller) porque os 3 métodos também fazem outras validações de
+    // storeId/loja que já estavam no service.
+    private ensureAdminMaster(user: any) {
+        if (!user?.isAdminMaster) {
+            throw new ForbiddenException(
+                'Acesso restrito ao administrador do sistema.',
+            );
+        }
+    }
+
+    // Importa o PDF de "Produtos" exportado do PAINEL da Meep (não
+    // confundir com a API de vendas — essa não tem categoria) pra montar/
+    // atualizar o catálogo de produtos+categoria desta loja
+    // (ProductCatalogItem). Reutilizável: o mesmo fluxo serve pra Contagem
+    // agora e pra Anchieta/Raiz depois, só trocando o PDF e a loja ativa.
+    async importarCatalogoPdf(storeId: string, file: Express.Multer.File, user: any) {
+        this.ensureAdminMaster(user);
+
+        if (!storeId) {
+            throw new BadRequestException(
+                'Selecione uma loja ativa no topo do sistema.',
+            );
+        }
+
+        await this.ensureStoreAccess(storeId, user);
+
+        if (!file) {
+            throw new BadRequestException('Envie o arquivo PDF.');
+        }
+
+        let itens: { produto: string; categoria: string }[];
+
+        try {
+            itens = await parseMeepCatalogPdf(file.buffer);
+        } catch {
+            throw new BadRequestException(
+                'Não consegui ler esse PDF — confirme que é o relatório de "Produtos" exportado do painel da Meep.',
+            );
+        }
+
+        if (itens.length === 0) {
+            throw new BadRequestException(
+                'Não encontrei nenhum produto com categoria nesse PDF.',
+            );
+        }
+
+        let novos = 0;
+        let atualizados = 0;
+
+        for (const item of itens) {
+            const produtoChave = normalizarProduto(item.produto);
+
+            const existente = await this.prisma.productCatalogItem.findUnique({
+                where: { storeId_produtoChave: { storeId, produtoChave } },
+                select: { id: true },
+            });
+
+            await this.prisma.productCatalogItem.upsert({
+                where: { storeId_produtoChave: { storeId, produtoChave } },
+                update: { produto: item.produto, categoria: item.categoria },
+                create: {
+                    storeId,
+                    produtoChave,
+                    produto: item.produto,
+                    categoria: item.categoria,
+                },
+            });
+
+            if (existente) atualizados += 1;
+            else novos += 1;
+        }
+
+        // Reimportar é um sinal explícito de "quero esse item de volta" —
+        // desfaz a ocultação (HiddenProductDish) só dos itens que vieram
+        // NESTE PDF, sem tocar em outros pratos que o usuário escondeu por
+        // outro motivo e não vieram aqui.
+        await this.prisma.hiddenProductDish.deleteMany({
+            where: {
+                storeId,
+                produtoChave: { in: itens.map((item) => normalizarProduto(item.produto)) },
+            },
+        });
+
+        return { total: itens.length, novos, atualizados };
+    }
+
+    // "Lixeirinha" da aba Ficha Técnica — esconde um prato da lista (não
+    // apaga venda real nem ficha técnica, só some da lista daqui pra
+    // frente). Funciona pra QUALQUER prato (curado, com venda real ou do
+    // catálogo), não só os que vieram do PDF: além de remover o
+    // ProductCatalogItem (se existir), grava em HiddenProductDish pra
+    // filtrar esse produtoChave em getNomesPratosDaLoja — é essa segunda
+    // parte que faz a ocultação valer mesmo pra prato curado/vendido.
+    async removerItemCatalogo(
+        storeId: string,
+        produtoChave: string,
+        user: any,
+    ) {
+        this.ensureAdminMaster(user);
+
+        if (!storeId) {
+            throw new BadRequestException(
+                'Selecione uma loja ativa no topo do sistema.',
+            );
+        }
+
+        await this.ensureStoreAccess(storeId, user);
+
+        if (!produtoChave || !produtoChave.trim()) {
+            throw new BadRequestException('Produto inválido.');
+        }
+
+        const chave = produtoChave.trim();
+
+        const resultado = await this.prisma.productCatalogItem.deleteMany({
+            where: { storeId, produtoChave: chave },
+        });
+
+        await this.prisma.hiddenProductDish.upsert({
+            where: { storeId_produtoChave: { storeId, produtoChave: chave } },
+            update: {},
+            create: { storeId, produtoChave: chave },
+        });
+
+        return { removidos: resultado.count, ocultado: true };
+    }
+
+    // "Excluir toda a lista" pedido pelo usuário: esconde de uma vez TODO
+    // prato hoje visível na Ficha Técnica/Produtos desta loja (curado,
+    // com venda real ou do catálogo) — não apaga nenhum histórico de
+    // venda, só popula HiddenProductDish pra cada produtoChave atual.
+    // Também limpa o catálogo importado (ProductCatalogItem), já que ele
+    // não faz mais sentido enquanto os itens estiverem ocultos. Só volta
+    // reimportando o PDF (ver importarCatalogoPdf) ou, pra prato curado/
+    // vendido, não tem botão de "trazer de volta" por ora — é intencional,
+    // o usuário pediu uma zerada mesmo.
+    async limparListaFichaTecnica(storeId: string, user: any) {
+        this.ensureAdminMaster(user);
+
+        if (!storeId) {
+            throw new BadRequestException(
+                'Selecione uma loja ativa no topo do sistema.',
+            );
+        }
+
+        await this.ensureStoreAccess(storeId, user);
+
+        const nomesAtuais = await this.getNomesPratosDaLoja(storeId);
+        const chaves = nomesAtuais.map((nome) => normalizarProduto(nome));
+
+        await this.prisma.productCatalogItem.deleteMany({ where: { storeId } });
+
+        if (chaves.length > 0) {
+            await this.prisma.hiddenProductDish.createMany({
+                data: chaves.map((produtoChave) => ({ storeId, produtoChave })),
+                skipDuplicates: true,
+            });
+        }
+
+        return { ocultados: chaves.length };
+    }
+
     // Apaga TODAS as fichas técnicas da loja de uma vez — pensado pra
     // quem quer começar do zero e reimportar uma planilha nova em cima
     // de uma base limpa, sem receita antiga sobrando de produto que não
@@ -2064,16 +2263,37 @@ export class ProductSalesService {
         return encontrada?.itens || [];
     }
 
+    // Catálogo da loja (alimentado pelo PDF de Produtos do painel da
+    // Meep, ver importarCatalogoPdf) — Map produtoChave -> categoria.
+    // Reaproveitado por getNomesPratosDaLoja, getFichaTecnicaOverview,
+    // gerarModeloFichasTecnicas e productSummary (fallback de categoria
+    // retroativo pra venda Meep que caiu com CATEGORIA_PADRAO).
+    private async getCatalogoPorLoja(
+        storeId: string,
+    ): Promise<Map<string, { produto: string; categoria: string }>> {
+        const itens = await this.prisma.productCatalogItem.findMany({
+            where: { storeId },
+            select: { produtoChave: true, produto: true, categoria: true },
+        });
+
+        return new Map(
+            itens.map((item) => [
+                item.produtoChave,
+                { produto: item.produto, categoria: item.categoria },
+            ]),
+        );
+    }
+
     // Nome de cada prato conhecido da loja: une o que já tem venda
-    // importada (produtoChave distinto em ProductSalesEntry) com a lista
-    // curada do cardápio dessa loja (ver recipe-template-dish-lists.ts) —
-    // sem isso, uma loja que ainda não importou vendas (ou importou
-    // pouco) ficava com o modelo/lista de fichas técnicas vazio ou
-    // incompleto, sem bater com o cardápio real dela. Usado tanto pelo
-    // "baixar modelo" (xlsx) quanto pela aba Ficha Técnica (lista na
-    // tela).
+    // importada (produtoChave distinto em ProductSalesEntry), a lista
+    // curada do cardápio dessa loja (ver recipe-template-dish-lists.ts) E
+    // o catálogo importado do PDF da Meep (ProductCatalogItem) — sem
+    // isso, uma loja que ainda não importou vendas (ou importou pouco)
+    // ficava com o modelo/lista de fichas técnicas vazio ou incompleto,
+    // sem bater com o cardápio real dela. Usado tanto pelo "baixar
+    // modelo" (xlsx) quanto pela aba Ficha Técnica (lista na tela).
     private async getNomesPratosDaLoja(storeId: string): Promise<string[]> {
-        const [store, entries] = await Promise.all([
+        const [store, entries, catalogo, ocultos] = await Promise.all([
             this.prisma.store.findUnique({
                 where: { id: storeId },
                 select: { name: true },
@@ -2086,17 +2306,30 @@ export class ProductSalesService {
                 select: { produto: true },
                 distinct: ['produtoChave'],
             }),
+            this.getCatalogoPorLoja(storeId),
+            this.prisma.hiddenProductDish.findMany({
+                where: { storeId },
+                select: { produtoChave: true },
+            }),
         ]);
 
         const nomesImportados = entries.map((item) => item.produto);
         const nomesCurados = this.getListaCuradaPorLoja(store?.name || '');
+        const nomesCatalogo = Array.from(catalogo.values()).map(
+            (item) => item.produto,
+        );
+        const chavesOcultas = new Set(ocultos.map((item) => item.produtoChave));
 
         const vistos = new Set<string>();
         const nomes: string[] = [];
-        for (const nome of [...nomesImportados, ...nomesCurados]) {
+        for (const nome of [...nomesImportados, ...nomesCurados, ...nomesCatalogo]) {
             const chave = normalizarProduto(nome);
             if (vistos.has(chave)) continue;
             vistos.add(chave);
+            // Prato que o Admin Master decidiu excluir da lista (ver
+            // removerItemCatalogo/limparListaFichaTecnica) — não apaga
+            // venda real nem ficha técnica, só some daqui pra frente.
+            if (chavesOcultas.has(chave)) continue;
             nomes.push(nome);
         }
         nomes.sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -2118,7 +2351,7 @@ export class ProductSalesService {
 
         await this.ensureStoreAccess(storeId, user);
 
-        const [nomes, recipeItems] = await Promise.all([
+        const [nomes, recipeItems, catalogo] = await Promise.all([
             this.getNomesPratosDaLoja(storeId),
             this.prisma.productRecipeItem.findMany({
                 where: { storeId },
@@ -2127,6 +2360,7 @@ export class ProductSalesService {
                     productionItem: { select: { id: true, nome: true, unidadeMedida: true } },
                 },
             }),
+            this.getCatalogoPorLoja(storeId),
         ]);
 
         const itensPorProdutoChave = new Map<
@@ -2156,10 +2390,18 @@ export class ProductSalesService {
 
         return nomes.map((nome) => {
             const produtoChave = normalizarProduto(nome);
+            const itemCatalogo = catalogo.get(produtoChave);
             return {
                 produto: nome,
                 produtoChave,
                 itens: itensPorProdutoChave.get(produtoChave) || [],
+                categoria: itemCatalogo?.categoria,
+                // true só quando existe ProductCatalogItem pra esse
+                // produto nesta loja — é o que decide se a lixeirinha
+                // aparece no frontend (não faz sentido "excluir" um
+                // prato que já tem venda real importada, só os que
+                // vieram exclusivamente do PDF/catálogo).
+                origemCatalogo: !!itemCatalogo,
             };
         });
     }
@@ -2173,11 +2415,33 @@ export class ProductSalesService {
     async gerarModeloFichasTecnicas(storeId: string, user: any) {
         await this.ensureStoreAccess(storeId, user);
 
-        const nomes = await this.getNomesPratosDaLoja(storeId);
+        const [nomes, catalogo] = await Promise.all([
+            this.getNomesPratosDaLoja(storeId),
+            this.getCatalogoPorLoja(storeId),
+        ]);
 
+        // Coluna extra "Categoria" (só informativa — a importação ignora
+        // célula que não bate com "Nome - Gramatura") preenchida quando o
+        // produto tiver match no catálogo importado do PDF da Meep (ver
+        // importarCatalogoPdf) — ajuda a loja a já visualizar a categoria
+        // de cada prato na hora de montar a ficha técnica.
         const linhas: (string | null)[][] = [
-            ['Prato', 'Ingrediente 1', 'Ingrediente 2', 'Ingrediente 3', 'Ingrediente 4'],
-            ...nomes.map((nome) => [nome]),
+            [
+                'Prato',
+                'Ingrediente 1',
+                'Ingrediente 2',
+                'Ingrediente 3',
+                'Ingrediente 4',
+                'Categoria',
+            ],
+            ...nomes.map((nome) => [
+                nome,
+                null,
+                null,
+                null,
+                null,
+                catalogo.get(normalizarProduto(nome))?.categoria ?? null,
+            ]),
         ];
 
         const worksheet = XLSX.utils.aoa_to_sheet(linhas);
@@ -2187,6 +2451,7 @@ export class ProductSalesService {
             { wch: 28 },
             { wch: 28 },
             { wch: 28 },
+            { wch: 24 },
         ];
 
         const workbook = XLSX.utils.book_new();

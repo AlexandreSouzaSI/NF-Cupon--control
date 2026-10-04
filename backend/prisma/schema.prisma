@@ -504,6 +504,19 @@ model Empresa {
   supplierCategories  SupplierCategory[]
   billCategories      BillCategory[]
   paymentBatchConfigs PaymentBatchConfig[]
+
+  // Planos/cobrança (SaaS): empresa isenta nunca vê "Planos", nunca é
+  // bloqueada por falta de pagamento e nunca recebe cobrança — hoje só a
+  // Nugalho (marcada por prisma/scripts/backfill-plan-exempt.ts e pelo
+  // seed). Flag explícita em vez de comparar nome/id no código.
+  planExempt Boolean @default(false)
+
+  // Cliente (customer) dessa empresa no Asaas — criado no primeiro
+  // checkout e reaproveitado nas assinaturas seguintes (evita duplicar
+  // cadastro no gateway).
+  asaasCustomerId String?
+
+  subscriptions Subscription[]
 }
 
 model Store {
@@ -606,6 +619,8 @@ model Store {
 
   productSalesImports       ProductSalesImport[]
   productRecipeItems        ProductRecipeItem[]
+  productCatalogItems       ProductCatalogItem[]
+  hiddenProductDishes       HiddenProductDish[]
   recipeImportBackup        ProductRecipeImportBackup?
   stockItems                StockItem[]
   stockMovements            StockMovement[]
@@ -1778,6 +1793,51 @@ model ProductSalesEntry {
 
   @@index([importId])
   @@index([produtoChave])
+}
+
+// Catálogo de produtos + categoria por loja, alimentado pela exportação de
+// "Produtos" do painel da própria Meep (PDF ou texto com Produto+Categoria)
+// — usado pra: (a) classificar vendas sincronizadas da Meep, que não trazem
+// categoria nenhuma na API de vendas (ver CATEGORIA_PADRAO em
+// meep-product-sales-sync.service.ts); (b) alimentar a lista de pratos da
+// aba Ficha Técnica/modelo de planilha mesmo antes de ter venda registrada.
+// Editável por item (lixeirinha na aba Ficha Técnica) sem precisar de nova
+// versão do sistema — ver POST /product-sales/catalog/import-pdf.
+model ProductCatalogItem {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  produtoChave String
+  produto      String
+  categoria    String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, produtoChave])
+  @@index([storeId])
+}
+
+// Pratos que o usuário (Admin Master) decidiu remover da lista da Ficha
+// Técnica/Produtos — não apaga histórico de venda nenhum, só esconde esse
+// produtoChave de getNomesPratosDaLoja()/getFichaTecnicaOverview() daqui pra
+// frente. Reimportar o catálogo (import-pdf) desfaz a ocultação dos itens
+// que vierem de novo no PDF, porque reimportar é um sinal explícito de
+// "quero esse item de volta".
+model HiddenProductDish {
+  id String @id @default(uuid())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  produtoChave String
+
+  createdAt DateTime @default(now())
+
+  @@unique([storeId, produtoChave])
+  @@index([storeId])
 }
 
 // Como o consumo de um ingrediente deve ser lido/contado. KG é peso
@@ -3174,4 +3234,98 @@ model MeepCashExtra {
 
   @@unique([storeId, businessDay])
   @@index([storeId])
+}
+
+
+// ---------------------------------------------------------------------------
+// Planos e cobrança (Asaas)
+// ---------------------------------------------------------------------------
+
+enum SubscriptionStatus {
+  // Criada (checkout feito), ainda sem o 1º pagamento confirmado.
+  PENDING
+  // Paga e dentro de currentPeriodEnd — módulos do plano liberados.
+  ACTIVE
+  // Venceu sem pagar (passou da tolerância) — módulos pagos removidos.
+  PAST_DUE
+  CANCELED
+}
+
+// Plano vendido pelo SaaS — editado só pelo Admin Master em /admin/planos.
+// priceCents é a ÚNICA fonte de preço: o checkout nunca aceita valor vindo
+// do cliente. modules é o conjunto de módulos que o plano libera nas lojas
+// da empresa assinante (o plano DEFINE o conjunto, não soma com o que já
+// havia — ver billing.service.ts, applyPlanModules).
+model Plan {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  priceCents  Int
+  modules     StoreModule[]
+  active      Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  subscriptions Subscription[]
+}
+
+// Assinatura mensal de uma empresa. Regra de negócio (não dá pra expressar
+// como unique parcial no Prisma): no máximo UMA assinatura não-CANCELED por
+// empresa — o checkout cancela a anterior antes de criar a nova.
+model Subscription {
+  id        String             @id @default(uuid())
+  empresaId String
+  empresa   Empresa            @relation(fields: [empresaId], references: [id])
+  planId    String
+  plan      Plan               @relation(fields: [planId], references: [id])
+  status    SubscriptionStatus @default(PENDING)
+
+  // Fim do período já pago (30 dias a partir do pagamento/vencimento da
+  // cobrança). Passou disso + tolerância, o cron diário marca PAST_DUE.
+  currentPeriodEnd DateTime?
+
+  asaasCustomerId     String?
+  asaasSubscriptionId String? @unique
+
+  // Conta de teste grátis (User.isDemo) que originou essa assinatura. Na 1ª
+  // ativação, essa conta e a loja de teste viram "reais" (ver
+  // convertTrialToReal em billing.service.ts). Nulo pra empresas que já
+  // existiam.
+  trialUserId String?
+
+  // Quando os módulos das lojas foram removidos por falta de pagamento
+  // (cron de vencimento, webhook ou bloqueio manual do Admin). Nulo = nunca
+  // foram removidos / já foram restaurados. Serve de idempotência pro cron
+  // (não reprocessa a mesma assinatura todo dia) e de aviso no /admin.
+  modulesBlockedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments SubscriptionPayment[]
+
+  @@index([empresaId])
+  @@index([status, currentPeriodEnd])
+}
+
+model SubscriptionPayment {
+  id             String       @id @default(uuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  // Id da cobrança no Asaas (pay_xxx) — unique: é a chave de idempotência
+  // do webhook (o Asaas reenvia o mesmo evento quando não recebe 200).
+  asaasPaymentId String @unique
+  valueCents     Int
+  // Status cru do Asaas (PENDING, RECEIVED, CONFIRMED, OVERDUE...).
+  status         String
+  billingType    String?
+  invoiceUrl     String?
+  dueDate        DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([subscriptionId])
 }

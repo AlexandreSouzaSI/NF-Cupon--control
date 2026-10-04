@@ -39,13 +39,12 @@ export class AuthService {
             throw new UnauthorizedException('Usuário ou senha inválidos');
         }
 
-        // Conta de teste (autocadastro em /demo/signup) — depois de 1h a
-        // partir do cadastro, nem relogando dá pra continuar usando.
-        if (user.isDemo && user.demoExpiresAt && user.demoExpiresAt < new Date()) {
-            throw new UnauthorizedException(
-                'Seu teste grátis de 1h expirou. Cadastre um novo teste pra continuar explorando.',
-            );
-        }
+        // Conta de teste vencida (isDemo + demoExpiresAt no passado) AINDA
+        // entra: o login devolve o token normal e o jwt.strategy.ts limita
+        // o acesso às rotas de planos/cobrança, pra pessoa conhecer os
+        // planos e pagar. Quem passou da janela de recuperação já está
+        // active=false (cron em demo.service.ts) e cai no erro genérico
+        // acima.
 
         const stores = user.userStores
             .map((item) => item.store)

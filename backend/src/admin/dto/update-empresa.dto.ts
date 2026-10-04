@@ -16,4 +16,10 @@ export class UpdateEmpresaDto {
     @IsOptional()
     @IsString()
     adminNotes?: string;
+
+    // Empresa isenta de planos/cobrança (ex.: Nugalho) — nunca vê "Planos"
+    // nem é bloqueada. Só o Admin Master edita (rota /admin).
+    @IsOptional()
+    @IsBoolean()
+    planExempt?: boolean;
 }

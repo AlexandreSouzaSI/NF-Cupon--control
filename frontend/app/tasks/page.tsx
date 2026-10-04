@@ -7,6 +7,7 @@ import { AutocompleteInput } from '../../src/components/ui/AutocompleteInput';
 import { api, API_URL } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { getActiveStore } from '@/lib/active-store';
+import { isBusinessDayBrasilia } from '@/lib/business-day';
 import {
     AlertTriangle,
     Ban,
@@ -454,6 +455,13 @@ function QuadroTab({
     // gerencia que vai querer cutucar. Backend valida se a pessoa tem
     // telefone cadastrado e devolve erro claro se não tiver.
     async function handleNotifyWhatsapp(occurrence: Occurrence) {
+        if (!isBusinessDayBrasilia()) {
+            toast.error(
+                'Avisos de tarefas só são enviados de segunda a sexta. Tente novamente na segunda-feira.',
+            );
+            return;
+        }
+
         try {
             setActingId(occurrence.id);
             await api.post(`/tasks/occurrences/${occurrence.id}/notify-whatsapp`);
@@ -758,8 +766,12 @@ function QuadroTab({
                     <div className="mt-auto flex flex-wrap gap-2">
                         <button
                             onClick={() => handleNotifyWhatsapp(occurrence)}
-                            disabled={acting}
-                            title="Enviar lembrete pelo WhatsApp"
+                            disabled={acting || !isBusinessDayBrasilia()}
+                            title={
+                                isBusinessDayBrasilia()
+                                    ? 'Enviar lembrete pelo WhatsApp'
+                                    : 'Indisponível no fim de semana: avisos de tarefas só são enviados de segunda a sexta'
+                            }
                             className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-blue-300 dark:border-blue-900 px-3 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 disabled:opacity-50"
                         >
                             <MessageCircle size={16} />

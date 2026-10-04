@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
@@ -31,14 +31,32 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     ) {
         const user = await this.usersService.findById(payload.sub);
 
-        // Corta o acesso no meio do uso, não só no login — sem isso quem
-        // já tinha token aberto continuaria usando o sistema depois de 1h.
+        // Teste grátis vencido: antes cortava tudo (401 → logout). Agora a
+        // conta fica "recuperável por pagamento": a API só deixa passar as
+        // rotas de planos/cobrança (/plans e /billing), pra pessoa
+        // conseguir ver os planos e assinar; qualquer outra rota recebe 403
+        // com code TRIAL_EXPIRED (o frontend leva pra /planos). Depois da
+        // janela de recuperação o cron desativa a conta (ver
+        // demo.service.ts), aí o login nem acontece mais.
         if (
             user.isDemo &&
             user.demoExpiresAt &&
             user.demoExpiresAt < new Date()
         ) {
-            throw new UnauthorizedException('Seu teste grátis de 1h expirou.');
+            const path = (req.originalUrl || req.url || '').split('?')[0];
+            const allowed =
+                path === '/plans' ||
+                path.startsWith('/plans/') ||
+                path === '/billing' ||
+                path.startsWith('/billing/');
+
+            if (!allowed) {
+                throw new ForbiddenException({
+                    message:
+                        'Seu teste grátis expirou. Conheça os planos para continuar.',
+                    code: 'TRIAL_EXPIRED',
+                });
+            }
         }
 
         // Admin Master (dono do sistema) continua conseguindo entrar em

@@ -85,6 +85,7 @@ export class AdminService {
                 name: dto.name?.trim(),
                 cnpj: dto.cnpj !== undefined ? dto.cnpj?.trim() || null : undefined,
                 active: dto.active,
+                planExempt: dto.planExempt,
                 adminNotes:
                     dto.adminNotes !== undefined
                         ? dto.adminNotes?.trim() || null

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { canAccessHref, isModuleEnabled } from './menu';
+import {
+    canAccessHref,
+    getHomeHref,
+    isItemAllowedForFisica,
+    isModuleEnabled,
+    menu,
+} from './menu';
 
 describe('isModuleEnabled', () => {
     it('libera item sem módulo (item comum, sem restrição)', () => {
@@ -84,5 +90,61 @@ describe('canAccessHref', () => {
                 'COMPRAS',
             ]),
         ).toBe(true);
+    });
+});
+
+describe('loja Pessoa Física', () => {
+    const mods = ['CONTAS_A_PAGAR' as const];
+
+    it('Início e Dashboard operacional não existem pra Física', () => {
+        expect(canAccessHref('PROPRIETARIO', '/home', false, mods, null, 'FISICA')).toBe(false);
+        expect(canAccessHref('PROPRIETARIO', '/dashboard', false, mods, null, 'FISICA')).toBe(false);
+    });
+
+    it('Início continua liberado pra loja normal', () => {
+        expect(canAccessHref('PROPRIETARIO', '/home', false, undefined, null, 'JURIDICA')).toBe(true);
+        expect(canAccessHref('PROPRIETARIO', '/home')).toBe(true);
+    });
+
+    it('Dashboard Financeiro e Contas a Pagar liberados pra Física', () => {
+        expect(canAccessHref('PROPRIETARIO', '/financial-dashboard', false, mods, null, 'FISICA')).toBe(true);
+        expect(canAccessHref('PROPRIETARIO', '/bills', false, mods, null, 'FISICA')).toBe(true);
+    });
+
+    it('módulos de negócio ficam fora mesmo se o cookie vier sem lista de módulos', () => {
+        for (const href of ['/tasks', '/purchases', '/estoque', '/conciliacao-caixa', '/meep', '/losses']) {
+            expect(canAccessHref('PROPRIETARIO', href, false, undefined, null, 'FISICA')).toBe(false);
+        }
+    });
+
+    it('menu da Física = Dashboard Financeiro, Contas a Pagar, Cadastros e Dúvidas (nesta ordem)', () => {
+        const labels = menu
+            .flatMap((group) => group.items)
+            .filter(
+                (item) =>
+                    !item.hidden &&
+                    item.roles.includes('PROPRIETARIO') &&
+                    isModuleEnabled(item, mods) &&
+                    isItemAllowedForFisica(item),
+            )
+            .map((item) => item.label);
+
+        expect(labels).toEqual([
+            'Dashboard Financeiro',
+            'Contas a Pagar',
+            'Cadastros',
+            'Dúvidas',
+        ]);
+    });
+
+    it('home da Física é o Dashboard Financeiro; da loja normal é /home', () => {
+        expect(getHomeHref('PROPRIETARIO', 'FISICA', false, mods)).toBe('/financial-dashboard');
+        expect(getHomeHref('PROPRIETARIO', 'JURIDICA')).toBe('/home');
+        expect(getHomeHref('PROPRIETARIO')).toBe('/home');
+    });
+
+    it('perfil sem acesso ao Dashboard Financeiro não entra em loop de redirect', () => {
+        // Gerente não vê Dashboard Financeiro nem Contas a Pagar.
+        expect(getHomeHref('GERENTE', 'FISICA', false, mods)).toBe('/help');
     });
 });

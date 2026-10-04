@@ -28,6 +28,58 @@ export class MeepSyncService {
         private meepProductSalesSync: MeepProductSalesSyncService,
     ) { }
 
+    // Serializa as rotinas que gravam pedidos/itens da MESMA loja. Sem
+    // isso, o cron horário, a confirmação D+1, o GetSales das 04h-14h e os
+    // botões manuais ("Sincronizar agora", "Rebuscar este dia") podiam
+    // rodar ao mesmo tempo no mesmo pedido: ambos faziam deleteMany +
+    // createMany dos itens, e como não há unique em (orderId, meepItemId)
+    // o intercalar dos dois deixava os itens DUPLICADOS (inflando Itens
+    // por Dia e Venda/Lista). Fila em memória por loja — o backend roda em
+    // uma instância só, então isso basta.
+    private readonly storeLocks = new Map<string, Promise<unknown>>();
+
+    private runExclusive<T>(storeId: string, fn: () => Promise<T>): Promise<T> {
+        const anterior = this.storeLocks.get(storeId) ?? Promise.resolve();
+        const atual = anterior.catch(() => undefined).then(fn);
+        const marcador = atual.catch(() => undefined);
+        this.storeLocks.set(storeId, marcador);
+        void marcador.then(() => {
+            if (this.storeLocks.get(storeId) === marcador) this.storeLocks.delete(storeId);
+        });
+        return atual;
+    }
+
+    forceResync(storeId: string, credentialId: string, from: Date, to: Date) {
+        return this.runExclusive(storeId, () => this.forceResyncLocked(storeId, credentialId, from, to));
+    }
+
+    syncSimpleSales(storeId: string, credentialId: string, cursorFrom: Date | null) {
+        return this.runExclusive(storeId, () => this.syncSimpleSalesLocked(storeId, credentialId, cursorFrom));
+    }
+
+    syncSales(storeId: string, credentialId: string, cursorFrom: Date | null) {
+        return this.runExclusive(storeId, () => this.syncSalesLocked(storeId, credentialId, cursorFrom));
+    }
+
+    // Falha de rebuild do Venda/Lista não derruba o sync (os pedidos já
+    // foram gravados), mas NÃO pode ficar só num logger: vira linha no
+    // Histórico de Sincronização (success=false) pra aparecer na tela.
+    private async logRebuildErrors(storeId: string, rangeStart: Date, rangeEnd: Date, erros: string[]) {
+        if (erros.length === 0) return;
+        try {
+            await this.log({
+                storeId,
+                endpoint: 'PRODUCT_SALES_REBUILD',
+                rangeStart,
+                rangeEnd,
+                success: false,
+                message: `Venda/Lista NÃO foi atualizado em ${erros.length} dia(s): ${erros.slice(0, 5).join(' | ')}`,
+            });
+        } catch (logError: any) {
+            this.logger.error(`Não consegui gravar o log de falha do rebuild: ${logError?.message}`);
+        }
+    }
+
     private async activeCredentials() {
         return this.prisma.meepCredential.findMany({
             where: { active: true },
@@ -321,7 +373,7 @@ export class MeepSyncService {
     // cobrir [from, to) inteiro numa chamada só, e no final also atualiza
     // o Venda/Lista (rebuildRange) pros dias tocados — já que o objetivo é
     // corrigir o passado, não só avançar o normal de agora em diante.
-    async forceResync(storeId: string, credentialId: string, from: Date, to: Date) {
+    private async forceResyncLocked(storeId: string, credentialId: string, from: Date, to: Date) {
         const now = new Date();
         const end = to > now ? now : to;
 
@@ -395,15 +447,21 @@ export class MeepSyncService {
             });
         }
 
+        let rebuildErros: string[] = [];
         try {
-            await this.meepProductSalesSync.rebuildRange(storeId, from, end);
+            const rebuild = await this.meepProductSalesSync.rebuildRange(storeId, from, end);
+            rebuildErros = rebuild.erros;
+            await this.logRebuildErrors(storeId, from, end, rebuild.erros);
         } catch (bridgeError: any) {
-            this.logger.warn(
+            rebuildErros = [bridgeError?.message || String(bridgeError)];
+            this.logger.error(
                 `Falha ao atualizar Venda/Lista após re-sincronização forçada (loja ${storeId}): ${bridgeError?.message}`,
+                bridgeError?.stack,
             );
+            await this.logRebuildErrors(storeId, from, end, rebuildErros);
         }
 
-        return { totalOrders, chunks };
+        return { totalOrders, chunks, rebuildErros };
     }
 
     // Confirmação D+1: a Meep não fecha os dados de um dia comercial na
@@ -483,7 +541,7 @@ export class MeepSyncService {
     // quebra a janela em pedaços de SUB_WINDOW_HOURS (ver
     // fetchOrdersInSubWindows) pra não esbarrar no truncamento silencioso
     // da Meep.
-    async syncSimpleSales(storeId: string, credentialId: string, cursorFrom: Date | null) {
+    private async syncSimpleSalesLocked(storeId: string, credentialId: string, cursorFrom: Date | null) {
         const now = new Date();
         const start = cursorFrom ?? new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
@@ -525,12 +583,22 @@ export class MeepSyncService {
             // sincronização se isso der erro (só loga) — os dados da Meep
             // já foram gravados com sucesso, o pior caso é Venda/Lista
             // ficar um pouco atrasada até o próximo sync.
+            //
+            // lookbackDays=3: além dos dias tocados pela janela, reconcilia
+            // os últimos 3 dias comerciais toda vez (barato: o rebuild pula
+            // o dia que não mudou). Cobre o GetSales das 04h-14h que regrava
+            // itens de dias antigos e rebuild anterior que falhou.
             try {
-                await this.meepProductSalesSync.rebuildRange(storeId, start, chunkEnd);
+                const rebuild = await this.meepProductSalesSync.rebuildRange(storeId, start, chunkEnd, {
+                    lookbackDays: 3,
+                });
+                await this.logRebuildErrors(storeId, start, chunkEnd, rebuild.erros);
             } catch (bridgeError: any) {
-                this.logger.warn(
+                this.logger.error(
                     `Falha ao atualizar Venda/Lista a partir da Meep (loja ${storeId}): ${bridgeError?.message}`,
+                    bridgeError?.stack,
                 );
+                await this.logRebuildErrors(storeId, start, chunkEnd, [bridgeError?.message || String(bridgeError)]);
             }
         } catch (error: any) {
             await this.log({
@@ -573,7 +641,7 @@ export class MeepSyncService {
     // trava o resto por causa de um dia ruim).
     private static readonly SALES_RETRY_DELAY_MS = 5000;
 
-    async syncSales(storeId: string, credentialId: string, cursorFrom: Date | null) {
+    private async syncSalesLocked(storeId: string, credentialId: string, cursorFrom: Date | null) {
         const now = new Date();
         const start = cursorFrom ?? new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
         const chunkEnd = new Date(Math.min(start.getTime() + 3 * 24 * 60 * 60 * 1000, now.getTime()));

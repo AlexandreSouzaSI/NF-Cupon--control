@@ -184,6 +184,7 @@ export function ImportProductSalesTab({
                 message?: string;
                 diasVarridos?: number;
                 diasComVenda?: number;
+                diasAlterados?: number;
                 totalItensEncontrados?: number;
                 erros?: string[];
             };
@@ -201,7 +202,7 @@ export function ImportProductSalesTab({
             }
 
             toast.success(
-                `Venda/Lista reconstruído: ${resultado.diasComVenda} dia(s) com venda, ${resultado.totalItensEncontrados} item(ns) no total.`,
+                `Venda/Lista reconstruído: ${resultado.diasComVenda} dia(s) com venda (${resultado.diasAlterados ?? 0} atualizado(s)), ${resultado.totalItensEncontrados} item(ns) no total.`,
             );
 
             // Erro num dia específico não impede os outros dias de serem

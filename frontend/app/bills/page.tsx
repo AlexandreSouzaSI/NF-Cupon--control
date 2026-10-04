@@ -436,6 +436,18 @@ function BillsPageInner() {
     ) as DashboardPeriod | null;
     const dashboardPaid = searchParams.get('paid') as DashboardPaid | null;
     const billIdFilter = searchParams.get('billId');
+    // ?card=OVERDUE|TODAY|WEEK|MONTH — abre a lista já num dos cards de
+    // período normais (mesmas regras de matchesPeriod). Usado pelos cards do
+    // Dashboard Financeiro da loja Pessoa Física, que precisam bater
+    // exatamente com o que esta tela mostra em cada card.
+    const cardParam = searchParams.get('card');
+    const initialCard: PeriodKey | null =
+        cardParam === 'OVERDUE' ||
+        cardParam === 'TODAY' ||
+        cardParam === 'WEEK' ||
+        cardParam === 'MONTH'
+            ? cardParam
+            : null;
     const hasDashboardFilter = Boolean(dashboardPeriod || billIdFilter);
 
     function clearDashboardFilter() {
@@ -451,7 +463,7 @@ function BillsPageInner() {
     );
 
     const [search, setSearch] = useState('');
-    const [periodFilter, setPeriodFilter] = useState<PeriodKey>('ALL');
+    const [periodFilter, setPeriodFilter] = useState<PeriodKey>(initialCard ?? 'ALL');
     const [statusFilter, setStatusFilter] = useState('');
     const [supplierFilter, setSupplierFilter] = useState('');
     const [paymentMethodFilter, setPaymentMethodFilter] =

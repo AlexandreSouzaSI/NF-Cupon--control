@@ -13,6 +13,14 @@ import { DemoSignupDto } from './dto/demo-signup.dto';
 // Duração do teste grátis, a partir do momento do cadastro.
 const TRIAL_DURATION_MS = 60 * 60 * 1000;
 
+// Depois que o teste de 1h vence, a conta NÃO some na hora: fica "vencida
+// mas recuperável" por esse prazo, pra pessoa conseguir entrar, conhecer os
+// planos e pagar (ver billing.service.ts, convertTrialToReal). Passado o
+// prazo, quem nunca assinou é desativado como antes e o e-mail é liberado
+// pra um novo teste. Colocar 0 volta ao comportamento antigo (desativa
+// 1h depois, sem janela de recuperação).
+const TRIAL_RECOVERY_GRACE_DAYS = 7;
+
 @Injectable()
 export class DemoService {
     constructor(
@@ -31,8 +39,15 @@ export class DemoService {
         });
 
         if (emailExists) {
+            const expired =
+                emailExists.isDemo &&
+                emailExists.demoExpiresAt &&
+                emailExists.demoExpiresAt < new Date();
+
             throw new ConflictException(
-                'Esse e-mail já tem um teste em andamento agora. Aguarde ele expirar (1h) ou entre com a conta já criada.',
+                expired
+                    ? 'O teste grátis desse e-mail já acabou. Entre com a sua senha para conhecer os planos e continuar usando.'
+                    : 'Esse e-mail já tem um teste em andamento agora. Entre com a conta já criada.',
             );
         }
 
@@ -93,26 +108,51 @@ export class DemoService {
     }
 
     // Roda sozinho a cada 5min (ScheduleModule já é global, ver
-    // app.module.ts) — desativa quem passou de 1h de teste junto com a
-    // loja que foi criada só pra essa pessoa. Desativar (não apagar de
-    // verdade) segue o mesmo padrão do resto do sistema (remove() de
-    // usuário/loja também só marca active:false) e evita qualquer risco de
-    // erro de chave estrangeira ao tentar apagar linhas de Compra/Tarefa/
-    // Perda/etc. que a pessoa tenha criado durante o teste.
+    // app.module.ts) — faz a limpeza de testes que ninguém assinou. Quando
+    // o teste de 1h vence, a conta continua ativa (só fica restrita a
+    // planos/cobrança, ver jwt.strategy.ts) durante TRIAL_RECOVERY_GRACE_DAYS;
+    // só depois desse prazo desativa o usuário e a loja de teste. Quem tem
+    // assinatura (Subscription) ligada à conta de teste NUNCA é limpo aqui:
+    // ou já virou conta real no pagamento, ou está com o checkout em
+    // andamento. Desativar (não apagar de verdade) segue o padrão do
+    // sistema e evita erro de chave estrangeira em Compra/Tarefa/Perda etc.
     @Cron(CronExpression.EVERY_5_MINUTES)
     async cleanupExpiredTrials() {
         const now = new Date();
+        const cutoff = new Date(
+            now.getTime() - TRIAL_RECOVERY_GRACE_DAYS * 24 * 60 * 60 * 1000,
+        );
 
-        const expiredUsers = await this.prisma.user.findMany({
+        const candidates = await this.prisma.user.findMany({
             where: {
                 isDemo: true,
                 active: true,
-                demoExpiresAt: { lt: now },
+                demoExpiresAt: { lt: cutoff },
             },
             include: {
                 userStores: { select: { storeId: true } },
             },
         });
+
+        // Conta de teste com assinatura (qualquer status exceto cancelada)
+        // fica de fora da limpeza.
+        const withSubscription = candidates.length
+            ? await this.prisma.subscription.findMany({
+                where: {
+                    trialUserId: { in: candidates.map((user) => user.id) },
+                    status: { not: 'CANCELED' },
+                },
+                select: { trialUserId: true },
+            })
+            : [];
+
+        const protectedIds = new Set(
+            withSubscription.map((item) => item.trialUserId),
+        );
+
+        const expiredUsers = candidates.filter(
+            (user) => !protectedIds.has(user.id),
+        );
 
         if (expiredUsers.length === 0) return;
 
@@ -146,7 +186,7 @@ export class DemoService {
         }
 
         console.log(
-            `[demo] ${expiredUsers.length} teste(s) grátis expirado(s) — loja desativada e e-mail liberado pra repetir.`,
+            `[demo] ${expiredUsers.length} teste(s) grátis sem assinatura passaram da janela de recuperação — loja desativada e e-mail liberado pra repetir.`,
         );
     }
 

@@ -40,6 +40,7 @@ import { EmailModule } from './email/email.module';
 import { CashReconciliationModule } from './cash-reconciliation/cash-reconciliation.module';
 import { AdminModule } from './admin/admin.module';
 import { MeepModule } from './meep/meep.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { MeepModule } from './meep/meep.module';
     CashReconciliationModule,
     AdminModule,
     MeepModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -46,6 +46,19 @@ export default function LoginPage() {
 
       toast.success('Login realizado');
 
+      // Conta de teste que já passou de 1h: o sistema não abre mais, mas a
+      // conta continua viva pra assinar — leva direto pros planos.
+      const loggedUser = response.data.user;
+
+      if (
+        loggedUser?.isDemo &&
+        loggedUser.demoExpiresAt &&
+        new Date(loggedUser.demoExpiresAt) < new Date()
+      ) {
+        router.push('/planos?motivo=teste-expirado');
+        return;
+      }
+
       router.push('/home');
     } catch (error: any) {
       toast.error(

@@ -49,6 +49,23 @@ api.interceptors.response.use(
             }
         }
 
+        // Teste grátis vencido: a API só libera /plans e /billing (ver
+        // jwt.strategy.ts) e responde 403 TRIAL_EXPIRED no resto. Em vez de
+        // deslogar, leva a pessoa direto pra tela de planos — é aí que o
+        // teste vira cliente. Não redireciona de /planos nem do login/demo
+        // pra não entrar em loop.
+        if (
+            error?.response?.status === 403 &&
+            error?.response?.data?.code === 'TRIAL_EXPIRED' &&
+            typeof window !== 'undefined'
+        ) {
+            const path = window.location.pathname;
+
+            if (path !== '/planos' && path !== '/login' && path !== '/demo') {
+                window.location.href = '/planos?motivo=teste-expirado';
+            }
+        }
+
         return Promise.reject(error);
     },
 );
