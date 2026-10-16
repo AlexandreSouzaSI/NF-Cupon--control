@@ -90,6 +90,7 @@ type Bill = {
     paymentProofUrl?: string | null;
 
     notes?: string | null;
+    recorrenciaId?: string | null;
     createdAt: string;
 
     store: Store;
@@ -1283,6 +1284,7 @@ function BillRow({
     // card — antes só dava pra ver, não pra corrigir/completar depois que
     // a conta já tinha sido criada.
     const [editingPayment, setEditingPayment] = useState(false);
+    const [editingBill, setEditingBill] = useState(false);
 
     return (
         <article
@@ -1389,6 +1391,17 @@ function BillRow({
                                 bill.paymentMethod}
                         </span>
 
+                        {displayStatus !== 'CANCELED' && !editingBill && (
+                            <button
+                                type="button"
+                                onClick={() => setEditingBill(true)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400 hover:bg-blue-500/20"
+                            >
+                                <Pencil size={12} />
+                                Editar conta
+                            </button>
+                        )}
+
                         {!isInactive && !editingPayment && (
                             <button
                                 type="button"
@@ -1442,6 +1455,17 @@ function BillRow({
                             Abrir compra:{' '}
                             {bill.purchase.description}
                         </button>
+                    )}
+
+                    {editingBill && (
+                        <BillEditForm
+                            bill={bill}
+                            onCancel={() => setEditingBill(false)}
+                            onSaved={async () => {
+                                setEditingBill(false);
+                                await onSaved();
+                            }}
+                        />
                     )}
 
                     {editingPayment ? (
@@ -1539,6 +1563,195 @@ function BillRow({
                 </div>
             )}
         </article>
+    );
+}
+
+// Edição completa da conta (descrição, valor, vencimento, forma de
+// pagamento, observações). Quando a conta veio de uma recorrência, dá pra
+// aplicar a mudança em TODAS as contas ainda em aberto da série de uma vez
+// (ex.: valor digitado errado) — contas já pagas nunca são alteradas.
+function BillEditForm({
+    bill,
+    onCancel,
+    onSaved,
+}: {
+    bill: Bill;
+    onCancel: () => void;
+    onSaved: () => Promise<void>;
+}) {
+    const [description, setDescription] = useState(bill.description);
+    const [value, setValue] = useState(
+        String(Number(bill.value)).replace('.', ','),
+    );
+    const [dueDate, setDueDate] = useState(
+        (bill.dueDate || '').slice(0, 10),
+    );
+    const [paymentMethod, setPaymentMethod] = useState(bill.paymentMethod);
+    const [notes, setNotes] = useState(bill.notes || '');
+    const [applyAll, setApplyAll] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    async function handleSave() {
+        const numericValue = Number(
+            value.replace(/\./g, '').replace(',', '.'),
+        );
+
+        if (!description.trim() || !Number.isFinite(numericValue) || numericValue < 0) {
+            toast.error('Informe descrição e um valor válido.');
+            return;
+        }
+
+        try {
+            setSaving(true);
+
+            if (applyAll && bill.recorrenciaId) {
+                const originalDay = Number((bill.dueDate || '').slice(8, 10));
+                const newDay = Number(dueDate.slice(8, 10));
+
+                const { data } = await api.patch(
+                    `/bills/recorrencias/${bill.recorrenciaId}/apply-all`,
+                    {
+                        description: description.trim(),
+                        value: numericValue,
+                        paymentMethod,
+                        notes,
+                        dayOfMonth:
+                            newDay && newDay !== originalDay && newDay <= 30
+                                ? newDay
+                                : undefined,
+                    },
+                );
+
+                toast.success(
+                    `${data?.atualizadas ?? 0} conta(s) em aberto atualizada(s).`,
+                );
+            } else {
+                await api.put(`/bills/${bill.id}`, {
+                    description: description.trim(),
+                    value: numericValue,
+                    dueDate,
+                    paymentMethod,
+                    notes,
+                });
+
+                toast.success('Conta atualizada.');
+            }
+
+            await onSaved();
+        } catch (error: any) {
+            const message =
+                error?.response?.data?.message || 'Erro ao salvar conta.';
+
+            toast.error(
+                Array.isArray(message) ? message.join(', ') : message,
+            );
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    const inputClass =
+        'mt-1 h-10 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm outline-none focus:border-blue-500';
+
+    return (
+        <div className="mt-4 rounded-2xl border border-blue-500/30 bg-white dark:bg-zinc-900 p-4">
+            <p className="mb-3 text-sm font-semibold">Editar conta</p>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="text-xs text-zinc-500 sm:col-span-2">
+                    Descrição
+                    <input
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        className={inputClass}
+                    />
+                </label>
+
+                <label className="text-xs text-zinc-500">
+                    Valor (R$)
+                    <input
+                        value={value}
+                        inputMode="decimal"
+                        onChange={(e) => setValue(e.target.value)}
+                        className={inputClass}
+                    />
+                </label>
+
+                <label className="text-xs text-zinc-500">
+                    Vencimento
+                    <input
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className={inputClass}
+                    />
+                </label>
+
+                <label className="text-xs text-zinc-500">
+                    Forma de pagamento
+                    <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className={inputClass}
+                    >
+                        {Object.entries(paymentMethodLabel).map(
+                            ([val, label]) => (
+                                <option key={val} value={val}>
+                                    {label}
+                                </option>
+                            ),
+                        )}
+                    </select>
+                </label>
+
+                <label className="text-xs text-zinc-500 sm:col-span-2">
+                    Observações
+                    <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={2}
+                        className="mt-1 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    />
+                </label>
+            </div>
+
+            {bill.recorrenciaId && (
+                <label className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                    <input
+                        type="checkbox"
+                        checked={applyAll}
+                        onChange={(e) => setApplyAll(e.target.checked)}
+                        className="mt-0.5"
+                    />
+                    <span>
+                        Aplicar em <strong>todas as contas em aberto</strong>{' '}
+                        desta recorrência (as já pagas não são alteradas). Se
+                        mudar o dia do vencimento, o novo dia vale para todos
+                        os meses.
+                    </span>
+                </label>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    disabled={saving}
+                    onClick={handleSave}
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                    {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+
+                <button
+                    type="button"
+                    disabled={saving}
+                    onClick={onCancel}
+                    className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                    Cancelar
+                </button>
+            </div>
+        </div>
     );
 }
 

@@ -763,6 +763,114 @@ export class BillsService {
         return { ok: true };
     }
 
+    // Edição em massa: aplica as mudanças na recorrência E em todas as
+    // contas dela que ainda não foram pagas/canceladas (OPEN/OVERDUE).
+    // Contas já pagas ou canceladas nunca são alteradas (histórico).
+    // Se o dia do mês mudar, o vencimento de cada conta é recalculado
+    // mantendo o mês de cada uma.
+    async applyToRecorrencia(
+        id: string,
+        dto: {
+            description?: string;
+            value?: number;
+            type?: any;
+            paymentMethod?: any;
+            categoryId?: string | null;
+            supplierId?: string | null;
+            notes?: string;
+            dayOfMonth?: number;
+        },
+        user: any,
+    ) {
+        if (!this.canManageBills(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para editar contas a pagar.',
+            );
+        }
+
+        const recorrencia = await this.prisma.billRecorrencia.findUnique({
+            where: { id },
+        });
+
+        if (!recorrencia) {
+            throw new NotFoundException('Conta recorrente não encontrada.');
+        }
+
+        await this.ensureStoreAccess(recorrencia.storeId, user);
+
+        if (
+            dto.value !== undefined &&
+            (typeof dto.value !== 'number' || dto.value < 0)
+        ) {
+            throw new BadRequestException('Valor inválido.');
+        }
+
+        if (
+            dto.dayOfMonth !== undefined &&
+            (recorrencia.recurrence !== 'MONTHLY' ||
+                dto.dayOfMonth < 1 ||
+                dto.dayOfMonth > 30)
+        ) {
+            throw new BadRequestException(
+                'Dia do mês inválido (use 1 a 30, só para recorrência mensal).',
+            );
+        }
+
+        await this.prisma.billRecorrencia.update({
+            where: { id },
+            data: {
+                description: dto.description,
+                value: dto.value,
+                type: dto.type,
+                paymentMethod: dto.paymentMethod,
+                categoryId: dto.categoryId,
+                supplierId: dto.supplierId,
+                dayOfMonth: dto.dayOfMonth,
+            },
+        });
+
+        const abertas = await this.prisma.bill.findMany({
+            where: {
+                recorrenciaId: id,
+                status: { in: [BillStatus.OPEN, BillStatus.OVERDUE] },
+            },
+            select: { id: true, dueDate: true },
+        });
+
+        for (const bill of abertas) {
+            let dueDate: Date | undefined;
+
+            if (dto.dayOfMonth !== undefined) {
+                const ano = bill.dueDate.getUTCFullYear();
+                const mes = bill.dueDate.getUTCMonth();
+                const dia = Math.min(
+                    dto.dayOfMonth,
+                    this.ultimoDiaDoMes(ano, mes),
+                );
+                dueDate = new Date(Date.UTC(ano, mes, dia, 12, 0, 0));
+            }
+
+            await this.prisma.bill.update({
+                where: { id: bill.id },
+                data: {
+                    description: dto.description,
+                    value: dto.value,
+                    type: dto.type,
+                    paymentMethod: dto.paymentMethod,
+                    categoryId: dto.categoryId,
+                    supplierId: dto.supplierId,
+                    notes: dto.notes,
+                    dueDate,
+                    status: dueDate
+                        ? this.computeStatusForDueDate(dueDate)
+                        : undefined,
+                },
+            });
+        }
+
+        return { ok: true, atualizadas: abertas.length };
+    }
+
     // Gera as ocorrências concretas (Bill) de uma recorrência, desde o
     // que já foi gerado (generatedUntil) até MESES_GERACAO_RECORRENCIA
     // meses a partir de hoje — idempotente: o @@unique([recorrenciaId,

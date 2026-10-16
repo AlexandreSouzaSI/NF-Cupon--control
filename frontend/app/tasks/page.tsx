@@ -92,6 +92,7 @@ type Occurrence = {
         attachmentUrl: string | null;
         attachmentName: string | null;
         assignedTo: { id: string; name: string };
+        createdBy?: { id: string; name: string };
     };
     confirmedBy: { id: string; name: string } | null;
 };
@@ -571,6 +572,14 @@ function QuadroTab({
                             {occurrence.task.assignedTo.name}
                         </span>
                     </p>
+                    {getUser()?.isAdminMaster && occurrence.task.createdBy && (
+                        <p>
+                            Criada por:{' '}
+                            <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                                {occurrence.task.createdBy.name}
+                            </span>
+                        </p>
+                    )}
                     <p>
                         Prazo:{' '}
                         <span className="font-medium text-zinc-900 dark:text-zinc-100">

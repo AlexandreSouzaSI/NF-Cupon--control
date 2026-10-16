@@ -192,6 +192,35 @@ export class BillsController {
         );
     }
 
+    @Patch('recorrencias/:id/apply-all')
+    async applyToRecorrencia(
+        @Param('id') id: string,
+        @Body() body: any,
+        @CurrentUser() user: any,
+    ) {
+        return this.billsService.applyToRecorrencia(
+            id,
+            {
+                description: body?.description,
+                value:
+                    body?.value !== undefined && body?.value !== null
+                        ? Number(body.value)
+                        : undefined,
+                type: body?.type,
+                paymentMethod: body?.paymentMethod,
+                categoryId: body?.categoryId,
+                supplierId: body?.supplierId,
+                notes: body?.notes,
+                dayOfMonth:
+                    body?.dayOfMonth !== undefined &&
+                        body?.dayOfMonth !== null
+                        ? Number(body.dayOfMonth)
+                        : undefined,
+            },
+            user,
+        );
+    }
+
     @Get(':id')
     async findOne(
         @Param('id') id: string,

@@ -58,6 +58,8 @@ export class FiscalDashboardService {
             perdas,
             topServicos,
             fornecedoresRows,
+            nfEntradaTratadas,
+            nfEntradaPendentes,
         ] = await Promise.all([
             this.prisma.incomingGoodsNf.aggregate({
                 where: { storeId, ignored: false, issueDate: range },
@@ -107,6 +109,34 @@ export class FiscalDashboardService {
                     issuerName: true,
                     value: true,
                 },
+            }),
+            // Tratadas = aceitas ou vinculadas a compra/conta a pagar.
+            this.prisma.incomingGoodsNf.aggregate({
+                where: {
+                    storeId,
+                    ignored: false,
+                    issueDate: range,
+                    OR: [
+                        { purchaseId: { not: null } },
+                        { billId: { not: null } },
+                        { accepted: true },
+                    ],
+                },
+                _sum: { value: true },
+                _count: true,
+            }),
+            // Pendentes = nem aceitas nem vinculadas.
+            this.prisma.incomingGoodsNf.aggregate({
+                where: {
+                    storeId,
+                    ignored: false,
+                    issueDate: range,
+                    purchaseId: null,
+                    billId: null,
+                    accepted: false,
+                },
+                _sum: { value: true },
+                _count: true,
             }),
         ]);
 
@@ -160,6 +190,16 @@ export class FiscalDashboardService {
             nfEntrada: {
                 count: nfEntrada._count,
                 value: Number(nfEntrada._sum.value || 0),
+            },
+            nfEntradaStatus: {
+                tratadas: {
+                    count: nfEntradaTratadas._count,
+                    value: Number(nfEntradaTratadas._sum.value || 0),
+                },
+                pendentes: {
+                    count: nfEntradaPendentes._count,
+                    value: Number(nfEntradaPendentes._sum.value || 0),
+                },
             },
             nfServico: {
                 count: nfServico._count,

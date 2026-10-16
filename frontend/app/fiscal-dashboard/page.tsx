@@ -35,6 +35,7 @@ type TopFornecedor = { label: string; value: number };
 type Summary = {
     period: { month: number; year: number };
     nfEntrada: Metric;
+    nfEntradaStatus?: { tratadas: Metric; pendentes: Metric };
     nfServico: Metric;
     faturamento: Metric;
     perdas: Metric;
@@ -259,6 +260,43 @@ export default function FiscalDashboardPage() {
                             />
                         </section>
 
+                        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <SummaryCard
+                                icon={FileStack}
+                                label="NF de entrada (total)"
+                                value={formatCurrency(
+                                    summary?.nfEntrada.value || 0,
+                                )}
+                                secondary={`${summary?.nfEntrada.count || 0
+                                    } nota(s) no mês`}
+                                colorClass="text-purple-500"
+                            />
+
+                            <SummaryCard
+                                icon={FileStack}
+                                label="NF de entrada vinculadas/aceitas"
+                                value={formatCurrency(
+                                    summary?.nfEntradaStatus?.tratadas.value ||
+                                    0,
+                                )}
+                                secondary={`${summary?.nfEntradaStatus?.tratadas.count || 0
+                                    } nota(s) tratada(s)`}
+                                colorClass="text-green-500"
+                            />
+
+                            <SummaryCard
+                                icon={AlertTriangle}
+                                label="NF de entrada ainda a tratar"
+                                value={formatCurrency(
+                                    summary?.nfEntradaStatus?.pendentes.value ||
+                                    0,
+                                )}
+                                secondary={`${summary?.nfEntradaStatus?.pendentes.count || 0
+                                    } nota(s) sem aceite nem vínculo`}
+                                colorClass="text-amber-500"
+                            />
+                        </section>
+
                         <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
                             <ChartPanel
                                 icon={AlertTriangle}
@@ -373,9 +411,9 @@ function ChartPanel({
                     />
 
                     <ul className="mt-4 space-y-2 border-t border-zinc-200 dark:border-zinc-800 pt-4">
-                        {itens.map((item) => (
+                        {itens.map((item, index) => (
                             <li
-                                key={item.label}
+                                key={`${item.label}-${index}`}
                                 className="flex items-center justify-between gap-3 text-sm"
                             >
                                 <span className="flex min-w-0 items-center gap-2 truncate">

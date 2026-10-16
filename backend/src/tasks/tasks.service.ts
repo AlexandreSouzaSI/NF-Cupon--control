@@ -776,6 +776,7 @@ export class TasksService implements OnModuleInit {
                         restrictedFromAdministrativo: true,
                         restrictedFromGerente: true,
                         assignedTo: { select: { id: true, name: true } },
+                        createdBy: { select: { id: true, name: true } },
                     },
                 },
                 confirmedBy: { select: { id: true, name: true } },
