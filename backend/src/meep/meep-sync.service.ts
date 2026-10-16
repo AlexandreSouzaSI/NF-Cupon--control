@@ -110,6 +110,89 @@ export class MeepSyncService {
         });
     }
 
+    private buildItemRows(orderId: string, items: any[]) {
+        return items.map((item: any) => ({
+            orderId,
+            meepItemId: item.Id ?? null,
+            productId: item.ProductId ?? '',
+            // GetSimpleSales chama de "Nome"/"Value", GetSales
+            // (confirmado na doc oficial) chama de
+            // "ProductName"/"UnitValue" e o NCM vem todo
+            // maiúsculo ("NCM", não "Ncm") — sem esse fallback,
+            // os itens vindos do GetSales entravam com nome
+            // vazio e NCM sempre null.
+            productName: item.Nome ?? item.ProductName ?? '',
+            quantity: item.Quantity ?? 0,
+            unitValue: item.Value ?? item.UnitValue ?? 0,
+            discount: item.Discount ?? 0,
+            addition: item.Addition ?? 0,
+            insurance: item.Insurance ?? 0,
+            total: item.Total ?? null,
+            ncm: item.NCM ?? item.Ncm ?? null,
+            cfop: item.Cfop ?? null,
+        }));
+    }
+
+    // Repara itens duplicados que já estão gravados: pedido cujo número de
+    // itens no banco é MAIOR que o número de itens do próprio JSON da Meep
+    // (rawJson.Itens) tem os itens regravados a partir desse JSON. Só mexe
+    // em pedido comprovadamente duplicado — pedido normal não é tocado.
+    // Devolve os dias comerciais afetados pra quem chamou reconstruir o
+    // Venda/Lista.
+    repairDuplicateItems(storeId: string) {
+        return this.runExclusive(storeId, () => this.repairDuplicateItemsLocked(storeId));
+    }
+
+    private async repairDuplicateItemsLocked(storeId: string) {
+        const candidates = await this.prisma.$queryRaw<{ id: string; orderDateUtc: Date }[]>`
+            SELECT o.id, o."orderDateUtc"
+            FROM "MeepOrder" o
+            JOIN (
+                SELECT "orderId", COUNT(*) AS c
+                FROM "MeepOrderItem"
+                GROUP BY "orderId"
+            ) i ON i."orderId" = o.id
+            WHERE o."storeId" = ${storeId}
+              AND jsonb_typeof(o."rawJson"->'Itens') = 'array'
+              AND i.c > jsonb_array_length(o."rawJson"->'Itens')
+        `;
+
+        let itemsRemoved = 0;
+        const dias = new Set<string>();
+
+        for (const candidate of candidates) {
+            const order = await this.prisma.meepOrder.findUnique({
+                where: { id: candidate.id },
+                select: { rawJson: true },
+            });
+            const rawItems = (order?.rawJson as any)?.Itens;
+            if (!Array.isArray(rawItems)) continue;
+
+            await this.prisma.$transaction(async (tx) => {
+                await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${candidate.id}))`;
+
+                const before = await tx.meepOrderItem.count({ where: { orderId: candidate.id } });
+                await tx.meepOrderItem.deleteMany({ where: { orderId: candidate.id } });
+
+                if (rawItems.length > 0) {
+                    await tx.meepOrderItem.createMany({
+                        data: this.buildItemRows(candidate.id, rawItems),
+                    });
+                }
+
+                itemsRemoved += before - rawItems.length;
+            });
+
+            dias.add(businessDayKey(candidate.orderDateUtc));
+        }
+
+        return {
+            ordersRepaired: candidates.length,
+            itemsRemoved,
+            affectedDays: Array.from(dias).sort(),
+        };
+    }
+
     // Grava (ou atualiza) um pedido Meep + seus itens/pagamentos. Os
     // filhos são sempre recriados do zero a cada sync — mais simples que
     // tentar diff, e o rawJson garante que nada se perde mesmo assim.
@@ -216,38 +299,35 @@ export class MeepSyncService {
         // CFOP/NCM) ou quando ainda não existe nenhum item salvo — assim
         // uma atualização vinda do GetSimpleSales não apaga o CFOP que já
         // tinha sido trazido antes pelo GetSales.
-        const existingItemsCount = await this.prisma.meepOrderItem.count({
-            where: { orderId: orderRecord.id },
-        });
+        // A checagem de "já tem item?" + delete + create roda dentro de UMA
+        // transação com advisory lock por pedido (pg_advisory_xact_lock).
+        // Sem isso, duas gravações simultâneas do mesmo pedido (cron +
+        // botão, ou duas instâncias do backend durante um deploy) liam
+        // count=0 ao mesmo tempo e AMBAS inseriam os itens → itens em
+        // dobro (Itens por Dia/Venda-Lista com o dobro do valor, enquanto
+        // os pagamentos — gravados por uma rota só — ficavam certos). O
+        // lock em memória (runExclusive) só protege dentro de 1 processo;
+        // este protege no banco.
+        await this.prisma.$transaction(
+            async (tx) => {
+                await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${orderRecord.id}))`;
 
-        if (source === 'SALES' || existingItemsCount === 0) {
-            await this.prisma.meepOrderItem.deleteMany({ where: { orderId: orderRecord.id } });
-
-            if (items.length > 0) {
-                await this.prisma.meepOrderItem.createMany({
-                    data: items.map((item: any) => ({
-                        orderId: orderRecord.id,
-                        meepItemId: item.Id ?? null,
-                        productId: item.ProductId ?? '',
-                        // GetSimpleSales chama de "Nome"/"Value", GetSales
-                        // (confirmado na doc oficial) chama de
-                        // "ProductName"/"UnitValue" e o NCM vem todo
-                        // maiúsculo ("NCM", não "Ncm") — sem esse fallback,
-                        // os itens vindos do GetSales entravam com nome
-                        // vazio e NCM sempre null.
-                        productName: item.Nome ?? item.ProductName ?? '',
-                        quantity: item.Quantity ?? 0,
-                        unitValue: item.Value ?? item.UnitValue ?? 0,
-                        discount: item.Discount ?? 0,
-                        addition: item.Addition ?? 0,
-                        insurance: item.Insurance ?? 0,
-                        total: item.Total ?? null,
-                        ncm: item.NCM ?? item.Ncm ?? null,
-                        cfop: item.Cfop ?? null,
-                    })),
+                const existingItemsCount = await tx.meepOrderItem.count({
+                    where: { orderId: orderRecord.id },
                 });
-            }
-        }
+
+                if (source === 'SALES' || existingItemsCount === 0) {
+                    await tx.meepOrderItem.deleteMany({ where: { orderId: orderRecord.id } });
+
+                    if (items.length > 0) {
+                        await tx.meepOrderItem.createMany({
+                            data: this.buildItemRows(orderRecord.id, items),
+                        });
+                    }
+                }
+            },
+            { timeout: 20000 },
+        );
 
         // Pagamentos só vêm detalhados no GetSimpleSales.
         if (source === 'SIMPLE_SALES' && payments.length > 0) {

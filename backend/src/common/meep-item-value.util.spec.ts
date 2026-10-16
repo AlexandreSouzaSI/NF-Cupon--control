@@ -1,4 +1,5 @@
 import {
+    itemEhLancamentoDeComanda,
     meepItemValue,
     normalizarProdutoChave,
     produtoExcluidoDaAnalise,
@@ -30,6 +31,18 @@ describe('meepItemValue', () => {
 describe('normalizarProdutoChave', () => {
     it('ignora caixa e espaços duplicados', () => {
         expect(normalizarProdutoChave('  Heineken   600ml ')).toBe('HEINEKEN 600ML');
+    });
+});
+
+describe('itemEhLancamentoDeComanda', () => {
+    it('descarta Pagamento/abertura/fechamento de comanda, mas não produto nem taxa', () => {
+        expect(itemEhLancamentoDeComanda('Pagamento')).toBe(true);
+        expect(itemEhLancamentoDeComanda('  pagamento ')).toBe(true);
+        expect(itemEhLancamentoDeComanda('Abertura de Comanda')).toBe(true);
+        expect(itemEhLancamentoDeComanda('Fechamento de Comanda')).toBe(true);
+        expect(itemEhLancamentoDeComanda('Taxa de Serviço')).toBe(false);
+        expect(itemEhLancamentoDeComanda('PICANHA')).toBe(false);
+        expect(itemEhLancamentoDeComanda(null)).toBe(false);
     });
 });
 

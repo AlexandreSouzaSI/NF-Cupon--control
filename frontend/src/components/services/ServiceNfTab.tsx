@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Pagination } from '../ui/Pagination';
+import { NfSearchInput, useDebouncedValue } from '../ui/NfSearchInput';
 import {
     AcceptNfBillForm,
     AcceptNfBillPayload,
@@ -37,6 +38,7 @@ type Service = {
 type ConfirmedNf = {
     id: string;
     source: 'service' | 'incoming';
+    numeroNf?: string | null;
     fileUrl: string;
     originalName?: string | null;
     date: string;
@@ -115,6 +117,14 @@ export function ServiceNfTab() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [confirmedPage, setConfirmedPage] = useState(1);
+
+    // Busca por número, nome ou valor. A lista de pendentes/aceitas busca no
+    // servidor (com debounce); a lista "NF de serviços" já está toda em
+    // memória e é filtrada aqui mesmo.
+    const [search, setSearch] = useState('');
+    const debouncedSearch = useDebouncedValue(search.trim());
+    // Descarta resposta de uma busca antiga que chegou depois da atual.
+    const requestId = useRef(0);
 
     // Total do card do topo — aceitas + pendentes, calculado no backend
     // (findAllNfTotal) pra não depender só do que já foi paginado/carregado
@@ -196,6 +206,8 @@ export function ServiceNfTab() {
     }
 
     async function loadIncomingNfs(page = incomingPage) {
+        const currentRequest = ++requestId.current;
+
         try {
             setLoadingIncoming(true);
 
@@ -205,8 +217,11 @@ export function ServiceNfTab() {
                     page,
                     pageSize: PAGE_SIZE,
                     accepted: showAccepted,
+                    search: debouncedSearch || undefined,
                 },
             });
+
+            if (currentRequest !== requestId.current) return;
 
             const result = response.data as {
                 items: IncomingNf[];
@@ -216,9 +231,13 @@ export function ServiceNfTab() {
             setIncomingNfs(result.items || []);
             setIncomingTotal(result.total || 0);
         } catch {
-            toast.error('Erro ao carregar NFs pendentes de conciliação.');
+            if (currentRequest === requestId.current) {
+                toast.error('Erro ao carregar NFs pendentes de conciliação.');
+            }
         } finally {
-            setLoadingIncoming(false);
+            if (currentRequest === requestId.current) {
+                setLoadingIncoming(false);
+            }
         }
     }
 
@@ -435,7 +454,13 @@ export function ServiceNfTab() {
     useEffect(() => {
         loadIncomingNfs(incomingPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [incomingPage, showAccepted]);
+    }, [incomingPage, showAccepted, debouncedSearch]);
+
+    // Busca nova volta pra primeira página das duas listas.
+    useEffect(() => {
+        setIncomingPage(1);
+        setConfirmedPage(1);
+    }, [debouncedSearch]);
 
     function handleToggleAccepted(checked: boolean) {
         setShowAccepted(checked);
@@ -452,7 +477,44 @@ export function ServiceNfTab() {
     }, [mode, month, startDate, endDate]);
 
     const filteredServices = useMemo(() => {
+        const term = debouncedSearch.toLowerCase();
+        const digits = debouncedSearch.replace(/\D/g, '');
+        const numberDigits = digits.replace(/^0+/, '');
+
+        // Valor digitado como "1.234,56", "1234,56" ou "1234.56".
+        let searchValue: number | null = null;
+        const cleaned = debouncedSearch.replace(/R\$\s*/i, '').trim();
+        if (/^[\d.,]+$/.test(cleaned) && /\d/.test(cleaned)) {
+            const normalized = cleaned.includes(',')
+                ? cleaned.replace(/\./g, '').replace(',', '.')
+                : /^\d{1,3}(\.\d{3})+$/.test(cleaned)
+                    ? cleaned.replace(/\./g, '')
+                    : cleaned;
+            const parsed = Number(normalized);
+            if (Number.isFinite(parsed)) {
+                searchValue = Math.round(parsed * 100) / 100;
+            }
+        }
+
         return confirmedNfs.filter((item) => {
+            if (term) {
+                const matchesName = item.providerName
+                    .toLowerCase()
+                    .includes(term);
+                const matchesNumber =
+                    !!numberDigits &&
+                    !!item.numeroNf &&
+                    item.numeroNf.includes(numberDigits);
+                const matchesValue =
+                    searchValue !== null &&
+                    Math.round(Number(item.value || 0) * 100) / 100 ===
+                    searchValue;
+
+                if (!matchesName && !matchesNumber && !matchesValue) {
+                    return false;
+                }
+            }
+
             if (mode === 'MONTH') {
                 if (!month) return true;
                 return item.date.slice(0, 7) === month;
@@ -470,7 +532,7 @@ export function ServiceNfTab() {
 
             return true;
         });
-    }, [confirmedNfs, mode, month, startDate, endDate]);
+    }, [confirmedNfs, mode, month, startDate, endDate, debouncedSearch]);
 
     const total = useMemo(
         () =>
@@ -715,15 +777,21 @@ export function ServiceNfTab() {
                     </button>
                 </div>
 
+                <div className="mb-4">
+                    <NfSearchInput value={search} onChange={setSearch} />
+                </div>
+
                 {loadingIncoming ? (
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
                         Carregando...
                     </p>
                 ) : incomingNfs.length === 0 ? (
                     <p className="text-sm text-zinc-500">
-                        {showAccepted
-                            ? 'Nenhuma NF de serviço aceita ainda.'
-                            : 'Nenhuma NF pendente de conciliação no momento.'}
+                        {debouncedSearch
+                            ? 'Nenhuma NF encontrada para essa busca.'
+                            : showAccepted
+                                ? 'Nenhuma NF de serviço aceita ainda.'
+                                : 'Nenhuma NF pendente de conciliação no momento.'}
                     </p>
                 ) : (
                     <div className="space-y-3">
@@ -975,7 +1043,9 @@ export function ServiceNfTab() {
                     <div className="py-8 text-center">
                         <FileText className="mx-auto mb-3 text-zinc-500" />
                         <p className="text-zinc-600 dark:text-zinc-400">
-                            Nenhuma NF de serviço nesse período.
+                            {debouncedSearch
+                                ? 'Nenhuma NF encontrada para essa busca.'
+                                : 'Nenhuma NF de serviço nesse período.'}
                         </p>
                     </div>
                 ) : (
@@ -986,9 +1056,17 @@ export function ServiceNfTab() {
                                 className="flex flex-col gap-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 sm:flex-row sm:items-center sm:justify-between"
                             >
                                 <div>
-                                    <p className="font-semibold">
-                                        {item.providerName}
-                                    </p>
+                                    <div className="flex flex-wrap items-baseline gap-x-2">
+                                        <p className="font-semibold">
+                                            {item.providerName}
+                                        </p>
+
+                                        {item.numeroNf && (
+                                            <p className="text-sm text-zinc-500">
+                                                NF nº {item.numeroNf}
+                                            </p>
+                                        )}
+                                    </div>
                                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                         {formatDate(item.date)}
                                         {item.value &&

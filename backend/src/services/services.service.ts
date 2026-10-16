@@ -28,6 +28,7 @@ import {
 } from '../stores/sefaz-nfse-client';
 import { buildDanfePdf } from '../common/danfe-builder';
 import { sleep } from '../common/sleep.util';
+import { buildServiceNfSearchOr } from '../common/nf-search.util';
 import { derivePaymentDefaults } from '../common/bill-payment-defaults.util';
 import {
     resolveAllowedStoreIds,
@@ -359,6 +360,7 @@ export class ServicesService {
         return {
             id: service.id,
             source: 'service' as const,
+            numeroNf: null as string | null,
             fileUrl: service.nfFileUrl as string,
             originalName: service.nfOriginalName,
             date: service.serviceDate,
@@ -373,11 +375,13 @@ export class ServicesService {
         issueDate: Date | null;
         fetchedAt: Date;
         issuerName: string | null;
+        numeroNf?: string | null;
         value: any;
     }) {
         return {
             id: incoming.id,
             source: 'incoming' as const,
+            numeroNf: incoming.numeroNf ?? null,
             fileUrl: incoming.fileUrl as string,
             originalName: null as string | null,
             date: incoming.issueDate || incoming.fetchedAt,
@@ -783,6 +787,7 @@ export class ServicesService {
             month?: string;
             startDate?: string;
             endDate?: string;
+            search?: string;
         },
     ) {
         const allowedStoreIds = await this.getAllowedStoreIds(user);
@@ -799,7 +804,10 @@ export class ServicesService {
 
         const dateFilter = this.buildDateFilter(filters);
 
-        const where = filters?.accepted
+        // Busca única por número, nome do prestador, CNPJ/CPF ou valor.
+        const searchOr = buildServiceNfSearchOr(filters?.search);
+
+        const baseWhere = filters?.accepted
             ? {
                 storeId:
                     filters?.storeId ||
@@ -824,6 +832,11 @@ export class ServicesService {
                 ignored: false,
                 issueDate: dateFilter,
             };
+
+        // AND separado porque o "aceitas" já usa OR na cláusula base.
+        const where = searchOr
+            ? { ...baseWhere, AND: [{ OR: searchOr }] }
+            : baseWhere;
 
         const [items, total] = await Promise.all([
             this.prisma.incomingServiceNf.findMany({

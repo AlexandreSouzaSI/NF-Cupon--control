@@ -46,6 +46,10 @@ import {
 } from '../stores/sefaz-nfe-client';
 import { buildDanfePdf } from '../common/danfe-builder';
 import { sleep } from '../common/sleep.util';
+import {
+    buildChaveNfSearchOr,
+    numeroNfFromChave,
+} from '../common/nf-search.util';
 import { derivePaymentDefaults } from '../common/bill-payment-defaults.util';
 import { LinkIncomingGoodsNfDto } from './dto/link-incoming-goods-nf.dto';
 import {
@@ -2066,6 +2070,7 @@ export class PurchasesService {
             month?: string;
             startDate?: string;
             endDate?: string;
+            search?: string;
         },
     ) {
         if (!this.canAccessGoodsNf(user)) {
@@ -2088,7 +2093,16 @@ export class PurchasesService {
 
         const dateFilter = this.buildDateFilter(filters);
 
-        const where = filters?.accepted
+        // Busca única por número (derivado da chave), nome, CNPJ ou valor.
+        const searchOr = await buildChaveNfSearchOr(this.prisma, {
+            table: 'IncomingGoodsNf',
+            search: filters?.search,
+            storeIds: filters?.storeId ? [filters.storeId] : allowedStoreIds,
+            nameField: 'issuerName',
+            docField: 'issuerCnpj',
+        });
+
+        const baseWhere = filters?.accepted
             ? {
                 storeId:
                     filters?.storeId ||
@@ -2112,6 +2126,11 @@ export class PurchasesService {
                 issueDate: dateFilter,
             };
 
+        // AND separado porque o "aceitas" já usa OR na cláusula base.
+        const where = searchOr
+            ? { ...baseWhere, AND: [{ OR: searchOr }] }
+            : baseWhere;
+
         const [items, total] = await Promise.all([
             this.prisma.incomingGoodsNf.findMany({
                 where,
@@ -2132,6 +2151,7 @@ export class PurchasesService {
             items: items.map((item) => ({
                 ...item,
                 nsu: item.nsu.toString(),
+                numeroNf: numeroNfFromChave(item.chaveAcesso),
             })),
             total,
             page,

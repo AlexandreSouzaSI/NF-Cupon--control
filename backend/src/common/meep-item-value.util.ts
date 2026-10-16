@@ -41,6 +41,22 @@ export function normalizarProdutoChave(nome: string): string {
         .replace(/\s+/g, ' ');
 }
 
+// Lançamentos da própria comanda que a Meep devolve como "item" mas NÃO
+// são produto vendido: o pedido de pagamento (OrderType 2) vem com uma
+// linha "Pagamento" cujo valor é o valor PAGO (soma o consumo de novo →
+// Itens por Dia ficava ~2× a Conciliação/dashboard da Meep), e os pedidos
+// de abertura/fechamento de comanda (valor 0, só poluem a lista). Taxa de
+// Serviço NÃO entra aqui: é venda real (e é paga junto no pagamento).
+const LANCAMENTOS_DE_COMANDA = new Set([
+    'PAGAMENTO',
+    'ABERTURA DE COMANDA',
+    'FECHAMENTO DE COMANDA',
+]);
+
+export function itemEhLancamentoDeComanda(nomeProduto: string | null | undefined): boolean {
+    return LANCAMENTOS_DE_COMANDA.has(normalizarProdutoChave(nomeProduto || ''));
+}
+
 // Linhas que a análise de Venda/Lista descarta (taxa de serviço, couvert)
 // — o Itens por Dia da Meep mostra tudo cru. Exportado aqui pra o
 // diagnóstico comparar maçã com maçã ("com" e "sem" essas linhas).

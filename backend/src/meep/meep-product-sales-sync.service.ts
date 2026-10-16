@@ -13,6 +13,7 @@ import {
     businessDayEndUtc,
 } from '../common/business-day.util';
 import {
+    itemEhLancamentoDeComanda,
     meepItemValue,
     normalizarProdutoChave,
     produtoExcluidoDaAnalise,
@@ -184,6 +185,8 @@ export class MeepProductSalesSyncService {
         for (const item of items) {
             const produto = (item.productName || '').trim();
             if (!produto) continue;
+            // "Pagamento"/abertura/fechamento de comanda não são produto.
+            if (itemEhLancamentoDeComanda(produto)) continue;
 
             const produtoChave = normalizarProdutoChave(produto);
             const quantidade = Number(item.quantity);
@@ -399,7 +402,9 @@ export class MeepProductSalesSyncService {
             };
         };
 
-        const linhasMeep = items.map((item) => ({
+        const linhasMeep = items
+            .filter((item) => !itemEhLancamentoDeComanda(item.productName))
+            .map((item) => ({
             produtoChave: normalizarProdutoChave(item.productName || ''),
             quantidade: Number(item.quantity),
             valor: meepItemValue(item),

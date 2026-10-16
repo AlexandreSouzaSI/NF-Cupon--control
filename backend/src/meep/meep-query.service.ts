@@ -6,7 +6,11 @@ import {
     businessDayStartUtc,
     businessDayEndUtc,
 } from '../common/business-day.util';
-import { meepItemValue, normalizarProdutoChave } from '../common/meep-item-value.util';
+import {
+    itemEhLancamentoDeComanda,
+    meepItemValue,
+    normalizarProdutoChave,
+} from '../common/meep-item-value.util';
 import {
     buildCashConciliationPdf,
     type CashConciliationReportRow,
@@ -96,6 +100,9 @@ export class MeepQueryService {
         >();
 
         for (const item of items) {
+            // "Pagamento"/abertura/fechamento de comanda não são produto.
+            if (itemEhLancamentoDeComanda(item.productName)) continue;
+
             const day = this.businessDayKey(item.order.orderDateUtc);
             if (!byDay.has(day)) byDay.set(day, new Map());
 

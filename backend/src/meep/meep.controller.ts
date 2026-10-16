@@ -145,6 +145,10 @@ export class MeepController {
         // funcionando) nunca vê CFOP/NCM aparecer.
         await this.meepSyncService.syncSales(storeId, credential.id, null);
 
+        // Auto-cura: se sobrou algum pedido com itens em dobro (ver
+        // repairDuplicateItems), conserta antes de reconstruir o Venda/Lista.
+        await this.meepSyncService.repairDuplicateItems(storeId);
+
         // O GetSales acima regrava os itens dos últimos 3 dias — sem isso o
         // Venda/Lista só acompanharia no próximo sync horário. Reconcilia
         // agora, e devolve os erros (se houver) pro botão mostrar.
@@ -155,6 +159,32 @@ export class MeepController {
         );
 
         return { success: true, rebuildErros: rebuild.erros };
+    }
+
+    // Conserta itens de pedido gravados em dobro (Itens por Dia / Venda-Lista
+    // com o dobro do valor da Conciliação) e reconstrói o Venda/Lista dos
+    // dias afetados. Seguro de rodar quantas vezes quiser — só mexe em
+    // pedido comprovadamente duplicado. Restrito a Proprietário/Admin Master.
+    @Post(':storeId/repair-duplicate-items')
+    @Roles(UserRole.PROPRIETARIO)
+    async repairDuplicateItems(@Param('storeId') storeId: string, @CurrentUser() user: any) {
+        await ensureStoreAccessScoped(this.prisma, storeId, user);
+
+        const reparo = await this.meepSyncService.repairDuplicateItems(storeId);
+
+        let rebuildErros: string[] = [];
+
+        if (reparo.affectedDays.length > 0) {
+            const rebuild = await this.meepProductSalesSync.rebuildRange(
+                storeId,
+                businessDayStartUtc(reparo.affectedDays[0]),
+                businessDayEndUtc(reparo.affectedDays[reparo.affectedDays.length - 1]),
+                { force: true },
+            );
+            rebuildErros = rebuild.erros;
+        }
+
+        return { success: true, ...reparo, rebuildErros };
     }
 
     // Reconstrói o Venda/Lista (ProductSalesImport origem=MEEP) a partir

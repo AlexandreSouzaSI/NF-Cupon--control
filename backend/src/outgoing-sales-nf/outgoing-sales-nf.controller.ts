@@ -44,8 +44,18 @@ export class OutgoingSalesNfController {
     async findAll(
         @CurrentUser() user: any,
         @Query('storeId') storeId?: string,
+        @Query('month') month?: string,
+        @Query('page') page?: string,
+        @Query('pageSize') pageSize?: string,
+        @Query('search') search?: string,
     ) {
-        return this.outgoingSalesNfService.findAll(user, { storeId });
+        return this.outgoingSalesNfService.findAll(user, {
+            storeId,
+            month,
+            page: page ? Number(page) : undefined,
+            pageSize: pageSize ? Number(pageSize) : undefined,
+            search,
+        });
     }
 
     @Post('import-xml')

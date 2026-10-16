@@ -5,6 +5,10 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
+import {
+    buildChaveNfSearchOr,
+    numeroNfFromChave,
+} from '../common/nf-search.util';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
@@ -50,28 +54,93 @@ export class OutgoingSalesNfService {
         return ensureStoreAccessScoped(this.prisma, storeId, user);
     }
 
-    async findAll(user: any, filters?: { storeId?: string }) {
+    // Paginado por linha + filtro opcional por mês de referência (AAAA-MM).
+    // Devolve também o resumo do filtro (quantidade e valor total) e a lista
+    // de meses que têm nota, pra tela montar o seletor de mês.
+    async findAll(
+        user: any,
+        filters?: {
+            storeId?: string;
+            month?: string;
+            page?: number;
+            pageSize?: number;
+            search?: string;
+        },
+    ) {
         const allowedStoreIds = await this.getAllowedStoreIds(user);
 
         if (filters?.storeId) {
             await this.ensureStoreAccess(filters.storeId, user);
         }
 
-        // O frontend agrupa por mês e pagina por mês (não por linha), então
-        // não dá pra paginar a query como nas outras listas de NF sem
-        // reescrever essa tela — mas sem nenhum teto, uma loja com anos de
-        // histórico acabaria trazendo a tabela inteira a cada abertura da
-        // aba. 3000 notas é folga de sobra pra qualquer volume real hoje.
-        return this.prisma.outgoingSalesNf.findMany({
-            where: {
-                storeId:
-                    filters?.storeId ||
-                    (allowedStoreIds ? { in: allowedStoreIds } : undefined),
-                ignored: false,
-            },
-            orderBy: { issueDate: 'desc' },
-            take: 3000,
+        const storeWhere = {
+            storeId:
+                filters?.storeId ||
+                (allowedStoreIds ? { in: allowedStoreIds } : undefined),
+            ignored: false,
+        };
+
+        const month =
+            filters?.month && /^\d{4}-\d{2}$/.test(filters.month)
+                ? filters.month
+                : undefined;
+
+        // Busca única por número (derivado da chave), nome, CNPJ/CPF ou valor.
+        // Vale dentro do mês escolhido; "Todos os meses" busca em tudo.
+        const searchOr = await buildChaveNfSearchOr(this.prisma, {
+            table: 'OutgoingSalesNf',
+            search: filters?.search,
+            storeIds: filters?.storeId ? [filters.storeId] : allowedStoreIds,
+            nameField: 'recipientName',
+            docField: 'recipientCnpj',
         });
+
+        const where = {
+            ...storeWhere,
+            ...(month ? { referenceMonth: month } : {}),
+            ...(searchOr ? { AND: [{ OR: searchOr }] } : {}),
+        };
+
+        const page = filters?.page && filters.page > 0 ? filters.page : 1;
+        const pageSize =
+            filters?.pageSize && filters.pageSize > 0
+                ? Math.min(filters.pageSize, 100)
+                : 20;
+
+        const [items, total, aggregate, monthGroups] = await Promise.all([
+            this.prisma.outgoingSalesNf.findMany({
+                where,
+                orderBy: { issueDate: 'desc' },
+                skip: (page - 1) * pageSize,
+                take: pageSize,
+            }),
+            this.prisma.outgoingSalesNf.count({ where }),
+            this.prisma.outgoingSalesNf.aggregate({
+                where,
+                _sum: { value: true },
+            }),
+            this.prisma.outgoingSalesNf.groupBy({
+                by: ['referenceMonth'],
+                where: storeWhere,
+                _count: { _all: true },
+                orderBy: { referenceMonth: 'desc' },
+            }),
+        ]);
+
+        return {
+            items: items.map((item) => ({
+                ...item,
+                numeroNf: numeroNfFromChave(item.chaveAcesso),
+            })),
+            total,
+            page,
+            pageSize,
+            totalValue: Number(aggregate._sum.value || 0),
+            months: monthGroups.map((group) => ({
+                month: group.referenceMonth,
+                count: group._count._all,
+            })),
+        };
     }
 
     // Importação em massa dos XMLs de venda (a loja é sempre a emitente).

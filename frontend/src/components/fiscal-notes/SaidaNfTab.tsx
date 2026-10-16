@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Pagination } from '../ui/Pagination';
 import { NfViewerModal } from '../ui/NfViewerModal';
+import { NfSearchInput, useDebouncedValue } from '../ui/NfSearchInput';
 import {
     Eye,
     FileText,
@@ -15,9 +16,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Paginação aqui é por grupo de mês (não por NF individual), pra manter o
-// total de cada mês sempre correto — nunca corta um mês ao meio.
-const MONTHS_PER_PAGE = 3;
+// Paginação feita no servidor (por NF), com filtro por mês de referência.
+const PAGE_SIZE = 20;
 
 // O backend aceita no máximo 200 arquivos por requisição
 // (FilesInterceptor('files', 200, ...) em outgoing-sales-nf.controller.ts).
@@ -30,6 +30,7 @@ const UPLOAD_BATCH_SIZE = 100;
 type OutgoingSalesNf = {
     id: string;
     chaveAcesso: string;
+    numeroNf?: string | null;
     tipoDocumento: string;
     recipientCnpj?: string | null;
     recipientName?: string | null;
@@ -71,61 +72,98 @@ export function SaidaNfTab() {
     const [revenueUpdated, setRevenueUpdated] = useState<
         { month: string; total: number }[]
     >([]);
-    const [monthPage, setMonthPage] = useState(1);
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [totalValue, setTotalValue] = useState(0);
+    // '' = todos os meses. Começa vazio e, na primeira carga, assume o mês
+    // mais recente que tem nota (evita abrir numa lista enorme).
+    const [month, setMonth] = useState('');
+    const [availableMonths, setAvailableMonths] = useState<
+        { month: string; count: number }[]
+    >([]);
+    const monthInitialized = useRef(false);
     const [uploadProgress, setUploadProgress] = useState<
         { done: number; total: number; batch: number; batchCount: number } | null
     >(null);
 
+    // Busca por número, nome ou valor (feita no servidor, com debounce).
+    const [search, setSearch] = useState('');
+    const debouncedSearch = useDebouncedValue(search.trim());
+    // Descarta resposta de uma busca antiga que chegou depois da atual.
+    const requestId = useRef(0);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    async function loadNotes() {
+    async function loadNotes(
+        targetPage = page,
+        targetMonth = month,
+    ) {
+        const currentRequest = ++requestId.current;
+
         try {
             setLoading(true);
 
             const response = await api.get('/outgoing-sales-nf', {
-                params: { storeId: getActiveStore()?.id || undefined },
+                params: {
+                    storeId: getActiveStore()?.id || undefined,
+                    month: targetMonth || undefined,
+                    page: targetPage,
+                    pageSize: PAGE_SIZE,
+                    search: debouncedSearch || undefined,
+                },
             });
 
-            setNotes(response.data || []);
+            if (currentRequest !== requestId.current) return;
+
+            const result = response.data as {
+                items: OutgoingSalesNf[];
+                total: number;
+                totalValue: number;
+                months: { month: string; count: number }[];
+            };
+
+            // Primeira carga: se ainda não escolheu mês, usa o mais recente.
+            if (!monthInitialized.current) {
+                monthInitialized.current = true;
+
+                if (result.months?.length && !targetMonth) {
+                    setAvailableMonths(result.months);
+                    setMonth(result.months[0].month);
+                    return;
+                }
+            }
+
+            setNotes(result.items || []);
+            setTotal(result.total || 0);
+            setTotalValue(result.totalValue || 0);
+            setAvailableMonths(result.months || []);
         } catch {
-            toast.error('Erro ao carregar NFs de venda.');
+            if (currentRequest === requestId.current) {
+                toast.error('Erro ao carregar NFs de venda.');
+            }
         } finally {
-            setLoading(false);
+            if (currentRequest === requestId.current) {
+                setLoading(false);
+            }
         }
     }
 
     useEffect(() => {
-        loadNotes();
-    }, []);
+        loadNotes(page, month);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, month, debouncedSearch]);
 
-    const groupedByMonth = useMemo(() => {
-        const groups: Record<string, OutgoingSalesNf[]> = {};
-
-        for (const note of notes) {
-            if (!groups[note.referenceMonth]) groups[note.referenceMonth] = [];
-            groups[note.referenceMonth].push(note);
-        }
-
-        return Object.entries(groups).sort((a, b) => (a[0] < b[0] ? 1 : -1));
-    }, [notes]);
-
+    // Busca nova volta pra primeira página.
     useEffect(() => {
-        setMonthPage(1);
-    }, [notes]);
+        setPage(1);
+    }, [debouncedSearch]);
 
-    const monthTotalPages = Math.max(
-        1,
-        Math.ceil(groupedByMonth.length / MONTHS_PER_PAGE),
-    );
+    function handleMonthChange(value: string) {
+        setMonth(value);
+        setPage(1);
+    }
 
-    const paginatedMonths = useMemo(
-        () =>
-            groupedByMonth.slice(
-                (monthPage - 1) * MONTHS_PER_PAGE,
-                monthPage * MONTHS_PER_PAGE,
-            ),
-        [groupedByMonth, monthPage],
-    );
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
     async function handleUploadXml(fileList: FileList | null) {
         const store = getActiveStore();
@@ -357,6 +395,36 @@ export function SaidaNfTab() {
             </section>
 
             <section className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                        <label
+                            htmlFor="saida-month-filter"
+                            className="text-sm font-medium text-zinc-600 dark:text-zinc-400"
+                        >
+                            Mês
+                        </label>
+                        <select
+                            id="saida-month-filter"
+                            value={month}
+                            onChange={(e) => handleMonthChange(e.target.value)}
+                            className="h-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-3 text-sm capitalize outline-none focus:border-blue-500"
+                        >
+                            <option value="">Todos os meses</option>
+                            {availableMonths.map((entry) => (
+                                <option key={entry.month} value={entry.month}>
+                                    {formatMonth(entry.month)} ({entry.count})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <NfSearchInput value={search} onChange={setSearch} />
+
+                    <p className="text-sm font-semibold text-blue-500">
+                        {total} NF(s) • {formatCurrency(totalValue)}
+                    </p>
+                </div>
+
                 {loading ? (
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
                         Carregando...
@@ -365,40 +433,36 @@ export function SaidaNfTab() {
                     <div className="py-8 text-center">
                         <FileText className="mx-auto mb-3 text-zinc-500" />
                         <p className="text-zinc-600 dark:text-zinc-400">
-                            Nenhuma NF de venda importada ainda.
+                            {debouncedSearch
+                                ? 'Nenhuma NF encontrada para essa busca.'
+                                : month
+                                    ? 'Nenhuma NF de venda nesse mês.'
+                                    : 'Nenhuma NF de venda importada ainda.'}
                         </p>
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        {paginatedMonths.map(([month, monthNotes]) => {
-                            const total = monthNotes.reduce(
-                                (sum, note) => sum + Number(note.value),
-                                0,
-                            );
-
-                            return (
-                                <div key={month}>
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <h3 className="font-semibold capitalize">
-                                            {formatMonth(month)}
-                                        </h3>
-                                        <p className="text-sm font-semibold text-blue-500">
-                                            {monthNotes.length} NF(s) •{' '}
-                                            {formatCurrency(total)}
-                                        </p>
-                                    </div>
-
+                        <div>
+                            <div>
                                     <div className="space-y-2">
-                                        {monthNotes.map((note) => (
+                                        {notes.map((note) => (
                                             <div
                                                 key={note.id}
                                                 className="flex flex-col gap-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 sm:flex-row sm:items-center sm:justify-between"
                                             >
                                                 <div>
-                                                    <p className="font-semibold">
-                                                        {note.recipientName ||
-                                                            'Consumidor não identificado'}
-                                                    </p>
+                                                    <div className="flex flex-wrap items-baseline gap-x-2">
+                                                        <p className="font-semibold">
+                                                            {note.recipientName ||
+                                                                'Consumidor não identificado'}
+                                                        </p>
+
+                                                        {note.numeroNf && (
+                                                            <p className="text-sm text-zinc-500">
+                                                                NF nº {note.numeroNf}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
                                                         {formatDate(note.issueDate)} •{' '}
                                                         {formatCurrency(note.value)}
@@ -443,14 +507,13 @@ export function SaidaNfTab() {
                                             </div>
                                         ))}
                                     </div>
-                                </div>
-                            );
-                        })}
+                            </div>
+                        </div>
 
                         <Pagination
-                            page={monthPage}
-                            totalPages={monthTotalPages}
-                            onPageChange={setMonthPage}
+                            page={page}
+                            totalPages={totalPages}
+                            onPageChange={setPage}
                         />
                     </div>
                 )}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Pagination } from '../ui/Pagination';
+import { NfSearchInput, useDebouncedValue } from '../ui/NfSearchInput';
 import {
     AcceptNfBillForm,
     AcceptNfBillPayload,
@@ -28,6 +29,7 @@ const PAGE_SIZE = 20;
 type IncomingGoodsNf = {
     id: string;
     chaveAcesso: string;
+    numeroNf?: string | null;
     tipoDocumento: string;
     issuerCnpj?: string | null;
     issuerName?: string | null;
@@ -103,7 +105,15 @@ export function EntradaNfTab() {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Busca por número, nome ou valor (feita no servidor, com debounce).
+    const [search, setSearch] = useState('');
+    const debouncedSearch = useDebouncedValue(search.trim());
+    // Descarta resposta de uma busca antiga que chegou depois da atual.
+    const requestId = useRef(0);
+
     async function loadIncomingNfs(page = incomingPage) {
+        const currentRequest = ++requestId.current;
+
         try {
             setLoadingIncoming(true);
 
@@ -113,8 +123,11 @@ export function EntradaNfTab() {
                     page,
                     pageSize: PAGE_SIZE,
                     accepted: showAccepted,
+                    search: debouncedSearch || undefined,
                 },
             });
+
+            if (currentRequest !== requestId.current) return;
 
             const result = response.data as {
                 items: IncomingGoodsNf[];
@@ -124,9 +137,13 @@ export function EntradaNfTab() {
             setIncomingNfs(result.items || []);
             setIncomingTotal(result.total || 0);
         } catch {
-            toast.error('Erro ao carregar NFs de entrada.');
+            if (currentRequest === requestId.current) {
+                toast.error('Erro ao carregar NFs de entrada.');
+            }
         } finally {
-            setLoadingIncoming(false);
+            if (currentRequest === requestId.current) {
+                setLoadingIncoming(false);
+            }
         }
     }
 
@@ -170,7 +187,12 @@ export function EntradaNfTab() {
     useEffect(() => {
         loadIncomingNfs(incomingPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [incomingPage, showAccepted]);
+    }, [incomingPage, showAccepted, debouncedSearch]);
+
+    // Busca nova volta pra primeira página.
+    useEffect(() => {
+        setIncomingPage(1);
+    }, [debouncedSearch]);
 
     function handleToggleAccepted(checked: boolean) {
         setShowAccepted(checked);
@@ -647,6 +669,8 @@ export function EntradaNfTab() {
                         </p>
                     </div>
 
+                    <NfSearchInput value={search} onChange={setSearch} />
+
                     <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 text-sm font-medium">
                         <input
                             type="checkbox"
@@ -668,9 +692,11 @@ export function EntradaNfTab() {
                     <div className="py-8 text-center">
                         <FileSearch className="mx-auto mb-3 text-zinc-500" />
                         <p className="text-zinc-600 dark:text-zinc-400">
-                            {showAccepted
-                                ? 'Nenhuma NF de entrada aceita ainda.'
-                                : 'Nenhuma NF de entrada pendente no momento.'}
+                            {debouncedSearch
+                                ? 'Nenhuma NF encontrada para essa busca.'
+                                : showAccepted
+                                    ? 'Nenhuma NF de entrada aceita ainda.'
+                                    : 'Nenhuma NF de entrada pendente no momento.'}
                         </p>
                     </div>
                 ) : (
@@ -687,6 +713,12 @@ export function EntradaNfTab() {
                                                 {nf.issuerName ||
                                                     'Fornecedor não identificado'}
                                             </p>
+
+                                            {nf.numeroNf && (
+                                                <p className="text-sm text-zinc-500">
+                                                    NF nº {nf.numeroNf}
+                                                </p>
+                                            )}
                                             <span
                                                 className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${nf.source === 'XML_UPLOAD'
                                                     ? 'bg-blue-500/10 text-blue-500'

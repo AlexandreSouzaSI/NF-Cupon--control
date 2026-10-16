@@ -214,6 +214,7 @@ export class ServicesController {
         @Query('month') month?: string,
         @Query('startDate') startDate?: string,
         @Query('endDate') endDate?: string,
+        @Query('search') search?: string,
     ) {
         return this.servicesService.findIncomingNf(user, {
             storeId,
@@ -223,6 +224,7 @@ export class ServicesController {
             month,
             startDate,
             endDate,
+            search,
         });
     }
 

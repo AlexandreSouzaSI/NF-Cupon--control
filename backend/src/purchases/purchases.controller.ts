@@ -173,6 +173,7 @@ export class PurchasesController {
         @Query('month') month?: string,
         @Query('startDate') startDate?: string,
         @Query('endDate') endDate?: string,
+        @Query('search') search?: string,
     ) {
         return this.purchasesService.findIncomingGoodsNf(user, {
             storeId,
@@ -182,6 +183,7 @@ export class PurchasesController {
             month,
             startDate,
             endDate,
+            search,
         });
     }
 
