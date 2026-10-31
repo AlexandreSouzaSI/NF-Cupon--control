@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { MoneyInput } from '../ui/MoneyInput';
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
     PIX: 'Pix',
@@ -157,10 +158,7 @@ export function NewServiceTab() {
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                                 Valor
                             </label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
+                            <MoneyInput
                                 value={value}
                                 onChange={(e) => setValue(e.target.value)}
                                 placeholder="0,00"

@@ -28,6 +28,7 @@ import {
     VoicePurchaseButton,
     type VoicePurchaseDraft,
 } from '../../../src/components/purchases/VoicePurchaseButton';
+import { MoneyInput } from '../../../src/components/ui/MoneyInput';
 
 type Card = {
     id: string;
@@ -905,12 +906,11 @@ export default function NewPurchasePage() {
                                         Valor final
                                     </label>
 
-                                    <input
+                                    <MoneyInput formato="virgula"
                                         value={simplifiedValue}
                                         onChange={(event) =>
                                             setSimplifiedValue(event.target.value)
                                         }
-                                        inputMode="decimal"
                                         placeholder="0,00"
                                         className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-blue-500"
                                     />
@@ -1259,7 +1259,7 @@ export default function NewPurchasePage() {
                                                 Valor unitário
                                             </label>
 
-                                            <input
+                                            <MoneyInput formato="virgula"
                                                 value={item.unitPrice}
                                                 onChange={(event) =>
                                                     updateItem(
@@ -1269,7 +1269,6 @@ export default function NewPurchasePage() {
                                                             .value,
                                                     )
                                                 }
-                                                inputMode="decimal"
                                                 placeholder="0,00"
                                                 className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-blue-500"
                                             />
@@ -1280,7 +1279,7 @@ export default function NewPurchasePage() {
                                                 Total
                                             </label>
 
-                                            <input
+                                            <MoneyInput formato="virgula"
                                                 value={item.total}
                                                 onChange={(event) =>
                                                     updateItem(
@@ -1290,7 +1289,6 @@ export default function NewPurchasePage() {
                                                             .value,
                                                     )
                                                 }
-                                                inputMode="decimal"
                                                 placeholder="0,00"
                                                 className="h-11 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 outline-none focus:border-blue-500"
                                             />

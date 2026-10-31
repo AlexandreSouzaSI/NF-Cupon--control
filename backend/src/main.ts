@@ -25,6 +25,10 @@ async function bootstrap() {
   // frente (o Nginx local), não em qualquer X-Forwarded-For que chegar.
   app.set('trust proxy', 1);
 
+  // Conciliação do Extrato manda a classificação de centenas de pagamentos
+  // de uma vez (o padrão de 100kb do Express não aguenta).
+  app.useBodyParser('json', { limit: '50mb' });
+
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
   });

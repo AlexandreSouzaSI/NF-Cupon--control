@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { CheckCircle2, Loader2, PackageSearch, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { MoneyInput } from '../../../src/components/ui/MoneyInput';
 
 type UnidadeMedida = 'KG' | 'UNIDADE';
 
@@ -248,7 +249,7 @@ export default function CotacaoPublicaPage() {
                                             <span className="text-xs text-zinc-500">
                                                 R$
                                             </span>
-                                            <input
+                                            <MoneyInput
                                                 disabled={encerrada}
                                                 value={prices[item.id] ?? ''}
                                                 onChange={(e) =>
@@ -257,7 +258,6 @@ export default function CotacaoPublicaPage() {
                                                         [item.id]: e.target.value,
                                                     }))
                                                 }
-                                                inputMode="decimal"
                                                 placeholder="0,00"
                                                 className="h-9 w-24 rounded-lg border border-zinc-700 bg-zinc-900 px-2 text-sm outline-none focus:border-teal-500 disabled:opacity-50"
                                             />

@@ -7,6 +7,7 @@ import { getActiveStore } from '@/lib/active-store';
 import { toast } from 'sonner';
 import { DateRangeFilter } from '../product-sales/DateRangeFilter';
 import { SingleDayFilter } from './SingleDayFilter';
+import { MoneyInput } from '../ui/MoneyInput';
 
 type TipoPagamento = {
     tipo: string;
@@ -466,18 +467,14 @@ export function CashConciliationTab() {
                                                 </td>
                                                 <td className="px-2 py-2">
                                                     <div className="flex flex-col items-end gap-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
+                                                        <MoneyInput
                                                             value={form.sistemaCredito}
                                                             onChange={(e) =>
                                                                 updateField(row.dia, 'sistemaCredito', e.target.value)
                                                             }
                                                             className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"
                                                         />
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
+                                                        <MoneyInput
                                                             value={form.bancoCredito}
                                                             onChange={(e) =>
                                                                 updateField(row.dia, 'bancoCredito', e.target.value)
@@ -488,18 +485,14 @@ export function CashConciliationTab() {
                                                 </td>
                                                 <td className="px-2 py-2">
                                                     <div className="flex flex-col items-end gap-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
+                                                        <MoneyInput
                                                             value={form.sistemaDebito}
                                                             onChange={(e) =>
                                                                 updateField(row.dia, 'sistemaDebito', e.target.value)
                                                             }
                                                             className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"
                                                         />
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
+                                                        <MoneyInput
                                                             value={form.bancoDebito}
                                                             onChange={(e) =>
                                                                 updateField(row.dia, 'bancoDebito', e.target.value)
@@ -510,18 +503,14 @@ export function CashConciliationTab() {
                                                 </td>
                                                 <td className="px-2 py-2">
                                                     <div className="flex flex-col items-end gap-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
+                                                        <MoneyInput
                                                             value={form.sistemaPix}
                                                             onChange={(e) =>
                                                                 updateField(row.dia, 'sistemaPix', e.target.value)
                                                             }
                                                             className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"
                                                         />
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
+                                                        <MoneyInput
                                                             value={form.bancoPix}
                                                             onChange={(e) =>
                                                                 updateField(row.dia, 'bancoPix', e.target.value)
@@ -532,18 +521,14 @@ export function CashConciliationTab() {
                                                 </td>
                                                 <td className="px-2 py-2">
                                                     <div className="flex flex-col items-end gap-2">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
+                                                        <MoneyInput
                                                             value={form.sistemaDinheiro}
                                                             onChange={(e) =>
                                                                 updateField(row.dia, 'sistemaDinheiro', e.target.value)
                                                             }
                                                             className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"
                                                         />
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
+                                                        <MoneyInput
                                                             value={form.bancoDinheiro}
                                                             onChange={(e) =>
                                                                 updateField(row.dia, 'bancoDinheiro', e.target.value)
@@ -625,10 +610,7 @@ export function CashConciliationTab() {
                                 <div className="flex flex-wrap items-end gap-3">
                                     <div>
                                         <label className="mb-1 block text-xs text-zinc-500">Freelancer</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
+                                        <MoneyInput
                                             value={form.freelancer}
                                             onChange={(e) => updateField(row.dia, 'freelancer', e.target.value)}
                                             className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"
@@ -636,10 +618,7 @@ export function CashConciliationTab() {
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-xs text-zinc-500">Descontos</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
+                                        <MoneyInput
                                             value={form.descontos}
                                             onChange={(e) => updateField(row.dia, 'descontos', e.target.value)}
                                             className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"
@@ -647,10 +626,7 @@ export function CashConciliationTab() {
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-xs text-zinc-500">Outros</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
+                                        <MoneyInput
                                             value={form.outros}
                                             onChange={(e) => updateField(row.dia, 'outros', e.target.value)}
                                             className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"
@@ -658,10 +634,7 @@ export function CashConciliationTab() {
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-xs text-zinc-500">Vale</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
+                                        <MoneyInput
                                             value={form.vale}
                                             onChange={(e) => updateField(row.dia, 'vale', e.target.value)}
                                             className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"

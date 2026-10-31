@@ -13,6 +13,7 @@ import {
     X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { MoneyInput } from '../ui/MoneyInput';
 
 type QuotationStatus =
     | 'DRAFT'
@@ -457,10 +458,8 @@ export function QuotationsTab() {
                                                                 className="px-4 py-2.5"
                                                             >
                                                                 <div className="flex items-center gap-1">
-                                                                    <input
+                                                                    <MoneyInput
                                                                         autoFocus
-                                                                        type="text"
-                                                                        inputMode="decimal"
                                                                         value={
                                                                             editingValue
                                                                         }

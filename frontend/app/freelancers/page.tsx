@@ -26,6 +26,7 @@ import {
     Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { MoneyInput, formatarValorMonetario } from '../../src/components/ui/MoneyInput';
 
 const ALLOWED_ROLES = ['ADMINISTRATIVO', 'PROPRIETARIO', 'GERENTE'];
 
@@ -403,10 +404,7 @@ function CadastroTab() {
                         <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                             Valor padrão da diária (R$)
                         </label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0"
+                        <MoneyInput
                             value={form.defaultDailyValue}
                             onChange={(e) =>
                                 setForm({
@@ -746,13 +744,8 @@ function DiasTrabalhadosTab() {
                                         </button>
 
                                         {isChecked && (
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                placeholder={
-                                                    selectedFreelancer.defaultDailyValue
-                                                }
+                                            <MoneyInput
+                                                placeholder={formatarValorMonetario(Number(selectedFreelancer.defaultDailyValue) || 0)}
                                                 value={values[col.weekday] || ''}
                                                 onChange={(e) =>
                                                     setValues({

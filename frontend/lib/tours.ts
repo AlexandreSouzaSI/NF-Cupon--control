@@ -307,26 +307,21 @@ export const tours: Tour[] = [
     },
     {
         id: 'conciliar-conta-a-pagar',
-        title: 'Como conciliar contas a pagar',
-        description: 'Importar o extrato do banco (.ofx) e confirmar quais contas já foram pagas.',
+        title: 'Como conciliar o extrato do banco',
+        description: 'Importar o extrato do mês (.ofx), conferir as categorias e dar baixa em Contas a Pagar.',
         category: 'Contas a Pagar',
-        href: '/bills/reconcile',
+        href: '/conciliacao-extrato',
         roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
         steps: [
             {
+                selector: '[data-tour="reconcile-import-file"]',
+                title: 'Escolher o extrato',
+                text: 'Exporte o extrato do internet banking em formato .ofx (ou as planilhas do Sicredi) e escolha o arquivo aqui. Ele entra na loja selecionada no topo.',
+            },
+            {
                 selector: '[data-tour="reconcile-import-button"]',
-                title: 'Importar extrato OFX',
-                text: 'Exporte o extrato do internet banking em formato .ofx e importe aqui. Clique pra escolher o arquivo.',
-            },
-            {
-                selector: '[data-tour="reconcile-select-bill"]',
-                title: 'Conta correspondente',
-                text: 'Pra cada saída do extrato, escolha a conta em aberto que bate com ela. Quando só existe uma opção com o mesmo valor, o sistema já sugere sozinho.',
-            },
-            {
-                selector: '[data-tour="reconcile-confirm-button"]',
-                title: 'Confirmar',
-                text: 'Pronto! Clique aqui pra marcar a conta como paga nessa data.',
+                title: 'Importar e classificar',
+                text: 'O sistema acha as contas que já estão em Contas a Pagar e sugere a categoria do resto. Depois é só conferir e clicar em "Aplicar em Contas a Pagar".',
             },
         ],
     },

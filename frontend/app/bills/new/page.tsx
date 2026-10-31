@@ -31,6 +31,11 @@ import {
 import { api, API_URL } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { parseBoletoCode } from '@/lib/boleto';
+import {
+    BillCategorySelect,
+    useBillCategories,
+} from '../../../src/components/bills/BillCategorySelect';
+import { MoneyInput } from '../../../src/components/ui/MoneyInput';
 
 type Store = {
     id: string;
@@ -283,6 +288,10 @@ function NewBillPageInner() {
         useState<BillForm>(
             createEmptyForm(),
         );
+
+    // Categoria (Funcionários / Revenda / Matéria-prima / Ativo).
+    const [categoryId, setCategoryId] = useState('');
+    const { categories } = useBillCategories();
 
     const [purchase, setPurchase] =
         useState<Purchase | null>(null);
@@ -709,6 +718,7 @@ function NewBillPageInner() {
                     paymentMethod: form.paymentMethod,
                     storeId: form.storeId,
                     supplierId: resolvedSupplierId || undefined,
+                    categoryId: categoryId || undefined,
                 });
 
                 toast.success(
@@ -812,6 +822,8 @@ function NewBillPageInner() {
                 supplierId:
                     resolvedSupplierId ||
                     undefined,
+
+                categoryId: categoryId || undefined,
 
                 purchaseId:
                     form.purchaseId ||
@@ -1166,7 +1178,7 @@ function NewBillPageInner() {
                                 Valor
                             </label>
 
-                            <input
+                            <MoneyInput formato="virgula"
                                 data-tour="bill-form-value"
                                 value={form.value}
                                 onChange={(event) =>
@@ -1179,7 +1191,6 @@ function NewBillPageInner() {
                                         }),
                                     )
                                 }
-                                inputMode="decimal"
                                 placeholder="0,00"
                                 className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 outline-none focus:border-cyan-500"
                             />
@@ -1646,6 +1657,19 @@ function NewBillPageInner() {
                             placeholder="Não informado"
                             inputClassName="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 text-sm outline-none focus:border-blue-500 dark:text-zinc-100"
                         />
+
+                        <div>
+                            <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
+                                Categoria
+                            </label>
+                            <BillCategorySelect
+                                categories={categories}
+                                value={categoryId}
+                                onChange={setCategoryId}
+                                placeholder="Sem categoria (classificar depois)"
+                                className="h-12 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-4 text-sm outline-none focus:border-blue-500 dark:text-zinc-100"
+                            />
+                        </div>
 
                         <div className="md:col-span-2">
                             <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">

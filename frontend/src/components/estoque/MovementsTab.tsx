@@ -6,6 +6,7 @@ import { getActiveStore } from '@/lib/active-store';
 import { toast } from 'sonner';
 import { ArrowDownCircle, ArrowUpCircle, Loader2 } from 'lucide-react';
 import { AutocompleteInput } from '../ui/AutocompleteInput';
+import { MoneyInput } from '../ui/MoneyInput';
 
 type StockItemOption = { id: string; nome: string; unidadeMedida: 'KG' | 'LITRO' | 'UNIDADE' };
 
@@ -174,10 +175,7 @@ export function MovementsTab({ onChanged }: { onChanged: () => void }) {
 
                     <div className="w-36">
                         <label className="text-xs text-zinc-500">Valor total (opcional)</label>
-                        <input
-                            type="number"
-                            min={0}
-                            step="0.01"
+                        <MoneyInput
                             value={valorTotal}
                             onChange={(e) => setValorTotal(e.target.value)}
                             className="mt-1 w-full rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-zinc-700"

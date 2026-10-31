@@ -20,6 +20,7 @@ import {
     TrendingUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { MoneyInput } from '../../src/components/ui/MoneyInput';
 
 type RevenueEntry = {
     id: string;
@@ -890,10 +891,7 @@ function FaturamentosTab() {
                         <label className="mb-2 block text-sm text-zinc-700 dark:text-zinc-300">
                             Faturamento bruto (R$)
                         </label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0"
+                        <MoneyInput
                             value={form.grossRevenue}
                             onChange={(e) =>
                                 setForm({ ...form, grossRevenue: e.target.value })

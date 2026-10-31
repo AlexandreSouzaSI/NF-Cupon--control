@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AutocompleteInput } from '../ui/AutocompleteInput';
+import { MoneyInput } from '../ui/MoneyInput';
 
 type EmployeePaymentType =
     | 'ADIANTAMENTO'
@@ -611,10 +612,7 @@ export function EmployeePaymentsTab() {
                         <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
                             Valor
                         </label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0"
+                        <MoneyInput
                             value={manualValue}
                             onChange={(e) => setManualValue(e.target.value)}
                             placeholder="0,00"
@@ -830,10 +828,7 @@ export function EmployeePaymentsTab() {
 
                                 {isEditing && (
                                     <div className="mt-3 grid grid-cols-1 gap-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-3 sm:grid-cols-4">
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
+                                        <MoneyInput
                                             value={editValue}
                                             onChange={(e) =>
                                                 setEditValue(e.target.value)

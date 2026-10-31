@@ -59,6 +59,7 @@ export class BillsService {
                     OR: [
                         { nameNormalized: { contains: 'funcionario' } },
                         { nameNormalized: { contains: 'freelance' } },
+                        { group: 'FUNCIONARIOS' },
                     ],
                 },
             },
@@ -83,7 +84,7 @@ export class BillsService {
                 purchaseId: true,
                 status: true,
                 notes: true,
-                category: { select: { nameNormalized: true } },
+                category: { select: { nameNormalized: true, group: true } },
             },
         });
 
@@ -99,7 +100,8 @@ export class BillsService {
             user.canViewPayrollBills === false &&
             bill.category &&
             (bill.category.nameNormalized.includes('funcionario') ||
-                bill.category.nameNormalized.includes('freelance'))
+                bill.category.nameNormalized.includes('freelance') ||
+                bill.category.group === 'FUNCIONARIOS')
         ) {
             throw new NotFoundException(
                 'Conta a pagar não encontrada.',
@@ -1048,6 +1050,110 @@ export class BillsService {
     // cron `markOverdueBills` roda 1x por dia — uma conta pode ter vencido
     // hoje e ainda não ter sido promovida a OVERDUE no banco quando esse
     // botão for clicado.
+    // Classificar várias contas de uma vez (tela de Contas a Pagar):
+    // categoryId = null tira a categoria. Só mexe em contas de lojas que o
+    // usuário enxerga, e a categoria tem que ser da mesma empresa da loja.
+    async classifyMany(user: any, ids: string[], categoryId: string | null) {
+        if (!this.canManageBills(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para gerenciar contas a pagar.',
+            );
+        }
+
+        const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+        if (uniqueIds.length === 0) {
+            throw new BadRequestException('Selecione pelo menos uma conta.');
+        }
+
+        const allowedStoreIds = await this.getAllowedStoreIds(user);
+        const bills = await this.prisma.bill.findMany({
+            where: {
+                id: { in: uniqueIds },
+                ...(allowedStoreIds ? { storeId: { in: allowedStoreIds } } : {}),
+                ...this.payrollCategoryFilter(user),
+            },
+            select: { id: true, store: { select: { empresaId: true } } },
+        });
+
+        if (bills.length === 0) {
+            throw new NotFoundException('Nenhuma conta encontrada.');
+        }
+
+        if (categoryId) {
+            const category = await this.prisma.billCategory.findUnique({
+                where: { id: categoryId },
+                select: { empresaId: true, active: true },
+            });
+            if (!category || !category.active) {
+                throw new NotFoundException('Categoria não encontrada.');
+            }
+            if (bills.some((b) => b.store.empresaId !== category.empresaId)) {
+                throw new BadRequestException(
+                    'Essa categoria é de outra empresa.',
+                );
+            }
+        }
+
+        const okIds = bills.map((b) => b.id);
+        await this.prisma.bill.updateMany({
+            where: { id: { in: okIds } },
+            data: { categoryId: categoryId || null },
+        });
+
+        return { total: okIds.length, ids: okIds };
+    }
+
+    // Marca várias contas como pagas (mesma regra do markAsPaid, uma por
+    // uma — inclusive fechar a compra quando era a última conta em aberto).
+    // As que já estavam pagas/canceladas ou sem acesso são puladas.
+    async payMany(user: any, ids: string[], paidAt?: string) {
+        if (!this.canManageBills(user)) {
+            throw new ForbiddenException(
+                'Seu perfil não tem permissão para marcar contas como pagas.',
+            );
+        }
+
+        const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+        if (uniqueIds.length === 0) {
+            throw new BadRequestException('Selecione pelo menos uma conta.');
+        }
+        if (uniqueIds.length > 3000) {
+            throw new BadRequestException('Selecione no máximo 3000 contas por vez.');
+        }
+
+        const noVencimento = paidAt === 'VENCIMENTO';
+        if (paidAt && !noVencimento && !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) {
+            throw new BadRequestException('Data de pagamento inválida.');
+        }
+
+        const bills = await this.prisma.bill.findMany({
+            where: { id: { in: uniqueIds }, status: { in: [BillStatus.OPEN, BillStatus.OVERDUE] } },
+            select: { id: true, dueDate: true },
+        });
+
+        let pagas = 0;
+        const erros: string[] = [];
+        for (const bill of bills) {
+            try {
+                const data = noVencimento
+                    ? bill.dueDate.toISOString()
+                    : paidAt
+                        ? `${paidAt}T12:00:00.000Z`
+                        : undefined;
+                await this.markAsPaid(bill.id, user, data);
+                pagas++;
+            } catch (error: any) {
+                erros.push(error?.message ?? 'erro');
+            }
+        }
+
+        return {
+            pagas,
+            puladas: uniqueIds.length - bills.length,
+            erros: erros.length,
+        };
+    }
+
     async queueAllOverdueToday(user: any, storeId?: string) {
         if (!this.canManageBills(user)) {
             throw new ForbiddenException(

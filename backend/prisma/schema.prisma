@@ -520,6 +520,7 @@ model Empresa {
 }
 
 model Store {
+  omieIntegracao OmieIntegracao?
   id      String  @id @default(uuid())
   name    String
   cnpj    String?
@@ -540,6 +541,11 @@ model Store {
   // WhatsApp das contas com vencimento hoje dessa loja. Em branco = não
   // manda aviso automático. Reaproveita o módulo WhatsApp já existente.
   telefoneAvisoDiario String?
+
+  // Links sem login: enviar boletos/notas (Lançar Contas) e avisar
+  // pagamentos (Registrar Pagamentos). Um por loja.
+  tokenEnvioContas    String? @unique
+  tokenAvisoPagamento String? @unique
 
   // Multi-tenant: de qual empresa-cliente essa loja é. Obrigatório — toda
   // loja tem uma empresa dona (rodou o backfill antes dessa migração
@@ -1282,6 +1288,12 @@ model Bill {
   paymentProofUrl String?
   notes           String?
 
+  // Conta criada pelo "Aplicar" da Conciliação do Extrato (desfazer apaga).
+  conciliacaoExtratoId String?
+
+  // Código do lançamento no Omie (integração Omie → Contas a Pagar).
+  omieCodigo String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1301,6 +1313,7 @@ model Bill {
   // criação + cron no mesmo dia) nunca duplica o Bill da mesma data —
   // mesmo raciocínio do @@unique equivalente no Controle Rota.
   @@unique([recorrenciaId, dueDate])
+  @@unique([storeId, omieCodigo])
   @@index([storeId])
   @@index([purchaseId])
   @@index([supplierId])
@@ -1312,6 +1325,7 @@ model Bill {
   @@index([barcode])
   @@index([queuedForPaymentAt])
   @@index([pixKey])
+  @@index([conciliacaoExtratoId])
   // Composto pra acelerar a lista de Contas a Pagar (loja + status,
   // mesmo raciocínio do índice equivalente em Purchase) + createdAt pra
   // quando alguém ordenar/paginar por data de criação em vez de vencimento.
@@ -1453,6 +1467,9 @@ model BillCategory {
   name           String
   // Idem Supplier/SupplierCategory: deixou de ser @unique global.
   nameNormalized String
+  // Grupo da categoria na tela de Contas a Pagar (FUNCIONARIOS, REVENDA,
+  // MATERIA_PRIMA, ATIVO). Nulo = categoria antiga/livre ("Outras").
+  group          String?
   active         Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3328,4 +3345,222 @@ model SubscriptionPayment {
   updatedAt      DateTime @updatedAt
 
   @@index([subscriptionId])
+}
+
+// =============================================================================
+// Contas a Pagar → Lançar Contas / Registrar Pagamentos / Conciliação do
+// Extrato / Recebimento automático (WhatsApp + e-mail). storeId nulo = loja
+// ainda não identificada (o financeiro escolhe ao lançar/conciliar).
+// =============================================================================
+
+enum ContaEnviadaStatus {
+  PENDENTE
+  LANCADA
+  DESCARTADA
+}
+
+model ContaEnviada {
+  id              String             @id @default(uuid())
+  empresaId       String
+  storeId         String?
+  // Como a loja foi escolhida: CNPJ (achado no documento), LINK, CANAL, MANUAL
+  lojaPor         String?
+  arquivo         Bytes?
+  arquivoNome     String?
+  arquivoMime     String?
+  tipoDocumento   String             @default("OUTRO")
+  fornecedor      String?
+  fornecedorDoc   String?
+  valor           Float?
+  vencimento      DateTime?
+  emissao         DateTime?
+  numeroDocumento String?
+  codigoBarras    String?
+  chaveNfe        String?
+  descricao       String?
+  parcelas        Json?
+  categoryId      String?
+  observacaoEnvio String?
+  enviadoPorNome  String?
+  origem          String?
+  status          ContaEnviadaStatus @default(PENDENTE)
+  billIds         String[]           @default([])
+  lancadoEm       DateTime?
+  lancadoPor      String?
+  motivoDescarte  String?
+  createdAt       DateTime           @default(now())
+
+  @@index([empresaId, status])
+  @@index([storeId])
+  @@index([codigoBarras])
+  @@index([chaveNfe])
+}
+
+enum PagamentoAvisadoStatus {
+  PENDENTE
+  CONCILIADO
+  DESCARTADO
+}
+
+model PagamentoAvisado {
+  id                   String                 @id @default(uuid())
+  empresaId            String
+  storeId              String?
+  lojaPor              String?
+  fornecedor           String
+  valor                Float                  @default(0)
+  dataPagamento        DateTime
+  descricao            String?
+  comprovante          Bytes?
+  comprovanteNome      String?
+  comprovanteMime      String?
+  avisadoPorNome       String?
+  idTransacao          String?
+  categoryId           String?
+  status               PagamentoAvisadoStatus @default(PENDENTE)
+  conciliadoEm         DateTime?
+  conciliadoPor        String?
+  billId               String?
+  observacaoFinanceiro String?
+  createdAt            DateTime               @default(now())
+
+  @@index([empresaId, status])
+  @@index([storeId])
+  @@index([idTransacao])
+}
+
+model ConciliacaoExtrato {
+  id                String    @id @default(uuid())
+  empresaId         String
+  storeId           String
+  mes               String
+  banco             String?
+  arquivos          String[]  @default([])
+  totalPagamentos   Float     @default(0)
+  totalRecebimentos Float     @default(0)
+  nPagamentos       Int       @default(0)
+  nRecebimentos     Int       @default(0)
+  saldoAnterior     Float?
+  saldoFinal        Float?
+  // ABERTA | APLICADA
+  status            String    @default("ABERTA")
+  pendenteReaplicar Boolean   @default(false)
+  aplicadoEm        DateTime?
+  aplicadoPor       String?
+  token             String?   @unique
+  linkEnviadoEm     DateTime?
+  linkEnviadoPor    String?
+  criadoPor         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  itens ConciliacaoExtratoItem[]
+
+  @@index([empresaId, storeId])
+}
+
+model ConciliacaoExtratoItem {
+  id            String             @id @default(uuid())
+  conciliacaoId String
+  conciliacao   ConciliacaoExtrato @relation(fields: [conciliacaoId], references: [id], onDelete: Cascade)
+  ordem         Int
+  data          DateTime
+  hora          String?
+  tipo          String
+  nome          String
+  documento     String?
+  descricao     String             @default("")
+  valor         Float
+  // [{ k: categoryId | NAO | JA_LANCADO, v: valor }]
+  partes        Json?
+  origem        String?
+  motivo        String?
+  sugestao      String?
+  nota          String?
+  // Conta a pagar que já é este pagamento (não cria outra).
+  billId        String?
+  // O "Aplicar" deu baixa nessa conta (desfazer volta ela pra aberta).
+  baixaFeita    Boolean            @default(false)
+
+  @@index([conciliacaoId])
+}
+
+model ConciliacaoVinculo {
+  id        String   @id @default(uuid())
+  empresaId String
+  termo     String
+  // categoryId ou NAO
+  destino   String
+  createdAt DateTime @default(now())
+
+  @@unique([empresaId, termo])
+}
+
+model RecebimentoWhatsapp {
+  id           String    @id @default(uuid())
+  empresaId    String
+  nome         String
+  instancia    String    @unique
+  segredo      String    @unique
+  ativo        Boolean   @default(true)
+  // Lojas atendidas por este número (vazio = todas da empresa). Com mais de
+  // uma, a loja de cada documento sai do CNPJ.
+  storeIds     String[]  @default([])
+  numero       String?
+  ultimoEvento DateTime?
+  ultimoErro   String?
+  createdAt    DateTime  @default(now())
+
+  @@index([empresaId])
+}
+
+model RecebimentoEmail {
+  id           String    @id @default(uuid())
+  empresaId    String    @unique
+  host         String
+  port         Int       @default(993)
+  secure       Boolean   @default(true)
+  usuario      String
+  senhaCifrada Json
+  ativo        Boolean   @default(true)
+  storeIds     String[]  @default([])
+  ultimoEvento DateTime?
+  ultimoErro   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model EntradaAutomatica {
+  id            String   @id @default(uuid())
+  empresaId     String
+  storeId       String?
+  canal         String
+  externoId     String   @unique
+  remetente     String?
+  nomeRemetente String?
+  assunto       String?
+  arquivoNome   String?
+  tipo          String
+  status        String
+  mensagem      String?
+  destinoTipo   String?
+  destinoId     String?
+  createdAt     DateTime @default(now())
+
+  @@index([empresaId, createdAt])
+}
+
+// Integração Omie → Contas a Pagar: App Key / App Secret de cada bar.
+model OmieIntegracao {
+  id                  String    @id @default(uuid())
+  storeId             String    @unique
+  appKey              String
+  appSecretCifrado    Json
+  empresaOmie         String?
+  resultado           Json?
+  ultimaSincronizacao DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 }

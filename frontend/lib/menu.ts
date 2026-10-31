@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+    CloudDownload,
     Home,
     ShoppingCart,
     ClipboardList,
@@ -23,6 +24,8 @@ import {
     PieChart,
     Calculator,
     CreditCard,
+    Landmark,
+    Inbox,
 } from 'lucide-react';
 
 import type { UserRole } from './auth';
@@ -431,6 +434,38 @@ export const menu: MenuGroup[] = [
                 roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
                 color: 'teal',
                 module: 'CONTAS_A_PAGAR',
+            },
+            {
+                label: 'Conciliação do Extrato',
+                href: '/conciliacao-extrato',
+                icon: Landmark,
+                // Extrato do banco → categorias / baixa em Contas a Pagar.
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
+                color: 'teal',
+                module: 'CONTAS_A_PAGAR',
+                hideForFisica: true,
+            },
+            {
+                label: 'Buscar do Omie',
+                href: '/bills/omie',
+                icon: CloudDownload,
+                // App Key / App Secret do Omie por bar + botão que traz todas
+                // as contas a pagar (pagas e em aberto).
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO'],
+                color: 'teal',
+                module: 'CONTAS_A_PAGAR',
+                hideForFisica: true,
+            },
+            {
+                label: 'Recebimento automático',
+                href: '/recebimento-automatico',
+                icon: Inbox,
+                // WhatsApp (QR code) + e-mail dos boletos → Lançar Contas /
+                // Registrar Pagamentos.
+                roles: ['ADMINISTRATIVO', 'PROPRIETARIO', 'FINANCEIRO'],
+                color: 'teal',
+                module: 'CONTAS_A_PAGAR',
+                hideForFisica: true,
             },
             {
                 label: 'Conciliação de Caixa',

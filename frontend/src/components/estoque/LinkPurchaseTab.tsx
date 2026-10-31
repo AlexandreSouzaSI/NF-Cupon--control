@@ -6,6 +6,7 @@ import { getActiveStore } from '@/lib/active-store';
 import { toast } from 'sonner';
 import { Check, Loader2, Plus, Receipt, Trash2, X } from 'lucide-react';
 import { AutocompleteInput } from '../ui/AutocompleteInput';
+import { MoneyInput } from '../ui/MoneyInput';
 
 type CompraPendente = {
     id: string;
@@ -335,10 +336,7 @@ export function LinkPurchaseTab({ onChanged }: { onChanged: () => void }) {
                                                                 placeholder="Quantidade"
                                                                 className="w-28 rounded-lg border border-zinc-200 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-500 dark:border-zinc-700"
                                                             />
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                step="0.01"
+                                                            <MoneyInput
                                                                 value={linha.valorTotal}
                                                                 onChange={(e) => updateLinha(index, { valorTotal: e.target.value })}
                                                                 placeholder="Valor total"

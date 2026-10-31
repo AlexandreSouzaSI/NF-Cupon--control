@@ -216,6 +216,7 @@ export class FinancialDashboardService {
                             OR: [
                                 { nameNormalized: { contains: 'funcionario' } },
                                 { nameNormalized: { contains: 'freelance' } },
+                                { group: 'FUNCIONARIOS' },
                             ],
                         },
                     },

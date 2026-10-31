@@ -41,6 +41,7 @@ import { CashReconciliationModule } from './cash-reconciliation/cash-reconciliat
 import { AdminModule } from './admin/admin.module';
 import { MeepModule } from './meep/meep.module';
 import { BillingModule } from './billing/billing.module';
+import { ContasEntradaModule } from './contas-entrada/contas-entrada.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { BillingModule } from './billing/billing.module';
     AdminModule,
     MeepModule,
     BillingModule,
+    ContasEntradaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

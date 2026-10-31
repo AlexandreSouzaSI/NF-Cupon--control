@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { canDeleteForever, getUser } from '@/lib/auth';
+import { MoneyInput } from '../ui/MoneyInput';
 
 type Employee = {
     id: string;
@@ -388,10 +389,7 @@ export function EmployeesTab() {
                             <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
                                 Salário (informativo)
                             </label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
+                            <MoneyInput
                                 value={form.salary}
                                 onChange={(e) =>
                                     setForm({
@@ -415,10 +413,7 @@ export function EmployeesTab() {
                                 <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
                                     Adiantamento (valor)
                                 </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
+                                <MoneyInput
                                     value={form.advanceValue}
                                     onChange={(e) =>
                                         setForm({
@@ -455,10 +450,7 @@ export function EmployeesTab() {
                                 <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
                                     Pagamento (valor)
                                 </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
+                                <MoneyInput
                                     value={form.paymentValue}
                                     onChange={(e) =>
                                         setForm({
@@ -495,10 +487,7 @@ export function EmployeesTab() {
                                 <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
                                     Vale transporte (valor da passagem)
                                 </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
+                                <MoneyInput
                                     value={form.vtValue}
                                     onChange={(e) =>
                                         setForm({
@@ -523,10 +512,7 @@ export function EmployeesTab() {
                                 <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
                                     Premiação (valor)
                                 </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
+                                <MoneyInput
                                     value={form.bonusValue}
                                     onChange={(e) =>
                                         setForm({

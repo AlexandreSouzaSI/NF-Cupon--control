@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NfViewerModal } from '../../src/components/ui/NfViewerModal';
+import { MoneyInput } from '../../src/components/ui/MoneyInput';
 
 function photoSrc(photoUrl: string) {
     return `${API_URL}${photoUrl}`;
@@ -551,15 +552,12 @@ function RegistrarTab() {
                                         placeholder="Un. (Lt, kg)"
                                         className="h-10 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm outline-none focus:border-blue-500"
                                     />
-                                    <input
+                                    <MoneyInput
                                         data-tour={
                                             index === 0
                                                 ? 'loss-item-value'
                                                 : undefined
                                         }
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
                                         value={item.unitValue}
                                         onChange={(e) =>
                                             updateItem(index, 'unitValue', e.target.value)

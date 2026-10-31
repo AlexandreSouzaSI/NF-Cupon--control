@@ -272,6 +272,28 @@ export class BillsController {
     // "Colocar todas as vencidas em pagamentos de hoje" de uma vez —
     // botão individual (acima) continua existindo pra marcar/desmarcar
     // uma conta só.
+    // Classificar várias contas de uma vez (checkbox na lista).
+    @Patch('classify')
+    async classifyMany(
+        @CurrentUser() user: any,
+        @Body('ids') ids: string[],
+        @Body('categoryId') categoryId?: string | null,
+    ) {
+        return this.billsService.classifyMany(user, Array.isArray(ids) ? ids : [], categoryId ?? null);
+    }
+
+    // Marcar várias contas como pagas de uma vez (checkbox na lista).
+    // paidAt: 'VENCIMENTO' = cada uma paga no próprio vencimento;
+    // 'AAAA-MM-DD' = todas nessa data; vazio = hoje.
+    @Patch('pay-many')
+    async payMany(
+        @CurrentUser() user: any,
+        @Body('ids') ids: string[],
+        @Body('paidAt') paidAt?: string,
+    ) {
+        return this.billsService.payMany(user, Array.isArray(ids) ? ids : [], paidAt);
+    }
+
     @Patch('queue-today/overdue')
     async queueAllOverdueToday(
         @CurrentUser() user: any,

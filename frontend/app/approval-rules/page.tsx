@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { toast } from 'sonner';
+import { MoneyInput } from '../../src/components/ui/MoneyInput';
 
 type ApprovalRule = {
     id: string;
@@ -173,7 +174,7 @@ export default function ApprovalRulesPage() {
                                 Valor mínimo
                             </label>
 
-                            <input
+                            <MoneyInput
                                 value={minValue}
                                 onChange={(e) =>
                                     setMinValue(e.target.value)
@@ -188,7 +189,7 @@ export default function ApprovalRulesPage() {
                                 Valor máximo
                             </label>
 
-                            <input
+                            <MoneyInput
                                 value={maxValue}
                                 onChange={(e) =>
                                     setMaxValue(e.target.value)

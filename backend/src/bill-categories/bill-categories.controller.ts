@@ -1,7 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminMasterGuard } from '../auth/admin-master.guard';
-import { FindOrCreateBillCategoryDto } from './dto/find-or-create-bill-category.dto';
+import { FindOrCreateBillCategoryDto, UpdateBillCategoryDto } from './dto/find-or-create-bill-category.dto';
 import { BillCategoriesService } from './bill-categories.service';
 
 @Controller('bill-categories')
@@ -11,7 +11,19 @@ export class BillCategoriesController {
 
     @Post('find-or-create')
     async findOrCreate(@Body() body: FindOrCreateBillCategoryDto, @Req() req: any) {
-        return this.billCategoriesService.findOrCreate(body.name, req.user);
+        return this.billCategoriesService.findOrCreate(body.name, req.user, body.group);
+    }
+
+    // Cria as subcategorias padrão (Funcionários, Revenda, Matéria-prima,
+    // Ativo) se ainda não existirem e devolve a lista completa.
+    @Post('padrao')
+    async ensureDefaults(@Req() req: any) {
+        return this.billCategoriesService.ensureDefaults(req.user);
+    }
+
+    @Patch(':id')
+    async update(@Param('id') id: string, @Body() body: UpdateBillCategoryDto, @Req() req: any) {
+        return this.billCategoriesService.update(id, body, req.user);
     }
 
     @Get()

@@ -14,6 +14,7 @@ import {
     type PlanDto,
     type SubscriptionStatus,
 } from '@/lib/billing';
+import { MoneyInput } from '../../../src/components/ui/MoneyInput';
 
 type AdminPlan = PlanDto & { _count?: { subscriptions: number } };
 
@@ -544,9 +545,8 @@ export default function AdminPlanosPage() {
                                 <label className="mb-1 block text-sm">
                                     Preço mensal (R$)
                                 </label>
-                                <input
+                                <MoneyInput formato="virgula"
                                     required
-                                    inputMode="decimal"
                                     placeholder="199,90"
                                     value={form.price}
                                     onChange={(e) => setForm({ ...form, price: e.target.value })}
