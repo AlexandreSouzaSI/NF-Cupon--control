@@ -442,6 +442,7 @@ export class UsersService {
     async findByEmail(email: string) {
         return this.prisma.user.findUnique({
             where: { email },
+            omit: { password: false },
             include: {
                 userStores: {
                     include: {
@@ -455,6 +456,7 @@ export class UsersService {
     async findByPhone(phone: string) {
         return this.prisma.user.findUnique({
             where: { phone: normalizePhone(phone) },
+            omit: { password: false },
             include: {
                 userStores: {
                     include: {

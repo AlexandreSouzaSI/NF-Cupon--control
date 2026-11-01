@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     CloudDownload,
+    Link2,
     Banknote,
     Building2,
     CalendarDays,
@@ -33,7 +34,7 @@ import { toast } from 'sonner';
 
 import { AppLayout } from '../../src/components/app-layout';
 import { AutocompleteInput } from '../../src/components/ui/AutocompleteInput';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { canManagePaymentBatch, getUser } from '@/lib/auth';
 import {
@@ -50,6 +51,7 @@ import {
     type BillCategoryGroup,
 } from '../../src/components/bills/BillCategorySelect';
 import { AbasContas } from '../../src/components/bills/AbasContas';
+import { NfChip, NfVinculoModal } from '../../src/components/bills/NfDaConta';
 import { MoneyInput } from '../../src/components/ui/MoneyInput';
 
 type Store = {
@@ -79,6 +81,12 @@ type Bill = {
     paymentMethod: string;
 
     dueDate: string;
+    // Vencimento do documento quando caía em fim de semana/feriado (o
+    // dueDate já foi empurrado pro próximo dia útil).
+    dueDateOriginal?: string | null;
+    // NF do sistema ligada à conta.
+    nfEntrada?: { id: string; chaveAcesso: string; issuerName?: string | null; value?: string | number | null; issueDate?: string | null } | null;
+    nfServico?: { id: string; chaveAcesso: string; numeroNf?: string | null; issuerName?: string | null; value?: string | number | null; issueDate?: string | null } | null;
     paidAt?: string | null;
     queuedForPaymentAt?: string | null;
 
@@ -289,6 +297,14 @@ function formatCurrency(value: string | number) {
         style: 'currency',
         currency: 'BRL',
     });
+}
+
+// "era sáb., 15/11" — quando o vencimento foi empurrado pro dia útil.
+function vencimentoOriginal(bill: { dueDateOriginal?: string | null }) {
+    if (!bill.dueDateOriginal) return null;
+    const d = new Date(bill.dueDateOriginal);
+    const dia = d.toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'short' }).replace('.', '');
+    return `venc. original ${dia} ${d.toLocaleDateString('pt-BR', { timeZone: 'UTC', day: '2-digit', month: '2-digit' })} (fim de semana/feriado)`;
 }
 
 function formatDate(value?: string | null) {
@@ -959,6 +975,26 @@ function BillsPageInner() {
     const pageBills = filteredBills.slice((currentPage - 1) * pageSize, currentPage * pageSize);
     const detailBill = detailId ? bills.find((bill) => bill.id === detailId) ?? null : null;
 
+    // NF da conta (janela de atrelar / trocar / remover).
+    const [nfBillId, setNfBillId] = useState<string | null>(null);
+    const nfBill = nfBillId ? bills.find((bill) => bill.id === nfBillId) ?? null : null;
+    const [vinculandoNfs, setVinculandoNfs] = useState(false);
+
+    async function vincularNfsAutomatico() {
+        try {
+            setVinculandoNfs(true);
+            const r = await api.post('/bills/nfs/vincular-automatico', { storeId: getActiveStore()?.id || undefined });
+            toast.success(r.data?.vinculadas
+                ? `${r.data.vinculadas} conta(s) atrelada(s) à NF.`
+                : 'Nenhuma conta nova para atrelar automaticamente — use "Atrelar NF" na linha da conta.');
+            await loadBills();
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Não foi possível atrelar as NFs.');
+        } finally {
+            setVinculandoNfs(false);
+        }
+    }
+
     const allVisibleSelected =
         pageBills.length > 0 &&
         pageBills.every((bill) => selectedIds.has(bill.id));
@@ -1610,6 +1646,11 @@ function BillsPageInner() {
                             <CloudDownload size={16} /> Buscar do Omie
                         </button>
                     )}
+                    <button onClick={vincularNfsAutomatico} disabled={vinculandoNfs}
+                        title="Liga as contas às NFs de entrada do sistema pela chave da NF-e ou pelo CNPJ + número da nota"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-zinc-700 text-sm font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 transition disabled:opacity-50">
+                        <Link2 size={16} /> {vinculandoNfs ? 'Atrelando NFs…' : 'Atrelar NFs automaticamente'}
+                    </button>
                     <button onClick={() => router.push('/bills/reconcile')}
                         className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-zinc-700 text-sm font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 transition">
                         <Landmark size={16} /> Conciliar com banco
@@ -1702,6 +1743,7 @@ function BillsPageInner() {
                                                         </span>
                                                         {bill.description}
                                                     </p>
+                                                    <NfChip bill={bill} onAbrir={() => setNfBillId(bill.id)} onRemovido={loadBills} />
                                                     {bill.queuedForPaymentAt && status === 'OVERDUE' && (
                                                         <span className="inline-block mt-0.5 text-xs text-amber-600 dark:text-amber-400">Nos pagamentos de hoje</span>
                                                     )}
@@ -1720,6 +1762,9 @@ function BillsPageInner() {
                                                 <td className="py-2.5 px-4 whitespace-nowrap">
                                                     <p>{formatDate(bill.dueDate)}</p>
                                                     <p className={`text-xs ${prazo.tom}`}>{prazo.texto}</p>
+                                                    {bill.dueDateOriginal && (
+                                                        <p className="text-[11px] text-gray-400" title={vencimentoOriginal(bill) ?? ''}>era {formatDate(bill.dueDateOriginal).slice(0, 5)} · dia não útil</p>
+                                                    )}
                                                 </td>
                                                 <td className="py-2.5 px-4 whitespace-nowrap">
                                                     <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(bill.value)}</p>
@@ -1791,6 +1836,10 @@ function BillsPageInner() {
                                 <X size={18} />
                             </button>
                         </div>
+                        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-zinc-300">
+                            <span className="font-medium">Nota fiscal:</span>
+                            <NfChip bill={detailBill} onAbrir={() => setNfBillId(detailBill.id)} onRemovido={loadBills} />
+                        </div>
                         <BillRow
                             bill={detailBill}
                             processing={processingId === detailBill.id}
@@ -1810,6 +1859,10 @@ function BillsPageInner() {
                         />
                     </div>
                 </div>
+            )}
+
+            {nfBill && (
+                <NfVinculoModal bill={nfBill} onClose={() => setNfBillId(null)} onChanged={loadBills} />
             )}
 
             {showBatchConfig && (
@@ -2066,7 +2119,7 @@ function BillRow({
                             icon={ReceiptText}
                             label="Vencimento"
                             value={formatDate(bill.dueDate)}
-                            secondary={getDueDateMessage(bill)}
+                            secondary={[getDueDateMessage(bill), vencimentoOriginal(bill)].filter(Boolean).join(' · ')}
                             danger={
                                 displayStatus === 'OVERDUE'
                             }
@@ -2131,7 +2184,7 @@ function BillRow({
                     <div className="mt-4 flex flex-wrap gap-2">
                         {bill.fileUrl && (
                             <a
-                                href={`${API_URL}${bill.fileUrl}`}
+                                href={arquivoUrl(bill.fileUrl)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-sm text-purple-400 hover:bg-purple-500/20"
@@ -2143,7 +2196,7 @@ function BillRow({
 
                         {bill.paymentProofUrl && (
                             <a
-                                href={`${API_URL}${bill.paymentProofUrl}`}
+                                href={arquivoUrl(bill.paymentProofUrl)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-400 hover:bg-blue-500/20"

@@ -3,6 +3,8 @@ import { BillPaymentMethod, BillStatus, PayableType, PixKeyType, Prisma } from '
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeCategoryName } from '../bill-categories/bill-categories.service';
+import { BillsNfService } from '../bills/bills-nf.service';
+import { vencimentoUtil } from '../common/dias-uteis';
 import { decryptSecret, encryptSecret } from '../stores/certificate-crypto.util';
 import { normalizeSupplierName } from '../suppliers/suppliers.service';
 import { empresaDo, exigirGestor, lojasPermitidas, lojaValida, so } from './entrada.util';
@@ -123,7 +125,10 @@ export class OmieContasService {
     private readonly logger = new Logger(OmieContasService.name);
     private readonly rodando = new Set<string>();
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly billsNf: BillsNfService,
+    ) { }
 
     // ---------------------------------------------------------------- telas
 
@@ -360,6 +365,16 @@ export class OmieContasService {
         await etapa(`Gravando ${contas.length} contas…`);
         await this.gravarContas(storeId, empresaId, userId, contas, { categoriasOmie, contasCorrentes, clientes, pagamentos }, limparAntigas, r);
 
+        // Liga as contas às NFs de entrada que já estão no sistema (pela
+        // chave da NF-e que veio do Omie).
+        try {
+            await etapa('Ligando as contas às NFs do sistema…');
+            const v = await this.billsNf.vincularAutomatico(null, storeId);
+            if (v.vinculadas) avisos.push(`${v.vinculadas} conta(s) ligada(s) à NF de entrada do sistema.`);
+        } catch {
+            // não atrapalha a busca
+        }
+
         r.status = 'OK';
         r.etapa = 'Concluída';
         r.fim = new Date().toISOString();
@@ -419,7 +434,7 @@ export class OmieContasService {
         const existentes = await this.prisma.bill.findMany({
             where: { storeId },
             select: {
-                id: true, omieCodigo: true, status: true, paidAt: true, value: true, dueDate: true, notes: true,
+                id: true, omieCodigo: true, status: true, paidAt: true, value: true, dueDate: true, dueDateOriginal: true, notes: true,
                 supplierId: true, categoryId: true, supplier: { select: { nameNormalized: true, cnpj: true } },
             },
         });
@@ -431,7 +446,7 @@ export class OmieContasService {
         for (const b of existentes) {
             if (b.omieCodigo || !b.notes?.startsWith('Importada do Omie.')) continue;
             for (const forn of [so(b.supplier?.cnpj), b.supplier?.nameNormalized].filter(Boolean) as string[]) {
-                const k = chavePlanilha(forn, b.dueDate, Number(b.value));
+                const k = chavePlanilha(forn, b.dueDateOriginal ?? b.dueDate, Number(b.value));
                 planilha.set(k, [...(planilha.get(k) ?? []), b]);
             }
         }
@@ -526,7 +541,9 @@ export class OmieContasService {
             if (pagaAqui) { status = BillStatus.PAID; paidAt = undefined; }
             else if (cancelada) { status = BillStatus.CANCELED; paidAt = null; }
             else if (paga) { status = BillStatus.PAID; paidAt = pag?.data ?? venc; }
-            else { status = venc < hoje ? BillStatus.OVERDUE : BillStatus.OPEN; paidAt = null; }
+            else { status = vencimentoUtil(venc).dueDate < hoje ? BillStatus.OVERDUE : BillStatus.OPEN; paidAt = null; }
+            // Em aberto: vencimento em fim de semana/feriado vai pro próximo dia útil.
+            const vencGravar = status === BillStatus.PAID || status === BillStatus.CANCELED ? { dueDate: venc, dueDateOriginal: null } : vencimentoUtil(venc);
 
             if (status === BillStatus.PAID) r.pagas!++;
             else if (status === BillStatus.CANCELED) r.canceladas!++;
@@ -548,7 +565,7 @@ export class OmieContasService {
                     ...(paidAt !== undefined ? { paidAt } : {}),
                     ...(status === BillStatus.PAID ? { queuedForPaymentAt: null } : {}),
                     // Conta já paga aqui: não mexe em valor/vencimento.
-                    ...(!pagaAqui ? { value: valor, dueDate: venc } : {}),
+                    ...(!pagaAqui ? { value: valor, dueDate: vencGravar.dueDate, dueDateOriginal: vencGravar.dueDateOriginal } : {}),
                     supplierId: existente.supplierId ?? (await fornecedorId(fornNome, fornDoc)),
                     categoryId: existente.categoryId ?? (await categoriaId(nomeCategoriaOmie)),
                 };
@@ -563,7 +580,8 @@ export class OmieContasService {
                         value: valor,
                         type,
                         paymentMethod,
-                        dueDate: venc,
+                        dueDate: vencGravar.dueDate,
+                        dueDateOriginal: vencGravar.dueDateOriginal,
                         status,
                         paidAt: paidAt ?? null,
                         ...dadosPagamento,

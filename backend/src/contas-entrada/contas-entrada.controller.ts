@@ -120,6 +120,16 @@ export class ContasEntradaController {
         return this.contas.parecidas(user, id);
     }
 
+    @Get('contas/:id/nfs')
+    nfsDaConta(@CurrentUser() user: any, @Param('id') id: string, @Query('q') q?: string) {
+        return this.contas.nfsCandidatas(user, id, q);
+    }
+
+    @Patch('contas/:id')
+    salvarConta(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
+        return this.contas.salvar(user, id, body ?? {});
+    }
+
     @Patch('contas/:id/lancar')
     lancar(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
         return this.contas.lancar(user, id, body ?? {});
@@ -358,7 +368,7 @@ export class ContasEntradaPublicController {
             categoryId: body?.categoryId,
             observacao: body?.observacao,
         });
-        return { ok: true, fornecedor: r.fornecedor, valor: r.valor, vencimento: r.vencimento, tipoDocumento: r.tipoDocumento };
+        return { ok: true, fornecedor: r.fornecedor, valor: r.valor, vencimento: r.vencimento, tipoDocumento: r.tipoDocumento, total: r.total };
     }
 
     @Get('avisar/:token')

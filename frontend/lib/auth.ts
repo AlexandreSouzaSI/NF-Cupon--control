@@ -211,5 +211,6 @@ export function getUser(): AuthUser | null {
 export function logout() {
     Cookies.remove('token');
     Cookies.remove('user');
+    Cookies.remove('ftoken');
     clearActiveStore();
 }

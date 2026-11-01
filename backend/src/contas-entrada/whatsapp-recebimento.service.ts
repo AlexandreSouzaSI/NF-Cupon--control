@@ -10,8 +10,12 @@ import { RecebimentoAutomaticoService, Resultado } from './recebimento-automatic
 // EVOLUTION_API_KEY), mas com instâncias próprias: cada número conectado é
 // uma instância "nfreceb-...", ligada por QR code na tela Recebimento
 // automático. Um número pode atender uma loja ou várias (aí a loja de cada
-// documento sai do CNPJ). Só reage a arquivo; texto/áudio/figurinha são
-// ignorados e o número não conversa com ninguém.
+// documento sai do CNPJ). Funciona em conversa direta e em GRUPO (todo mundo
+// manda no mesmo grupo). A loja de cada documento sai, nesta ordem, do CNPJ
+// do pagador/destinatário, da NF já cadastrada, do nome da loja escrito na
+// legenda ("Raiz", "Anchieta") — e, se nada disso resolver, o número
+// pergunta no próprio chat "de qual loja é?" e a resposta ("2" ou "Raiz")
+// direciona. Fora isso, texto/áudio/figurinha são ignorados.
 //
 //   WEBHOOK_BASE_URL  como o Evolution alcança este backend
 //                     (ex.: http://backend:3000 no docker, ou a URL pública da API)
@@ -122,11 +126,15 @@ export class WhatsappRecebimentoService {
         const webhook = { enabled: true, url: this.webhookUrl(c.segredo), byEvents: false, base64: true, events: ['MESSAGES_UPSERT'] };
         const existe = await this.chamar('GET', `/instance/connectionState/${c.instancia}`).then(() => true).catch((e) => (e?.status === 404 ? false : Promise.reject(e)));
         if (!existe) {
-            const r = await this.chamar('POST', '/instance/create', { instanceName: c.instancia, integration: 'WHATSAPP-BAILEYS', qrcode: true, webhook });
+            const r = await this.chamar('POST', '/instance/create', { instanceName: c.instancia, integration: 'WHATSAPP-BAILEYS', qrcode: true, webhook, groupsIgnore: false });
             const qr = r?.qrcode?.base64 ?? null;
             if (qr) return { estado: 'connecting', qr };
         } else {
             await this.chamar('POST', `/webhook/set/${c.instancia}`, { webhook }).catch((e) => this.log.warn(`webhook/set: ${e?.message}`));
+            // Grupos precisam chegar (todas as lojas mandam no mesmo grupo).
+            await this.chamar('POST', `/settings/set/${c.instancia}`, {
+                rejectCall: false, groupsIgnore: false, alwaysOnline: false, readMessages: false, readStatus: false, syncFullHistory: false,
+            }).catch((e) => this.log.warn(`settings/set: ${e?.message}`));
         }
         const st = await this.estado(c.instancia);
         if (st.estado === 'open') return { estado: 'open', qr: null, numero: st.numeroAtual };
@@ -150,12 +158,37 @@ export class WhatsappRecebimentoService {
         return { ok: true };
     }
 
-    private async enviarTexto(instancia: string, numero: string, texto: string) {
+    // Responde no chat (conversa ou grupo), citando a mensagem original
+    // quando der. Devolve o id da mensagem enviada.
+    private async enviarTexto(instancia: string, numero: string, texto: string, citar?: any): Promise<string | null> {
+        const base = { number: numero, text: texto };
         try {
-            await this.chamar('POST', `/message/sendText/${instancia}`, { number: numero, text: texto });
+            const r = await this.chamar('POST', `/message/sendText/${instancia}`, citar?.key ? { ...base, quoted: { key: citar.key, message: citar.message ?? { conversation: '' } } } : base);
+            return r?.key?.id ?? null;
         } catch (e: any) {
+            if (citar?.key) return this.enviarTexto(instancia, numero, texto);
             this.log.warn(`Não consegui responder ${numero}: ${e?.message}`);
+            return null;
         }
+    }
+
+    private textoDa(msg: any): string | null {
+        const m = msg?.message ?? {};
+        return m.conversation ?? m.extendedTextMessage?.text ?? null;
+    }
+
+    // Resposta à pergunta "de qual loja é?" (no grupo ou na conversa).
+    private async tratarResposta(c: { empresaId: string; instancia: string; storeIds: string[] }, chat: string, msg: any) {
+        const texto = this.textoDa(msg);
+        if (!texto || texto.length > 60) return;
+        const citado = msg?.message?.extendedTextMessage?.contextInfo?.stanzaId ?? null;
+        const pendente = await this.recebimento.aguardandoLoja(c.empresaId, chat, citado);
+        if (!pendente) return;
+        const loja = await this.recebimento.lojaPeloTexto(c.empresaId, texto, c.storeIds, true);
+        // Conversa normal do grupo: não responde nada.
+        if (!loja) return;
+        const n = await this.recebimento.aplicarLoja(pendente.id, loja.id);
+        await this.enviarTexto(c.instancia, chat, `👍 Anotado: ${loja.name}${n > 1 ? ` (${n} contas)` : ''}.`, msg);
     }
 
     // ------------------------------------------------------------------ webhook
@@ -199,28 +232,47 @@ export class WhatsappRecebimentoService {
 
     private async tratarMensagem(c: { id: string; empresaId: string; instancia: string; storeIds: string[] }, msg: any) {
         const jid: string = msg.key.remoteJid ?? '';
-        if (msg.key.fromMe || !jid || jid.endsWith('@g.us') || jid === 'status@broadcast' || jid.endsWith('@newsletter')) return;
-        const real: string = jid.endsWith('@lid') ? (msg.key.remoteJidAlt ?? msg.key.senderPn ?? jid) : jid;
-        const numero = real.endsWith('@lid') ? real : real.split('@')[0];
+        if (msg.key.fromMe || !jid || jid === 'status@broadcast' || jid.endsWith('@newsletter')) return;
+        const grupo = jid.endsWith('@g.us');
+        // Quem mandou: no grupo é o participante; na conversa, o próprio chat.
+        const autor: string = grupo
+            ? (msg.key.participantAlt ?? msg.key.participantPn ?? msg.key.participant ?? msg.participant ?? '')
+            : jid.endsWith('@lid') ? (msg.key.remoteJidAlt ?? msg.key.senderPn ?? jid) : jid;
+        const numero = autor.endsWith('@lid') || !autor ? autor : autor.split('@')[0];
+        // Para onde responder: o grupo inteiro ou a pessoa.
+        const chat = grupo ? jid : numero;
         const midia = this.extrairMidia(msg);
-        // Só arquivo (PDF, XML ou foto). O resto é ignorado em silêncio.
-        if (!midia) return;
+        // Texto: só interessa se for resposta à pergunta da loja.
+        if (!midia) {
+            await this.tratarResposta(c, chat, msg);
+            return;
+        }
         if (!/pdf|image|xml/.test(midia.mime) && !/\.(pdf|xml|jpe?g|png)$/i.test(midia.nome)) return;
 
         const buffer = await this.baixar(c.instancia, msg, midia);
         const r: Resultado = await this.recebimento.processar(c.empresaId, 'WHATSAPP',
             { buffer, nome: midia.nome, mime: midia.mime },
-            { externoId: `wa:${c.instancia}:${msg.key.id}`, remetente: numero.includes('@') ? numero : `+${numero}`, nomeRemetente: msg.pushName ?? null, texto: midia.legenda || null },
+            { externoId: `wa:${c.instancia}:${msg.key.id}`, remetente: !numero ? null : numero.includes('@') ? numero : `+${numero}`, nomeRemetente: msg.pushName ?? null, texto: midia.legenda || null, chatId: chat },
             c.storeIds);
         await this.prisma.recebimentoWhatsapp.update({ where: { id: c.id }, data: { ultimoEvento: new Date(), ultimoErro: null } });
 
         if (r.status === 'JA_PROCESSADO') return;
         const oque = r.tipo === 'COMPROVANTE' ? 'Comprovante' : 'Boleto/nota';
+
+        // Não deu pra saber a loja: pergunta no chat.
+        if (r.status === 'OK' && r.semLoja && r.entradaId) {
+            const lojas = await this.recebimento.lojasDoCanal(c.empresaId, c.storeIds);
+            const opcoes = lojas.map((l, i) => `${i + 1} - ${l.name}`).join('\n');
+            const pergunta = `📍 ${r.total && r.total > 1 ? `${r.total} contas recebidas` : `${oque} recebido`}${r.resumo ? `: ${r.resumo}` : ''}.\nNão achei a loja no documento — *de qual loja é?* Responda esta mensagem com o número ou o nome:\n${opcoes}`;
+            const idPergunta = await this.enviarTexto(c.instancia, chat, pergunta, msg);
+            await this.recebimento.marcarPergunta(r.entradaId, idPergunta);
+            return;
+        }
         const loja = r.loja ? ` (${r.loja})` : '';
         const texto =
-            r.status === 'OK' ? `✅ ${oque} recebido${loja}${r.resumo ? `: ${r.resumo}` : ''}. Já está com o financeiro para conferir.${r.tipo === 'COMPROVANTE' && !midia.legenda && /image/.test(midia.mime) ? '\n(Se for boleto ou nota, mande de novo escrevendo "boleto" ou "nota" na legenda.)' : ''}`
+            r.status === 'OK' ? `✅ ${r.total && r.total > 1 ? `${r.total} contas recebidas` : `${oque} recebido`}${loja}${r.resumo ? `: ${r.resumo}` : ''}. Já está com o financeiro para conferir.${r.tipo === 'COMPROVANTE' && !midia.legenda && /image/.test(midia.mime) ? '\n(Se for boleto ou nota, mande de novo escrevendo "boleto" ou "nota" na legenda.)' : ''}`
                 : r.status === 'DUPLICADO' ? `⚠️ Esse ${oque.toLowerCase()} já tinha sido enviado antes — não registrei de novo.`
                     : `❌ Não consegui registrar esse arquivo (${r.mensagem}). Pode mandar de novo ou falar com o financeiro?`;
-        await this.enviarTexto(c.instancia, numero, texto);
+        await this.enviarTexto(c.instancia, chat, texto, grupo ? msg : undefined);
     }
 }

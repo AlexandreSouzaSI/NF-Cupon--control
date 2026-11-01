@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AppLayout } from '../../src/components/app-layout';
 import { AutocompleteInput } from '../../src/components/ui/AutocompleteInput';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import {
     CheckCircle2,
@@ -397,7 +397,7 @@ export default function FiscalDocumentsPage() {
 
                                             {nf.fileUrl && (
                                                 <a
-                                                    href={`${API_URL}${nf.fileUrl}`}
+                                                    href={arquivoUrl(nf.fileUrl)}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="mt-2 inline-block text-sm font-medium text-purple-400 hover:text-purple-300"
@@ -549,7 +549,7 @@ export default function FiscalDocumentsPage() {
 
                                                             {doc.fileUrl && (
                                                                 <a
-                                                                    href={`${API_URL}${doc.fileUrl}`}
+                                                                    href={arquivoUrl(doc.fileUrl)}
                                                                     target="_blank"
                                                                     rel="noreferrer"
                                                                     className="mt-2 inline-block text-sm font-medium text-blue-400 hover:text-blue-300"

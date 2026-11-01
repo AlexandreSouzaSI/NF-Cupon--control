@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
@@ -27,9 +27,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     async validate(
         req: Request,
-        payload: { sub: string; email: string; role: string },
+        payload: { sub: string; email: string; role: string; scope?: string },
     ) {
-        const user = await this.usersService.findById(payload.sub);
+        // Token de arquivo (?t= dos links de /uploads) não serve pra API.
+        if (payload?.scope) throw new UnauthorizedException();
+
+        const user = await this.usersService.findById(payload.sub).catch(() => null);
+
+        // Desativado (ou excluído) perde o acesso na hora, mesmo com o token
+        // de 7 dias ainda válido.
+        if (!user || !user.active) {
+            throw new UnauthorizedException('Seu acesso foi desativado.');
+        }
 
         // Teste grátis vencido: antes cortava tudo (401 → logout). Agora a
         // conta fica "recuperável por pagamento": a API só deixa passar as

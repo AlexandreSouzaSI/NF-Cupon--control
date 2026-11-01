@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { api } from '@/lib/api';
+import { api, opcoesCookie } from '@/lib/api';
 
 import Cookies from 'js-cookie';
 
@@ -37,12 +37,10 @@ export default function LoginPage() {
         password,
       });
 
-      Cookies.set('token', response.data.access_token);
+      Cookies.set('token', response.data.access_token, opcoesCookie());
+      Cookies.remove('ftoken');
 
-      Cookies.set(
-        'user',
-        JSON.stringify(response.data.user),
-      );
+      Cookies.set('user', JSON.stringify(response.data.user), opcoesCookie());
 
       toast.success('Login realizado');
 

@@ -50,7 +50,9 @@ export default function EnviarContaPage() {
             try { localStorage.setItem('enviar-conta-nome', nome.trim()); } catch { /* ignora */ }
             const r = await api.post(`/publico/enviar-conta/${token}`, fd);
             const partes = [r.data.fornecedor, r.data.valor ? moeda(r.data.valor) : null].filter(Boolean);
-            setOk(partes.length ? partes.join(' — ') : 'Documento recebido. O financeiro vai conferir os dados.');
+            setOk(r.data.total > 1
+                ? `${r.data.total} contas recebidas neste arquivo. O financeiro vai conferir os dados.`
+                : partes.length ? partes.join(' — ') : 'Documento recebido. O financeiro vai conferir os dados.');
             setArquivo(null); setCategoryId(''); setObservacao('');
         } catch (err: any) {
             setErro(err?.response?.data?.message ?? 'Não foi possível enviar.');

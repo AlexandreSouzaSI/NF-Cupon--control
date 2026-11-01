@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 
 import { AppLayout } from '../../../src/components/app-layout';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 
 type PurchaseItem = {
@@ -897,7 +897,7 @@ function PurchaseDetailPageInner() {
                                         </p>
 
                                         <a
-                                            href={`${API_URL}${purchase.orderMirrorUrl}`}
+                                            href={arquivoUrl(purchase.orderMirrorUrl)}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="font-medium text-blue-400 hover:underline"
@@ -1329,7 +1329,7 @@ function PurchaseDetailPageInner() {
 
                                                         return (
                                                             <a
-                                                                href={`${API_URL}${document.fileUrl}`}
+                                                                href={arquivoUrl(document.fileUrl)}
                                                                 target="_blank"
                                                                 rel="noreferrer"
                                                                 className="inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-sm font-medium text-purple-400 hover:bg-purple-500/20"

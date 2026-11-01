@@ -208,8 +208,9 @@ export default function RecebimentoAutomaticoPage() {
                             );
                         })}
                         <p className="text-xs text-gray-500">
-                            Cada PDF ou foto recebido é registrado e a pessoa recebe uma resposta confirmando (com a loja). Foto sem legenda vira <b>comprovante</b>; escrevendo &quot;boleto&quot; ou &quot;nota&quot; na legenda, vira conta a lançar.
-                            Texto, áudio e grupos são ignorados — o número não conversa com ninguém. Integração não oficial: se desconectar, é só ler o QR code de novo.
+                            Funciona em conversa e em <b>grupo</b> (pode ser um grupo só para todas as lojas). Cada PDF ou foto é registrado e o número responde confirmando, com a loja.
+                            A loja sai do <b>CNPJ do pagador/destinatário</b> no documento; se não tiver, do nome da loja escrito na legenda (ex.: &quot;Raiz&quot;); se ainda assim não der, o número pergunta &quot;de qual loja é?&quot; e é só responder com o número ou o nome.
+                            Foto ou PDF escaneado sem legenda: a leitura automática decide se é boleto/nota ou comprovante. Áudio e conversa normal do grupo são ignorados. Integração não oficial: se desconectar, é só ler o QR code de novo.
                         </p>
                     </div>
 

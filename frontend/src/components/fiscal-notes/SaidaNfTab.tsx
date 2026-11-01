@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Pagination } from '../ui/Pagination';
 import { NfViewerModal } from '../ui/NfViewerModal';
@@ -486,7 +486,7 @@ export function SaidaNfTab() {
 
                                                     {note.fileUrl && (
                                                         <a
-                                                            href={`${API_URL}${note.fileUrl}`}
+                                                            href={arquivoUrl(note.fileUrl)}
                                                             target="_blank"
                                                             rel="noreferrer"
                                                             className="inline-flex items-center gap-2 rounded-xl bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-400 hover:bg-blue-500/20"

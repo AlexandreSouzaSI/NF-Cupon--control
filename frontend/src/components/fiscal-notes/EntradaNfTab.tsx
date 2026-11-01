@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Pagination } from '../ui/Pagination';
 import { NfSearchInput, useDebouncedValue } from '../ui/NfSearchInput';
@@ -771,7 +771,7 @@ export function EntradaNfTab() {
 
                                             {nf.fileUrl && (
                                                 <a
-                                                    href={`${API_URL}${nf.fileUrl}`}
+                                                    href={arquivoUrl(nf.fileUrl)}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="inline-block text-sm font-medium text-blue-500 hover:underline"

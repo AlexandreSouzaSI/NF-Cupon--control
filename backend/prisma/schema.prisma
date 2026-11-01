@@ -1250,6 +1250,9 @@ model Bill {
   paymentMethod BillPaymentMethod @default(BANK_SLIP)
 
   dueDate DateTime
+  // Vencimento que veio no documento quando caía em sábado/domingo/feriado
+  // (dueDate foi empurrado pro próximo dia útil). Null = não foi mexido.
+  dueDateOriginal DateTime?
   paidAt  DateTime?
 
   status BillStatus @default(OPEN)
@@ -1291,6 +1294,10 @@ model Bill {
   // Conta criada pelo "Aplicar" da Conciliação do Extrato (desfazer apaga).
   conciliacaoExtratoId String?
 
+  // NF do sistema desta conta (várias parcelas podem apontar pra mesma NF).
+  nfEntradaId String?
+  nfServicoId String?
+
   // Código do lançamento no Omie (integração Omie → Contas a Pagar).
   omieCodigo String?
 
@@ -1303,6 +1310,8 @@ model Bill {
   category    BillCategory?    @relation(fields: [categoryId], references: [id])
   launchedBy  User             @relation("BillLaunchedBy", fields: [launchedById], references: [id])
   recorrencia BillRecorrencia? @relation(fields: [recorrenciaId], references: [id])
+  nfEntrada   IncomingGoodsNf?   @relation("BillNfEntrada", fields: [nfEntradaId], references: [id], onDelete: SetNull)
+  nfServico   IncomingServiceNf? @relation("BillNfServico", fields: [nfServicoId], references: [id], onDelete: SetNull)
 
   // NF que deram origem a essa conta ao serem aceitas direto (sem passar
   // por Compra/Serviço já cadastrado) — ver IncomingGoodsNf/IncomingServiceNf.
@@ -1322,10 +1331,13 @@ model Bill {
   @@index([type])
   @@index([paymentMethod])
   @@index([dueDate])
+  @@index([recorrenciaId, dueDateOriginal])
   @@index([barcode])
   @@index([queuedForPaymentAt])
   @@index([pixKey])
   @@index([conciliacaoExtratoId])
+  @@index([nfEntradaId])
+  @@index([nfServicoId])
   // Composto pra acelerar a lista de Contas a Pagar (loja + status,
   // mesmo raciocínio do índice equivalente em Purchase) + createdAt pra
   // quando alguém ordenar/paginar por data de criação em vez de vencimento.
@@ -1625,6 +1637,9 @@ model IncomingServiceNf {
   service Service? @relation(fields: [serviceId], references: [id])
   bill    Bill?    @relation("IncomingServiceNfBill", fields: [billId], references: [id])
 
+  // Contas a pagar ligadas a esta NF (Contas a Pagar → NF).
+  contasVinculadas Bill[] @relation("BillNfServico")
+
   @@unique([storeId, chaveAcesso])
   @@index([storeId])
   @@index([serviceId])
@@ -1689,6 +1704,9 @@ model IncomingGoodsNf {
   purchase   Purchase?      @relation(fields: [purchaseId], references: [id])
   bill       Bill?          @relation("IncomingGoodsNfBill", fields: [billId], references: [id])
   devolucoes DevolucaoNfe[]
+
+  // Contas a pagar ligadas a esta NF (Contas a Pagar → NF).
+  contasVinculadas Bill[] @relation("BillNfEntrada")
 
   @@unique([storeId, chaveAcesso])
   @@index([storeId])
@@ -3388,12 +3406,20 @@ model ContaEnviada {
   lancadoEm       DateTime?
   lancadoPor      String?
   motivoDescarte  String?
+  // Conferência (editado antes de lançar)
+  tipoConta             String?
+  formaPagamento        String?
+  observacaoConferencia String?
+  // NF do sistema atrelada (NF de entrada / NFS-e já buscadas)
+  nfEntradaId           String?
+  nfServicoId           String?
   createdAt       DateTime           @default(now())
 
   @@index([empresaId, status])
   @@index([storeId])
   @@index([codigoBarras])
   @@index([chaveNfe])
+  @@index([nfEntradaId])
 }
 
 enum PagamentoAvisadoStatus {
@@ -3545,9 +3571,17 @@ model EntradaAutomatica {
   mensagem      String?
   destinoTipo   String?
   destinoId     String?
+  // Todas as contas criadas a partir do arquivo (um PDF pode ter várias).
+  destinoIds    String[] @default([])
+  // WhatsApp: chat (grupo/pessoa) e a pergunta "de qual loja é?"
+  chatId         String?
+  perguntaMsgId  String?
+  aguardandoLoja Boolean  @default(false)
   createdAt     DateTime @default(now())
 
   @@index([empresaId, createdAt])
+  @@index([chatId, aguardandoLoja])
+  @@index([perguntaMsgId])
 }
 
 // Integração Omie → Contas a Pagar: App Key / App Secret de cada bar.

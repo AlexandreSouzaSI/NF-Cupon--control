@@ -1,7 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
 
 import { AppModule } from './app.module';
 
@@ -11,7 +10,12 @@ async function bootstrap() {
       AppModule,
     );
 
+  // CORS_ORIGINS (opcional, separado por vírgula): só esses sites podem
+  // chamar a API pelo navegador. Sem a variável, continua aceitando qualquer
+  // origem (o login é por token no header, não por cookie).
+  const origens = (process.env.CORS_ORIGINS || '').split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean);
   app.enableCors({
+    origin: origens.length ? origens : true,
     // X-Batch-Summary: resumo do lançamento em lote (Sicredi) que vem
     // junto do download do .txt — sem isso o navegador bloqueia o
     // frontend de ler esse header numa resposta cross-origin (Contas a
@@ -29,8 +33,16 @@ async function bootstrap() {
   // de uma vez (o padrão de 100kb do Express não aguenta).
   app.useBodyParser('json', { limit: '50mb' });
 
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads/',
+  // /uploads NÃO é mais servido aberto: os arquivos (boletos, NF, documentos
+  // de funcionário...) passam pelo UploadsController, que exige login.
+
+  // Cabeçalhos básicos de segurança (sem depender do helmet).
+  app.disable('x-powered-by');
+  app.use((_req: any, res: any, next: () => void) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
   });
 
   app.useGlobalPipes(

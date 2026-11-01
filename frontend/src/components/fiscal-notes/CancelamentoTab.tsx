@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { NfViewerModal } from '../ui/NfViewerModal';
 import { Ban, Eye, FileX2, XCircle } from 'lucide-react';
@@ -208,7 +208,7 @@ export function CancelamentoTab() {
 
                                     {doc.xmlFileUrl && (
                                         <a
-                                            href={`${API_URL}${doc.xmlFileUrl}`}
+                                            href={arquivoUrl(doc.xmlFileUrl)}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="text-sm font-medium text-blue-500 hover:underline"

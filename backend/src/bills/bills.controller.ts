@@ -34,6 +34,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { RequiresModule } from '../auth/requires-module.decorator';
 import { ModuleAccessGuard } from '../auth/module-access.guard';
 
+import { BillsNfService } from './bills-nf.service';
 import { BillsService } from './bills.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { CreateBillRecorrenciaDto } from './dto/create-bill-recorrencia.dto';
@@ -59,7 +60,32 @@ if (!existsSync(uploadPath)) {
 @Roles(UserRole.ADMINISTRATIVO, UserRole.PROPRIETARIO, UserRole.FINANCEIRO)
 @RequiresModule(StoreModule.CONTAS_A_PAGAR)
 export class BillsController {
-    constructor(private billsService: BillsService) { }
+    constructor(
+        private billsService: BillsService,
+        private billsNf: BillsNfService,
+    ) { }
+
+    // ---------- NF da conta (atrelar / trocar / remover) ----------
+
+    @Post('nfs/vincular-automatico')
+    vincularNfsAutomatico(@CurrentUser() user: any, @Body('storeId') storeId?: string) {
+        return this.billsNf.vincularAutomatico(user, storeId || undefined);
+    }
+
+    @Get(':id/nfs')
+    nfsDaConta(@CurrentUser() user: any, @Param('id') id: string, @Query('q') q?: string) {
+        return this.billsNf.candidatas(user, id, q);
+    }
+
+    @Put(':id/nf')
+    vincularNf(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
+        return this.billsNf.vincular(user, id, body ?? {});
+    }
+
+    @Delete(':id/nf')
+    desvincularNf(@CurrentUser() user: any, @Param('id') id: string) {
+        return this.billsNf.desvincular(user, id);
+    }
 
     @Post()
     async create(

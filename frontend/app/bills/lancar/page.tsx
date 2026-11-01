@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle2, FileText, Loader2, Paperclip, Plus, Store, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileText, Link2, Loader2, Paperclip, Pencil, Plus, Save, Search, Store, Trash2, Upload, X } from 'lucide-react';
 
 import { AppLayout } from '../../../src/components/app-layout';
 import { AbasContas } from '../../../src/components/bills/AbasContas';
@@ -93,27 +93,59 @@ type Envio = {
     motivoDescarte: string | null;
     createdAt: string;
     temArquivo: boolean;
+    tipoConta: string | null;
+    formaPagamento: string | null;
+    observacaoConferencia: string | null;
+    nf: NfSistema | null;
 };
+
+// NF que já está no sistema (NF de entrada / NFS-e buscadas na SEFAZ).
+type NfSistema = {
+    tipo: 'PRODUTO' | 'SERVICO';
+    id: string;
+    chave: string;
+    numero: string | null;
+    emitente: string | null;
+    emitenteDoc: string | null;
+    valor: number | null;
+    emissao: string | null;
+    storeId: string;
+    loja: string | null;
+    billId: string | null;
+    motivos?: string[];
+};
+
+// O que ainda falta para lançar.
+const faltando = (e: Envio) => [
+    !e.storeId && 'loja',
+    !e.fornecedor && 'fornecedor',
+    !e.valor && 'valor',
+    !e.vencimento && 'vencimento',
+].filter(Boolean) as string[];
 
 type Parecida = { id: string; descricao: string; valor: number; vencimento: string; status: string; mesmoCodigo: boolean; fornecedor: string | null; loja: string | null };
 type Parcela = { valor: string; vencimento: string };
 type Form = {
-    storeId: string; fornecedor: string; descricao: string; categoryId: string;
+    storeId: string; fornecedor: string; fornecedorDoc: string; numeroDocumento: string; descricao: string; categoryId: string;
     tipo: string; formaPagamento: string; codigoBarras: string; observacao: string; parcelas: Parcela[];
+    nf: NfSistema | null;
 };
 
 const formDe = (e: Envio): Form => ({
     storeId: e.storeId ?? '',
     fornecedor: e.fornecedor ?? '',
+    fornecedorDoc: e.fornecedorDoc ?? '',
+    numeroDocumento: e.numeroDocumento ?? '',
     descricao: e.descricao ?? (e.numeroDocumento ? `${TIPOS_DOC[e.tipoDocumento ?? 'OUTRO']} ${e.numeroDocumento}` : ''),
     categoryId: e.categoryId ?? '',
-    tipo: e.tipoDocumento === 'BOLETO' || e.codigoBarras ? 'BOLETO' : 'NO_BILL',
-    formaPagamento: e.tipoDocumento === 'BOLETO' || e.codigoBarras ? 'BANK_SLIP' : 'PIX',
+    tipo: e.tipoConta ?? (e.tipoDocumento === 'BOLETO' || e.codigoBarras ? 'BOLETO' : 'NO_BILL'),
+    formaPagamento: e.formaPagamento ?? (e.tipoDocumento === 'BOLETO' || e.codigoBarras ? 'BANK_SLIP' : 'PIX'),
     codigoBarras: e.codigoBarras ?? '',
-    observacao: '',
+    observacao: e.observacaoConferencia ?? '',
+    nf: e.nf ?? null,
     parcelas: e.parcelas?.length
         ? e.parcelas.map((p) => ({ valor: p.valor.toFixed(2).replace('.', ','), vencimento: p.vencimento }))
-        : [{ valor: e.valor ? e.valor.toFixed(2).replace('.', ',') : '', vencimento: e.vencimento ?? hojeISO() }],
+        : [{ valor: e.valor ? e.valor.toFixed(2).replace('.', ',') : '', vencimento: e.vencimento ?? '' }],
 });
 
 export default function LancarContasPage() {
@@ -162,19 +194,20 @@ export default function LancarContasPage() {
 
     // ---------- Lista ----------
     const [filtro, setFiltro] = useState<'PENDENTE' | 'LANCADA' | 'DESCARTADA'>('PENDENTE');
+    const [todasLojas, setTodasLojas] = useState(false);
     const [itens, setItens] = useState<Envio[]>([]);
     const [carregando, setCarregando] = useState(false);
     const carregar = useCallback(async () => {
         setCarregando(true);
         try {
-            const r = await api.get('/contas-entrada/contas', { params: { status: filtro, storeId: getActiveStore()?.id || undefined } });
+            const r = await api.get('/contas-entrada/contas', { params: { status: filtro, storeId: todasLojas ? undefined : getActiveStore()?.id || undefined } });
             setItens(r.data ?? []);
         } catch {
             setItens([]);
         } finally {
             setCarregando(false);
         }
-    }, [filtro]);
+    }, [filtro, todasLojas]);
     useEffect(() => { carregar(); }, [carregar]);
 
     async function enviar(e: React.FormEvent) {
@@ -188,9 +221,15 @@ export default function LancarContasPage() {
             if (id) fd.append('storeId', id);
             if (envCategoria) fd.append('categoryId', envCategoria);
             if (envObs.trim()) fd.append('observacao', envObs.trim());
-            await api.post('/contas-entrada/contas', fd);
+            const r = await api.post('/contas-entrada/contas', fd);
             setArquivo(null); setEnvCategoria(''); setEnvObs('');
-            setMsgEnvio('Documento enviado. Confira abaixo e lance.');
+            const total: number = r.data?.total ?? 1;
+            const outraLoja = (r.data?.contas ?? []).filter((c: any) => id && c.storeId && c.storeId !== id).length;
+            setMsgEnvio(
+                (total > 1 ? `${total} contas encontradas no arquivo.` : 'Documento enviado.') +
+                (outraLoja ? ` ${outraLoja} ${outraLoja > 1 ? 'foram' : 'foi'} para outra loja (pelo CNPJ do pagador) — troque a loja no topo para ver.` : '') +
+                ' Confira abaixo e lance.',
+            );
             if (filtro === 'PENDENTE') carregar(); else setFiltro('PENDENTE');
         } catch (err: any) {
             setMsgEnvio(erroMsg(err, 'Não foi possível enviar.'));
@@ -206,6 +245,80 @@ export default function LancarContasPage() {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [lancando, setLancando] = useState(false);
     const [nParcelas, setNParcelas] = useState('2');
+    const [salvando, setSalvando] = useState(false);
+    const [nfsSugeridas, setNfsSugeridas] = useState<NfSistema[]>([]);
+    const [buscaNf, setBuscaNf] = useState('');
+    const [buscandoNf, setBuscandoNf] = useState(false);
+
+    async function buscarNfs(id: string, q?: string) {
+        setBuscandoNf(true);
+        try {
+            const r = await api.get(`/contas-entrada/contas/${id}/nfs`, { params: { q: q?.trim() || undefined } });
+            setNfsSugeridas(r.data ?? []);
+        } catch {
+            setNfsSugeridas([]);
+        } finally {
+            setBuscandoNf(false);
+        }
+    }
+
+    // Atrela a NF: a conta vai para a loja da NF e completa o que faltar.
+    function atrelarNf(nf: NfSistema | null) {
+        setForm((f) => {
+            if (!f) return f;
+            if (!nf) return { ...f, nf: null };
+            const parcelas = f.parcelas.length === 1 && !numero(f.parcelas[0].valor) && nf.valor
+                ? [{ ...f.parcelas[0], valor: nf.valor.toFixed(2).replace('.', ',') }]
+                : f.parcelas;
+            return {
+                ...f,
+                nf,
+                storeId: nf.storeId,
+                fornecedor: f.fornecedor || nf.emitente || '',
+                fornecedorDoc: f.fornecedorDoc || nf.emitenteDoc || '',
+                numeroDocumento: f.numeroDocumento || nf.numero || '',
+                parcelas,
+            };
+        });
+    }
+
+    // Grava o que foi editado sem lançar.
+    async function salvar(envio: Envio, fecharDepois = true) {
+        if (!form) return;
+        setSalvando(true);
+        try {
+            await api.patch(`/contas-entrada/contas/${envio.id}`, {
+                storeId: form.storeId || null,
+                fornecedor: form.fornecedor,
+                fornecedorDoc: form.fornecedorDoc,
+                numeroDocumento: form.numeroDocumento,
+                descricao: form.descricao,
+                categoryId: form.categoryId || null,
+                tipo: form.tipo,
+                formaPagamento: form.formaPagamento,
+                codigoBarras: form.codigoBarras,
+                observacao: form.observacao,
+                parcelas: form.parcelas.map((p) => ({ valor: numero(p.valor), vencimento: p.vencimento })),
+                nf: form.nf ? { tipo: form.nf.tipo, id: form.nf.id } : null,
+            });
+            if (fecharDepois) fechar();
+            carregar();
+        } catch (err: any) {
+            alert(erroMsg(err, 'Não foi possível salvar.'));
+        } finally {
+            setSalvando(false);
+        }
+    }
+
+    // Direcionar para outra loja direto da lista.
+    async function moverLoja(envio: Envio, storeId: string) {
+        try {
+            await api.patch(`/contas-entrada/contas/${envio.id}`, { storeId: storeId || null });
+            carregar();
+        } catch (err: any) {
+            alert(erroMsg(err, 'Não foi possível trocar a loja.'));
+        }
+    }
 
     async function abrirArquivo(id: string, nova = true) {
         const r = await api.get(`/contas-entrada/contas/${id}/arquivo`, { responseType: 'blob' });
@@ -216,7 +329,8 @@ export default function LancarContasPage() {
 
     async function conferir(e: Envio) {
         if (abertoId === e.id) { fechar(); return; }
-        setAbertoId(e.id); setForm(formDe(e)); setParecidas([]);
+        setAbertoId(e.id); setForm(formDe(e)); setParecidas([]); setNfsSugeridas([]); setBuscaNf('');
+        buscarNfs(e.id);
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         setPreviewUrl(null);
         api.get(`/contas-entrada/contas/${e.id}/parecidas`).then((r) => setParecidas(r.data ?? [])).catch(() => { });
@@ -251,11 +365,16 @@ export default function LancarContasPage() {
         if (!form) return;
         setLancando(true);
         try {
+            const anexar = !!form.nf?.billId;
             const r = await api.patch(`/contas-entrada/contas/${envio.id}/lancar`, {
                 ...form,
                 parcelas: form.parcelas.map((p) => ({ valor: numero(p.valor), vencimento: p.vencimento })),
+                nf: form.nf ? { tipo: form.nf.tipo, id: form.nf.id } : null,
+                modo: anexar ? 'ANEXAR' : 'NOVA',
             });
-            alert(`${r.data.criadas} conta${r.data.criadas === 1 ? '' : 's'} a pagar criada${r.data.criadas === 1 ? '' : 's'}.`);
+            alert(r.data.anexada
+                ? 'Documento anexado à conta a pagar da nota (vencimento, código de barras e arquivo atualizados).'
+                : `${r.data.criadas} conta${r.data.criadas === 1 ? '' : 's'} a pagar criada${r.data.criadas === 1 ? '' : 's'}.`);
             fechar();
             carregar();
         } catch (err: any) {
@@ -324,11 +443,15 @@ export default function LancarContasPage() {
                     </form>
                 </div>
 
-                <div className="flex gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
                     {([['PENDENTE', 'A conferir'], ['LANCADA', 'Lançadas'], ['DESCARTADA', 'Descartadas']] as const).map(([v, l]) => (
                         <button key={v} onClick={() => { fechar(); setFiltro(v); }}
                             className={`px-3 py-1.5 rounded-full ${filtro === v ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300'}`}>{l}</button>
                     ))}
+                    <label className="ml-auto inline-flex items-center gap-1.5 text-gray-600 dark:text-zinc-300 cursor-pointer">
+                        <input type="checkbox" checked={todasLojas} onChange={(ev) => { fechar(); setTodasLojas(ev.target.checked); }} />
+                        Ver de todas as lojas
+                    </label>
                 </div>
 
                 {carregando && <p className="text-sm text-gray-400">Carregando...</p>}
@@ -346,8 +469,16 @@ export default function LancarContasPage() {
                                         ? <span className="inline-flex items-center gap-1 mr-2 px-2 py-0.5 rounded border border-gray-300 dark:border-zinc-700 text-xs"><Store size={11} /> {e.lojaNome}{e.lojaPor === 'CNPJ' ? ' (pelo CNPJ)' : ''}</span>
                                         : <span className="inline-block mr-2 px-2 py-0.5 rounded border border-dashed border-amber-400 text-amber-700 text-xs">Loja: escolher</span>}
                                     {e.categoriaNome && <span className="inline-block mr-2 px-2 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-xs">{e.categoriaNome}</span>}
+                                    {e.nf && (
+                                        <span className="inline-flex items-center gap-1 mr-2 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs">
+                                            <Link2 size={11} /> NF {e.nf.numero ?? ''}{e.nf.billId ? ' (já tem conta)' : ''}
+                                        </span>
+                                    )}
                                     {e.fornecedor ?? <span className="text-gray-400">Fornecedor não identificado</span>}
                                 </p>
+                                {e.status === 'PENDENTE' && faltando(e).length > 0 && (
+                                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Falta: {faltando(e).join(', ')}</p>
+                                )}
                                 <p className="text-xs text-gray-500 mt-0.5">
                                     Venc. {dataBR(e.vencimento)}{e.parcelas?.length ? ` · ${e.parcelas.length} parcelas` : ''}{e.descricao ? ` · ${e.descricao}` : ''}
                                 </p>
@@ -368,8 +499,16 @@ export default function LancarContasPage() {
                             {e.status === 'PENDENTE' ? (
                                 <>
                                     <button onClick={() => conferir(e)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white">
-                                        {abertoId === e.id ? <><X size={14} /> Fechar</> : <><CheckCircle2 size={14} /> Conferir e lançar</>}
+                                        {abertoId === e.id ? <><X size={14} /> Fechar</> : <><Pencil size={14} /> Editar e lançar</>}
                                     </button>
+                                    {abertoId !== e.id && (
+                                        <select value="" onChange={(ev) => ev.target.value && moverLoja(e, ev.target.value)}
+                                            title="Mandar este documento para outra loja"
+                                            className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-gray-600 dark:text-zinc-300">
+                                            <option value="">{e.storeId ? 'Mover para loja…' : 'Escolher a loja…'}</option>
+                                            {lojas.filter((l) => l.id !== e.storeId).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                        </select>
+                                    )}
                                     <button onClick={() => descartar(e)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg text-red-500">
                                         <Trash2 size={14} /> Descartar
                                     </button>
@@ -410,6 +549,56 @@ export default function LancarContasPage() {
                                         </div>
                                     )}
 
+                                    <div className="rounded-lg border border-gray-200 dark:border-zinc-800 p-3 space-y-2">
+                                        <p className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5"><Link2 size={15} /> Nota fiscal no sistema</p>
+                                        {form.nf ? (
+                                            <div className="flex flex-wrap items-start justify-between gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                                                <div className="text-xs text-emerald-900 dark:text-emerald-200 space-y-0.5">
+                                                    <p className="font-semibold">{form.nf.tipo === 'SERVICO' ? 'NFS-e' : 'NF-e'} {form.nf.numero ?? ''} · {form.nf.emitente ?? 'emitente não informado'}</p>
+                                                    <p>{form.nf.valor != null ? moeda(form.nf.valor) : '—'} · emitida {dataBR(form.nf.emissao)} · {form.nf.loja ?? ''}</p>
+                                                    {form.nf.billId
+                                                        ? <p className="font-medium text-amber-700 dark:text-amber-300">Essa nota já tem conta a pagar — ao confirmar, o documento completa a conta que já existe (vencimento, código de barras e arquivo), sem criar outra.</p>
+                                                        : <p>A conta lançada fica ligada a esta nota.</p>}
+                                                </div>
+                                                <button type="button" onClick={() => atrelarNf(null)} className="text-xs text-red-600 hover:underline">Desatrelar</button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="flex gap-2">
+                                                    <input className={campo} value={buscaNf} onChange={(ev) => setBuscaNf(ev.target.value)}
+                                                        onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); buscarNfs(e.id, buscaNf); } }}
+                                                        placeholder="Buscar por número da NF, fornecedor, CNPJ ou valor" />
+                                                    <button type="button" onClick={() => buscarNfs(e.id, buscaNf)}
+                                                        className="inline-flex items-center gap-1 px-3 rounded-lg border border-gray-300 dark:border-zinc-700 text-xs text-gray-700 dark:text-zinc-200">
+                                                        {buscandoNf ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Buscar
+                                                    </button>
+                                                </div>
+                                                {nfsSugeridas.length === 0 ? (
+                                                    <p className="text-xs text-gray-500">{buscandoNf ? 'Procurando…' : 'Nenhuma nota parecida no sistema.'}</p>
+                                                ) : (
+                                                    <div className="max-h-56 overflow-y-auto divide-y divide-gray-100 dark:divide-zinc-800">
+                                                        {nfsSugeridas.map((n) => (
+                                                            <div key={n.id} className="flex items-center justify-between gap-2 py-1.5 text-xs">
+                                                                <div className="min-w-0">
+                                                                    <p className="font-medium text-gray-900 dark:text-white truncate">
+                                                                        {n.tipo === 'SERVICO' ? 'NFS-e' : 'NF'} {n.numero ?? ''} · {n.emitente ?? '—'}
+                                                                    </p>
+                                                                    <p className="text-gray-500">
+                                                                        {n.valor != null ? moeda(n.valor) : '—'} · {dataBR(n.emissao)} · {n.loja ?? ''}
+                                                                        {n.billId ? ' · já tem conta' : ''}
+                                                                        {n.motivos?.length ? <span className="text-emerald-600"> · {n.motivos.join(', ')}</span> : null}
+                                                                    </p>
+                                                                </div>
+                                                                <button type="button" onClick={() => atrelarNf(n)}
+                                                                    className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-600 text-white">Atrelar</button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+
                                     <div className="grid sm:grid-cols-2 gap-3">
                                         <div>
                                             <label className={rotulo}>Loja *</label>
@@ -427,7 +616,16 @@ export default function LancarContasPage() {
                                             <label className={rotulo}>Fornecedor</label>
                                             <input className={campo} list="lc-fornecedores" value={form.fornecedor} onChange={(ev) => set('fornecedor', ev.target.value)} placeholder="Nome do fornecedor" />
                                             <datalist id="lc-fornecedores">{fornecedores.map((f) => <option key={f.id} value={f.name} />)}</datalist>
-                                            {e.fornecedorDoc && <p className="text-[11px] text-gray-400 mt-0.5">CNPJ/CPF no documento: {e.fornecedorDoc}</p>}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className={rotulo}>CNPJ/CPF do fornecedor</label>
+                                                <input className={campo} value={form.fornecedorDoc} onChange={(ev) => set('fornecedorDoc', ev.target.value)} placeholder="Só números" />
+                                            </div>
+                                            <div>
+                                                <label className={rotulo}>Nº do documento / NF</label>
+                                                <input className={campo} value={form.numeroDocumento} onChange={(ev) => set('numeroDocumento', ev.target.value)} />
+                                            </div>
                                         </div>
                                         <div>
                                             <label className={rotulo}>Descrição *</label>
@@ -496,10 +694,19 @@ export default function LancarContasPage() {
                                     </div>
 
                                     <div className="flex flex-wrap gap-2">
-                                        <button onClick={() => lancar(e)} disabled={lancando || !form.descricao.trim() || !form.storeId}
+                                        <button onClick={() => lancar(e)}
+                                            disabled={lancando || !form.descricao.trim() || !form.storeId || form.parcelas.some((p) => !numero(p.valor) || !p.vencimento)}
+                                            title={form.parcelas.some((p) => !numero(p.valor) || !p.vencimento) ? 'Preencha valor e vencimento de todas as parcelas' : undefined}
                                             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold disabled:opacity-50">
                                             {lancando ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                                            Lançar {form.parcelas.length > 1 ? `${form.parcelas.length} contas` : 'conta'} a pagar
+                                            {form.nf?.billId
+                                                ? 'Anexar à conta da NF'
+                                                : `Lançar ${form.parcelas.length > 1 ? `${form.parcelas.length} contas` : 'conta'} a pagar`}
+                                        </button>
+                                        <button onClick={() => salvar(e)} disabled={salvando}
+                                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 dark:border-zinc-700 text-sm font-medium text-gray-700 dark:text-zinc-200 disabled:opacity-50">
+                                            {salvando ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                                            Salvar sem lançar
                                         </button>
                                         <button onClick={fechar} className="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800">Cancelar</button>
                                     </div>

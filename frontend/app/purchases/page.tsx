@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { canManagePurchaseBilling, getUser } from '@/lib/auth';
 import {
@@ -682,7 +682,7 @@ function PurchasesPageInner() {
                                                     return (
                                                         <a
                                                             key={doc.id}
-                                                            href={`${API_URL}${doc.fileUrl}`}
+                                                            href={arquivoUrl(doc.fileUrl)}
                                                             target="_blank"
                                                             rel="noreferrer"
                                                             className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20"

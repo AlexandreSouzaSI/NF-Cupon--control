@@ -28,7 +28,7 @@ import {
     SupplierAutocomplete,
     findOrCreateSupplier,
 } from '../../../src/components/ui/SupplierAutocomplete';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { parseBoletoCode } from '@/lib/boleto';
 import {
@@ -1719,7 +1719,7 @@ function NewBillPageInner() {
 
                             {form.fileUrl && (
                                 <a
-                                    href={`${API_URL}${form.fileUrl}`}
+                                    href={arquivoUrl(form.fileUrl)}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="mt-3 inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-sm text-purple-400 hover:bg-purple-500/20"

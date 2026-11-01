@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { Pagination } from '../ui/Pagination';
 import { NfSearchInput, useDebouncedValue } from '../ui/NfSearchInput';
@@ -853,7 +853,7 @@ export function ServiceNfTab() {
 
                                             {incoming.fileUrl && (
                                                 <a
-                                                    href={`${API_URL}${incoming.fileUrl}`}
+                                                    href={arquivoUrl(incoming.fileUrl)}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="inline-block text-sm text-blue-500 hover:underline"
@@ -1090,7 +1090,7 @@ export function ServiceNfTab() {
                                     </button>
 
                                     <a
-                                        href={`${API_URL}${item.fileUrl}`}
+                                        href={arquivoUrl(item.fileUrl)}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="inline-flex items-center gap-2 rounded-xl bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-400 hover:bg-blue-500/20"

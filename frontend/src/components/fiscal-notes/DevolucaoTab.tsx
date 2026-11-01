@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import { NfViewerModal } from '../ui/NfViewerModal';
 import {
@@ -691,7 +691,7 @@ export function DevolucaoTab() {
 
                                         {dev.xmlFileUrl && (
                                             <a
-                                                href={`${API_URL}${dev.xmlFileUrl}`}
+                                                href={arquivoUrl(dev.xmlFileUrl)}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"

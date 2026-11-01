@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { toast } from 'sonner';
 import { Download, ExternalLink, FileCode, FileWarning, Landmark, Loader2, X } from 'lucide-react';
 
@@ -355,7 +355,7 @@ export function NfViewerModal({ title, viewUrl, danfeUrl, xmlUrl, onClose }: NfV
                             </p>
                             {data.resumo?.fileUrl && (
                                 <a
-                                    href={`${API_URL}${data.resumo.fileUrl}`}
+                                    href={arquivoUrl(data.resumo.fileUrl)}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600"

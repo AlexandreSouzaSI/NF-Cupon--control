@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
 import { AutocompleteInput } from '../../src/components/ui/AutocompleteInput';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { getActiveStore } from '@/lib/active-store';
 import { isBusinessDayBrasilia } from '@/lib/business-day';
@@ -555,7 +555,7 @@ function QuadroTab({
 
                 {occurrence.task.attachmentUrl && (
                     <a
-                        href={`${API_URL}${occurrence.task.attachmentUrl}`}
+                        href={arquivoUrl(occurrence.task.attachmentUrl)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex w-fit items-center gap-1 rounded-lg bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-500 hover:underline"
@@ -606,7 +606,7 @@ function QuadroTab({
                         )}
                         {occurrence.attachmentUrl && (
                             <a
-                                href={`${API_URL}${occurrence.attachmentUrl}`}
+                                href={arquivoUrl(occurrence.attachmentUrl)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1 text-blue-500 hover:underline"
@@ -1471,7 +1471,7 @@ function GerenciarTab() {
                                 </p>
                                 {task.attachmentUrl && (
                                     <a
-                                        href={`${API_URL}${task.attachmentUrl}`}
+                                        href={arquivoUrl(task.attachmentUrl)}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="mt-1 inline-flex items-center gap-1 text-xs text-blue-500 hover:underline"

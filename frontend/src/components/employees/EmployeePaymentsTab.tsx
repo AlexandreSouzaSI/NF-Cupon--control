@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import {
     AlertTriangle,
@@ -721,7 +721,7 @@ export function EmployeePaymentsTab() {
                                         <div className="flex flex-wrap justify-end gap-2">
                                             {payment.receiptFileUrl && (
                                                 <a
-                                                    href={`${API_URL}${payment.receiptFileUrl}`}
+                                                    href={arquivoUrl(payment.receiptFileUrl)}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-500/20"

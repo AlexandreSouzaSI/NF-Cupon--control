@@ -13,6 +13,13 @@ export class PrismaService
 
         super({
             adapter,
+            // Segurança: senha (hash) e tokens de ativação/troca de senha
+            // NUNCA saem do banco por padrão — nem em listas de usuários,
+            // nem em include de relação. Quem precisa (login) pede com
+            // `omit: { password: false }`.
+            omit: {
+                user: { password: true, passwordResetToken: true, activationToken: true },
+            },
         });
     }
 

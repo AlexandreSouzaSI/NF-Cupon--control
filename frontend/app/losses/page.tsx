@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '../../src/components/app-layout';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, arquivoUrl } from '@/lib/api';
 import { getActiveStore } from '@/lib/active-store';
 import {
     Camera,
@@ -24,11 +24,11 @@ import { NfViewerModal } from '../../src/components/ui/NfViewerModal';
 import { MoneyInput } from '../../src/components/ui/MoneyInput';
 
 function photoSrc(photoUrl: string) {
-    return `${API_URL}${photoUrl}`;
+    return arquivoUrl(photoUrl);
 }
 
 function fileSrc(fileUrl: string) {
-    return `${API_URL}${fileUrl}`;
+    return arquivoUrl(fileUrl);
 }
 
 type Loss = {

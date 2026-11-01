@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 
 import { Cron } from '@nestjs/schedule';
+import { vencimentoUtil } from '../common/dias-uteis';
 
 import {
     BillStatus,
@@ -173,9 +174,11 @@ export class BillsService {
             }
         }
 
-        const dueDateValue = new Date(
-            `${dto.dueDate}T12:00:00.000Z`,
-        );
+        // Vencimento em fim de semana/feriado vai pro próximo dia útil (o
+        // original fica em dueDateOriginal). Conta já paga não mexe.
+        const venc = vencimentoUtil(new Date(`${dto.dueDate}T12:00:00.000Z`));
+        const pagaNoCadastro = (dto as any).status === BillStatus.PAID;
+        const dueDateValue = pagaNoCadastro ? new Date(`${dto.dueDate}T12:00:00.000Z`) : venc.dueDate;
 
         const bill = await this.prisma.bill.create({
             data: {
@@ -185,6 +188,7 @@ export class BillsService {
                 paymentMethod: dto.paymentMethod,
 
                 dueDate: dueDateValue,
+                dueDateOriginal: pagaNoCadastro ? null : venc.dueDateOriginal,
 
                 // Antes toda conta nascia OPEN e "vencida" só existia como
                 // cálculo de tela (comparando dueDate com hoje no
@@ -385,9 +389,8 @@ export class BillsService {
             await this.ensureStoreAccess(dto.storeId, user);
         }
 
-        const dueDateValue = dto.dueDate
-            ? new Date(`${dto.dueDate}T12:00:00.000Z`)
-            : undefined;
+        const vencEditado = dto.dueDate ? vencimentoUtil(new Date(`${dto.dueDate}T12:00:00.000Z`)) : undefined;
+        const dueDateValue = vencEditado?.dueDate;
 
         // Se quem chamou não mandou `status` explícito (ex.: marcar como
         // paga/cancelada é sempre explícito) mas mudou o vencimento de uma
@@ -413,6 +416,7 @@ export class BillsService {
                 paymentMethod: dto.paymentMethod,
 
                 dueDate: dueDateValue,
+                dueDateOriginal: vencEditado ? vencEditado.dueDateOriginal : undefined,
 
                 paidAt: dto.paidAt
                     ? new Date(dto.paidAt)
@@ -631,6 +635,11 @@ export class BillsService {
     // ainda estava OVERDUE (evita ficar "vencida" presa após correção).
     @Cron('10 0 * * *', { timeZone: 'America/Sao_Paulo' })
     async markOverdueBills() {
+        // Antes de marcar vencidas: empurra pro próximo dia útil as contas
+        // em aberto que vencem em sábado/domingo/feriado (inclusive as que
+        // chegaram por importação/integração direto no banco).
+        await this.ajustarVencimentosNaoUteis();
+
         const today = this.startOfToday();
 
         await this.prisma.bill.updateMany({
@@ -648,6 +657,38 @@ export class BillsService {
             },
             data: { status: BillStatus.OPEN },
         });
+    }
+
+    // Contas em aberto com vencimento em dia não útil → próximo dia útil.
+    async ajustarVencimentosNaoUteis() {
+        const abertas = await this.prisma.bill.findMany({
+            where: { status: { in: [BillStatus.OPEN, BillStatus.OVERDUE] } },
+            select: { id: true, dueDate: true, dueDateOriginal: true },
+        });
+        let ajustadas = 0;
+        for (const b of abertas) {
+            const venc = vencimentoUtil(b.dueDate);
+            if (!venc.dueDateOriginal) continue;
+            await this.prisma.bill.update({
+                where: { id: b.id },
+                data: {
+                    dueDate: venc.dueDate,
+                    dueDateOriginal: b.dueDateOriginal ?? venc.dueDateOriginal,
+                    status: this.computeStatusForDueDate(venc.dueDate),
+                },
+            });
+            ajustadas++;
+        }
+        return ajustadas;
+    }
+
+    // Ao subir o servidor também (pega o que já existe no banco).
+    async onApplicationBootstrap() {
+        try {
+            await this.markOverdueBills();
+        } catch {
+            // não impede o servidor de subir
+        }
     }
 
     // -----------------------------------------------------------------
@@ -851,6 +892,7 @@ export class BillsService {
                 );
                 dueDate = new Date(Date.UTC(ano, mes, dia, 12, 0, 0));
             }
+            const vencRec = dueDate ? vencimentoUtil(dueDate) : undefined;
 
             await this.prisma.bill.update({
                 where: { id: bill.id },
@@ -862,9 +904,10 @@ export class BillsService {
                     categoryId: dto.categoryId,
                     supplierId: dto.supplierId,
                     notes: dto.notes,
-                    dueDate,
-                    status: dueDate
-                        ? this.computeStatusForDueDate(dueDate)
+                    dueDate: vencRec?.dueDate,
+                    dueDateOriginal: vencRec ? vencRec.dueDateOriginal : undefined,
+                    status: vencRec
+                        ? this.computeStatusForDueDate(vencRec.dueDate)
                         : undefined,
                 },
             });
@@ -950,14 +993,23 @@ export class BillsService {
 
         for (const vencimento of vencimentos) {
             try {
+                // A ocorrência pode já existir com o vencimento empurrado pro
+                // dia útil (dueDateOriginal = a data da recorrência).
+                const jaExiste = await this.prisma.bill.findFirst({
+                    where: { recorrenciaId: recorrencia.id, OR: [{ dueDate: vencimento }, { dueDateOriginal: vencimento }] },
+                    select: { id: true },
+                });
+                if (jaExiste) continue;
+                const venc = vencimentoUtil(vencimento);
                 await this.prisma.bill.create({
                     data: {
                         description: recorrencia.description,
                         value: recorrencia.value,
                         type: recorrencia.type,
                         paymentMethod: recorrencia.paymentMethod,
-                        dueDate: vencimento,
-                        status: this.computeStatusForDueDate(vencimento),
+                        dueDate: venc.dueDate,
+                        dueDateOriginal: venc.dueDateOriginal,
+                        status: this.computeStatusForDueDate(venc.dueDate),
                         storeId: recorrencia.storeId,
                         categoryId: recorrencia.categoryId,
                         supplierId: recorrencia.supplierId,
@@ -1471,7 +1523,8 @@ export class BillsService {
                     billId: bill.id,
                     barcode: bill.barcode,
                     value: Number(bill.value),
-                    dueDate: bill.dueDate,
+                    // Vencimento impresso no boleto (antes de empurrar pro dia útil).
+                    dueDate: bill.dueDateOriginal ?? bill.dueDate,
                     paymentDate: hoje,
                     beneficiary: bill.beneficiary || bill.supplier?.name || null,
                     description: bill.description,
@@ -1543,6 +1596,8 @@ export class BillsService {
             store: true,
             supplier: true,
             category: true,
+            nfEntrada: { select: { id: true, chaveAcesso: true, issuerName: true, value: true, issueDate: true } },
+            nfServico: { select: { id: true, chaveAcesso: true, numeroNf: true, issuerName: true, value: true, issueDate: true } },
             purchase: {
                 include: {
                     store: true,

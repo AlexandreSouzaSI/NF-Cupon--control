@@ -9,7 +9,7 @@ import { XMLParser } from 'fast-xml-parser';
 export type ParcelaLida = { vencimento: string; valor: number; numero?: string }; // vencimento YYYY-MM-DD
 
 export type DocumentoLido = {
-    tipoDocumento: 'BOLETO' | 'NFE' | 'NFSE' | 'OUTRO';
+    tipoDocumento: 'BOLETO' | 'NFE' | 'NFSE' | 'OUTRO' | 'COMPROVANTE';
     fornecedor: string | null;
     fornecedorDoc: string | null; // CNPJ/CPF só números
     valor: number | null;

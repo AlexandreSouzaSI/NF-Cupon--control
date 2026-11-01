@@ -43,6 +43,7 @@ api.interceptors.response.use(
         if (error?.response?.status === 401 && typeof window !== 'undefined') {
             Cookies.remove('token');
             Cookies.remove('user');
+            Cookies.remove('ftoken');
 
             if (window.location.pathname !== '/login') {
                 window.location.href = '/login';
@@ -69,3 +70,40 @@ api.interceptors.response.use(
         return Promise.reject(error);
     },
 );
+
+// Opções dos cookies de sessão: só HTTPS em produção e nunca enviados por
+// outros sites.
+export const opcoesCookie = (): Cookies.CookieAttributes => ({
+    sameSite: 'strict',
+    secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
+});
+
+// -----------------------------------------------------------------------------
+// Arquivos (/uploads/...) exigem login. Links de <a href> e <img src> não
+// mandam o header Authorization, então vão com um "token de arquivo" curto
+// (12 h, só serve pra abrir arquivo — não dá acesso à API) no ?t=.
+// -----------------------------------------------------------------------------
+let buscandoTokenArquivo: Promise<void> | null = null;
+
+export function garantirTokenArquivo() {
+    if (typeof window === 'undefined' || !Cookies.get('token') || Cookies.get('ftoken')) return;
+    buscandoTokenArquivo ??= api.get('/auth/arquivo-token')
+        .then((r) => {
+            // Guarda por 11 h (o token vale 12 h).
+            Cookies.set('ftoken', r.data.token, { ...opcoesCookie(), expires: 11 / 24 });
+        })
+        .catch(() => undefined)
+        .finally(() => { buscandoTokenArquivo = null; });
+}
+
+// URL de um arquivo do sistema (fileUrl, photoUrl...) já com o token.
+export function arquivoUrl(caminho?: string | null): string {
+    if (!caminho) return '#';
+    if (/^(https?:|blob:|data:)/.test(caminho)) return caminho;
+    garantirTokenArquivo();
+    const token = Cookies.get('ftoken') || Cookies.get('token') || '';
+    const url = `${API_URL}${caminho.startsWith('/') ? '' : '/'}${caminho}`;
+    return token ? `${url}${url.includes('?') ? '&' : '?'}t=${encodeURIComponent(token)}` : url;
+}
+
+if (typeof window !== 'undefined') garantirTokenArquivo();
