@@ -248,6 +248,15 @@ export class ContasEnviadasService {
         });
     }
 
+    // Recebimento automático: a entrada que tinha virado comprovante passa a
+    // apontar pra conta enviada (a lista "Últimos recebidos" fica certa).
+    async ajustarEntradaMovida(pagamentoId: string, contaId: string) {
+        await this.prisma.entradaAutomatica.updateMany({
+            where: { destinoTipo: 'PAGAMENTO_AVISADO', destinoId: pagamentoId },
+            data: { tipo: 'BOLETO_NOTA', destinoTipo: 'CONTA_ENVIADA', destinoId: contaId, destinoIds: [contaId], mensagem: 'Movido para Lançar contas.' },
+        }).catch(() => null);
+    }
+
     // ---------- Link secreto (um por loja) ----------
 
     async obterLink(user: any, storeId: string) {
@@ -352,6 +361,11 @@ export class ContasEnviadasService {
         const qDig = so(q);
         const qValor = /^\d{1,3}(\.\d{3})*(,\d{1,2})?$|^\d+([.,]\d{1,2})?$/.test(q) ? Number(q.replace(/\./g, '').replace(',', '.')) : null;
 
+        // Número da NF lido do documento ("001974997-001" / "NF:1974997-1" → "1974997").
+        const numeroNf = (() => {
+            const m = /(\d{1,9})/.exec(String(item.numeroDocumento ?? '').replace(/^\D*/, ''));
+            return m && Number(m[1]) > 0 ? String(Number(m[1])) : null;
+        })();
         const goodsOr: any[] = [];
         const servOr: any[] = [];
         if (q) {
@@ -366,6 +380,10 @@ export class ContasEnviadasService {
                 servOr.push({ value: { gte: qValor - 0.01, lte: qValor + 0.01 } });
             }
         } else {
+            if (numeroNf) {
+                goodsOr.push({ chaveAcesso: { contains: numeroNf.padStart(9, '0') } });
+                servOr.push({ numeroNf: { contains: numeroNf } });
+            }
             if (item.chaveNfe) { goodsOr.push({ chaveAcesso: item.chaveNfe }); servOr.push({ chaveAcesso: item.chaveNfe }); }
             if (item.fornecedorDoc) { goodsOr.push({ issuerCnpj: item.fornecedorDoc }); servOr.push({ issuerDoc: item.fornecedorDoc }); }
             if (item.valor && item.valor > 0) {
@@ -397,6 +415,7 @@ export class ContasEnviadasService {
             let score = 0;
             if (item.chaveNfe && n.chave === item.chaveNfe) { score += 100; motivos.push('mesma chave'); }
             if (item.fornecedorDoc && n.emitenteDoc === item.fornecedorDoc) { score += 40; motivos.push('mesmo fornecedor'); }
+            if (numeroNf && n.numero && String(Number(n.numero)) === numeroNf) { score += 40; motivos.push('mesmo número'); }
             if (item.valor && n.valor && Math.abs(n.valor - item.valor) < 0.05) { score += 30; motivos.push('mesmo valor'); }
             if (n.emissao) {
                 const dias = Math.abs(new Date(n.emissao).getTime() - ref) / 86400000;

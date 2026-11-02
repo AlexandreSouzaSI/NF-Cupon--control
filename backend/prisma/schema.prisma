@@ -3532,6 +3532,12 @@ model RecebimentoWhatsapp {
   // Lojas atendidas por este número (vazio = todas da empresa). Com mais de
   // uma, a loja de cada documento sai do CNPJ.
   storeIds     String[]  @default([])
+  // Filtros de quem pode mandar (o número pode estar em grupos que não têm
+  // nada a ver com boletos): grupos marcados (vazio = qualquer grupo),
+  // telefones autorizados (vazio = qualquer pessoa) e conversa privada.
+  gruposPermitidos    String[] @default([])
+  telefonesPermitidos String[] @default([])
+  aceitarPrivado      Boolean  @default(true)
   numero       String?
   ultimoEvento DateTime?
   ultimoErro   String?

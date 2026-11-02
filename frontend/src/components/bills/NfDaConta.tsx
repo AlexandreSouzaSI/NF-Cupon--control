@@ -95,7 +95,8 @@ export function NfChip({ bill, onAbrir, onRemovido }: { bill: NfDaContaBill; onA
 // Janela: NF atual + sugestões + busca.
 export function NfVinculoModal({ bill, onClose, onChanged }: { bill: NfDaContaBill; onClose: () => void; onChanged: () => void }) {
     const [lista, setLista] = useState<Candidata[]>([]);
-    const [busca, setBusca] = useState('');
+    // Já começa com o número da NF que está na descrição da conta ("… — NF 13970269").
+    const [busca, setBusca] = useState(() => /\bNF[\s:-]*(?:n[ºo°.]?\s*)?0*(\d{1,9})\b/i.exec(bill.description)?.[1] ?? '');
     const [carregando, setCarregando] = useState(true);
     const [salvando, setSalvando] = useState<string | null>(null);
     const atualId = bill.nfEntrada?.id ?? bill.nfServico?.id ?? null;

@@ -45,6 +45,12 @@ const erroMsg = (e: any, padrao: string) => {
     return Array.isArray(m) ? m.join(', ') : m ?? padrao;
 };
 
+// Número da NF pra já deixar na busca ("001974997-001" / "NF:1974997-1" → "1974997").
+const numeroNf = (t?: string | null) => {
+    const m = /(\d{1,9})/.exec(String(t ?? '').replace(/^\D*/, ''));
+    return m ? String(Number(m[1])) : '';
+};
+
 const TIPOS_DOC: Record<string, string> = { BOLETO: 'Boleto', NFE: 'NF-e', NFSE: 'NFS-e', OUTRO: 'Documento' };
 const ORIGEM: Record<string, string> = { TELA: 'pela tela', LINK: 'pelo link', WHATSAPP: 'pelo WhatsApp', EMAIL: 'pelo e-mail' };
 const TIPOS_CONTA = [
@@ -329,7 +335,7 @@ export default function LancarContasPage() {
 
     async function conferir(e: Envio) {
         if (abertoId === e.id) { fechar(); return; }
-        setAbertoId(e.id); setForm(formDe(e)); setParecidas([]); setNfsSugeridas([]); setBuscaNf('');
+        setAbertoId(e.id); setForm(formDe(e)); setParecidas([]); setNfsSugeridas([]); setBuscaNf(numeroNf(e.numeroDocumento));
         buscarNfs(e.id);
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         setPreviewUrl(null);
@@ -338,6 +344,14 @@ export default function LancarContasPage() {
             try { setPreviewUrl(await abrirArquivo(e.id, false)); } catch { /* sem preview */ }
         }
     }
+
+    // Esc fecha a tela de conferência.
+    useEffect(() => {
+        if (!abertoId) return;
+        const tecla = (ev: KeyboardEvent) => { if (ev.key === 'Escape') fechar(); };
+        window.addEventListener('keydown', tecla);
+        return () => window.removeEventListener('keydown', tecla);
+    });
 
     function fechar() {
         setAbertoId(null); setForm(null);
@@ -382,6 +396,16 @@ export default function LancarContasPage() {
         } finally {
             setLancando(false);
         }
+    }
+
+    // Seleção para descartar vários de uma vez (ex.: fotos que não eram boleto).
+    const [marcados, setMarcados] = useState<Set<string>>(new Set());
+    const alternar = (id: string) => setMarcados((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    async function descartarMarcados() {
+        if (!marcados.size || !confirm(`Descartar ${marcados.size} item(ns)?`)) return;
+        await api.patch('/contas-entrada/contas/descartar-varios', { ids: [...marcados] });
+        setMarcados(new Set());
+        carregar();
     }
 
     async function descartar(envio: Envio) {
@@ -454,6 +478,18 @@ export default function LancarContasPage() {
                     </label>
                 </div>
 
+                {itens.some((i) => i.status === 'PENDENTE') && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <button onClick={() => setMarcados(marcados.size ? new Set() : new Set(itens.filter((i) => i.status === 'PENDENTE').map((i) => i.id)))}
+                            className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-300">
+                            {marcados.size ? 'Desmarcar todos' : 'Selecionar todos'}
+                        </button>
+                        {marcados.size > 0 && (
+                            <button onClick={descartarMarcados} className="px-2.5 py-1.5 rounded-lg bg-red-600 text-white font-semibold">Descartar {marcados.size} selecionado(s)</button>
+                        )}
+                    </div>
+                )}
+
                 {carregando && <p className="text-sm text-gray-400">Carregando...</p>}
                 {!carregando && itens.length === 0 && (
                     <p className="text-sm text-gray-400 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 text-center">Nada aqui.</p>
@@ -461,6 +497,9 @@ export default function LancarContasPage() {
 
                 {itens.map((e) => (
                     <div key={e.id} className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-4">
+                        {e.status === 'PENDENTE' && (
+                            <input type="checkbox" className="float-left mr-3 mt-1" checked={marcados.has(e.id)} onChange={() => alternar(e.id)} title="Selecionar para descartar" />
+                        )}
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <p className="font-semibold text-gray-900 dark:text-white">
@@ -499,9 +538,9 @@ export default function LancarContasPage() {
                             {e.status === 'PENDENTE' ? (
                                 <>
                                     <button onClick={() => conferir(e)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white">
-                                        {abertoId === e.id ? <><X size={14} /> Fechar</> : <><Pencil size={14} /> Editar e lançar</>}
+                                        <Pencil size={14} /> Conferir e lançar
                                     </button>
-                                    {abertoId !== e.id && (
+                                    {(
                                         <select value="" onChange={(ev) => ev.target.value && moverLoja(e, ev.target.value)}
                                             title="Mandar este documento para outra loja"
                                             className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-gray-600 dark:text-zinc-300">
@@ -523,20 +562,48 @@ export default function LancarContasPage() {
                             )}
                         </div>
 
-                        {abertoId === e.id && form && (
-                            <div className={`mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800 grid gap-4 ${previewUrl ? 'xl:grid-cols-2' : ''}`}>
-                                {previewUrl && (
-                                    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-zinc-800 bg-gray-50 min-h-[420px]">
-                                        {/pdf/.test(e.arquivoMime ?? '') ? (
-                                            <iframe src={previewUrl} title="Documento" className="w-full h-[560px]" />
+                    </div>
+                ))}
+
+                {(() => {
+                    const e = itens.find((i) => i.id === abertoId);
+                    if (!e || !form) return null;
+                    return (
+                            <div className="fixed inset-0 z-50 bg-black/60 p-0 sm:p-3" onClick={fechar}>
+                            <div className="h-full w-full rounded-none sm:rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden grid grid-rows-[45vh_1fr] lg:grid-rows-1 lg:grid-cols-2" onClick={(ev) => ev.stopPropagation()}>
+                                {/* Documento — sempre à esquerda */}
+                                <div className="h-full min-h-0 bg-gray-100 dark:bg-zinc-950 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-zinc-800">
+                                    {previewUrl ? (
+                                        /pdf/.test(e.arquivoMime ?? '') ? (
+                                            <iframe src={previewUrl} title="Documento" className="w-full h-full" />
                                         ) : (
                                             // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={previewUrl} alt="Documento" className="w-full object-contain max-h-[560px]" />
-                                        )}
-                                    </div>
-                                )}
+                                            <img src={previewUrl} alt="Documento" className="w-full h-full object-contain" />
+                                        )
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-sm text-gray-400">
+                                            {e.temArquivo ? <><Loader2 size={16} className="animate-spin mr-2" /> Abrindo o documento…</> : 'Sem arquivo'}
+                                        </div>
+                                    )}
+                                </div>
 
-                                <div className="space-y-3">
+                                {/* Campos — sempre à direita */}
+                                <div className="h-full min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="text-lg font-bold text-gray-900 dark:text-white truncate">{e.fornecedor ?? 'Fornecedor não identificado'}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {TIPOS_DOC[e.tipoDocumento ?? 'OUTRO']}{e.numeroDocumento ? ` ${e.numeroDocumento}` : ''} · {e.valor ? moeda(e.valor) : 'valor —'} · venc. {dataBR(e.vencimento)}
+                                                {e.enviadoPorNome ? ` · enviado por ${e.enviadoPorNome}` : ''}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {e.temArquivo && (
+                                                <button type="button" onClick={() => abrirArquivo(e.id)} title="Abrir o documento em outra aba" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800"><FileText size={18} /></button>
+                                            )}
+                                            <button type="button" onClick={fechar} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800"><X size={18} /></button>
+                                        </div>
+                                    </div>
                                     {parecidas.length > 0 && (
                                         <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-xs text-amber-800 dark:text-amber-300 space-y-1">
                                             <p className="font-semibold flex items-center gap-1"><AlertTriangle size={14} /> Pode já estar lançada:</p>
@@ -712,9 +779,9 @@ export default function LancarContasPage() {
                                     </div>
                                 </div>
                             </div>
-                        )}
-                    </div>
-                ))}
+                            </div>
+                    );
+                })()}
             </div>
         </AppLayout>
     );

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, FileText, Link2, Loader2, Paperclip, Store, Trash2, Upload } from 'lucide-react';
+import { CheckCircle2, FileText, Link2, Loader2, Paperclip, Store, Trash2, Upload, X } from 'lucide-react';
 
 import { AppLayout } from '../../../src/components/app-layout';
 import { AbasContas } from '../../../src/components/bills/AbasContas';
@@ -107,6 +107,8 @@ export default function RegistrarPagamentosPage() {
     const [msg, setMsg] = useState<string | null>(null);
 
     const [abertoId, setAbertoId] = useState<string | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewMime, setPreviewMime] = useState('');
     const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
     const [obs, setObs] = useState('');
     const [valorPagoInput, setValorPagoInput] = useState('');
@@ -160,10 +162,30 @@ export default function RegistrarPagamentosPage() {
         window.open(URL.createObjectURL(r.data), '_blank');
     }
 
+    function fechar() {
+        setAbertoId(null);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+    }
+
+    // Esc fecha a tela de conciliação.
+    useEffect(() => {
+        if (!abertoId) return;
+        const tecla = (ev: KeyboardEvent) => { if (ev.key === 'Escape') fechar(); };
+        window.addEventListener('keydown', tecla);
+        return () => window.removeEventListener('keydown', tecla);
+    });
+
     async function abrir(id: string) {
-        if (abertoId === id) { setAbertoId(null); return; }
         const aviso = itens.find((i) => i.id === id);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null); setPreviewMime('');
         setAbertoId(id); setObs(''); setSugestoes([]);
+        if (aviso?.temComprovante) {
+            api.get(`/contas-entrada/pagamentos/${id}/comprovante`, { responseType: 'blob' })
+                .then((r) => { setPreviewMime(r.data?.type ?? ''); setPreviewUrl(URL.createObjectURL(r.data)); })
+                .catch(() => undefined);
+        }
         setValorPagoInput(aviso && aviso.valor > 0 ? String(aviso.valor).replace('.', ',') : '');
         setLojaNova(aviso?.storeId ?? getActiveStore()?.id ?? '');
         setCategoriaNova(aviso?.categoryId ?? '');
@@ -181,11 +203,33 @@ export default function RegistrarPagamentosPage() {
                 valorPago: numero(valorPagoInput) || undefined,
                 observacao: obs,
             });
-            setAbertoId(null);
+            fechar();
             carregar();
         } catch (err: any) {
             alert(erroMsg(err, 'Não foi possível conciliar.'));
         }
+    }
+
+    // Chegou como comprovante mas é boleto/nota.
+    async function moverParaContas(id: string) {
+        if (!confirm('Este arquivo é boleto/nota (conta a pagar), não comprovante? Ele vai para Lançar contas.')) return;
+        try {
+            const r = await api.patch(`/contas-entrada/pagamentos/${id}/mover-para-contas`);
+            alert(`Movido para Lançar contas${r.data?.total > 1 ? ` (${r.data.total} contas)` : ''}.`);
+            carregar();
+        } catch (err: any) {
+            alert(erroMsg(err, 'Não foi possível mover.'));
+        }
+    }
+
+    // Seleção para descartar vários de uma vez (ex.: fotos que não eram boleto).
+    const [marcados, setMarcados] = useState<Set<string>>(new Set());
+    const alternar = (id: string) => setMarcados((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    async function descartarMarcados() {
+        if (!marcados.size || !confirm(`Descartar ${marcados.size} item(ns)?`)) return;
+        await api.patch('/contas-entrada/pagamentos/descartar-varios', { ids: [...marcados] });
+        setMarcados(new Set());
+        carregar();
     }
 
     async function descartar(id: string) {
@@ -267,6 +311,17 @@ export default function RegistrarPagamentosPage() {
                                 ))}
                             </div>
 
+                {itens.some((i) => i.status === 'PENDENTE') && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <button onClick={() => setMarcados(marcados.size ? new Set() : new Set(itens.filter((i) => i.status === 'PENDENTE').map((i) => i.id)))}
+                            className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-300">
+                            {marcados.size ? 'Desmarcar todos' : 'Selecionar todos'}
+                        </button>
+                        {marcados.size > 0 && (
+                            <button onClick={descartarMarcados} className="px-2.5 py-1.5 rounded-lg bg-red-600 text-white font-semibold">Descartar {marcados.size} selecionado(s)</button>
+                        )}
+                    </div>
+                )}
                             {carregando && <p className="text-sm text-gray-400">Carregando...</p>}
                             {!carregando && itens.length === 0 && (
                                 <p className="text-sm text-gray-400 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-6 text-center">Nenhum aviso aqui.</p>
@@ -274,6 +329,9 @@ export default function RegistrarPagamentosPage() {
 
                             {itens.map((a) => (
                                 <div key={a.id} className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-4">
+                                    {a.status === 'PENDENTE' && (
+                                        <input type="checkbox" className="float-left mr-3 mt-1" checked={marcados.has(a.id)} onChange={() => alternar(a.id)} title="Selecionar para descartar" />
+                                    )}
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <p className="font-semibold text-gray-900 dark:text-white">
@@ -301,6 +359,9 @@ export default function RegistrarPagamentosPage() {
                                                 <button onClick={() => abrir(a.id)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white">
                                                     <Link2 size={14} /> Conciliar
                                                 </button>
+                                                <button onClick={() => moverParaContas(a.id)} title="Não é comprovante — é boleto/nota a pagar" className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-300">
+                                                    <FileText size={14} /> É boleto/nota
+                                                </button>
                                                 <button onClick={() => descartar(a.id)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg text-red-500">
                                                     <Trash2 size={14} /> Descartar
                                                 </button>
@@ -313,8 +374,46 @@ export default function RegistrarPagamentosPage() {
                                         )}
                                     </div>
 
-                                    {abertoId === a.id && (
-                                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-zinc-800 space-y-2">
+                                </div>
+                            ))}
+                            {(() => {
+                                const a = itens.find((i) => i.id === abertoId);
+                                if (!a) return null;
+                                return (
+                                        <div className="fixed inset-0 z-50 bg-black/60 p-0 sm:p-3" onClick={fechar}>
+                            <div className="h-full w-full rounded-none sm:rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden grid grid-rows-[45vh_1fr] lg:grid-rows-1 lg:grid-cols-2" onClick={(ev) => ev.stopPropagation()}>
+                                {/* Comprovante — sempre à esquerda */}
+                                <div className="h-full min-h-0 bg-gray-100 dark:bg-zinc-950 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-zinc-800">
+                                    {previewUrl ? (
+                                        /pdf/.test(previewMime) ? (
+                                            <iframe src={previewUrl} title="Comprovante" className="w-full h-full" />
+                                        ) : (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={previewUrl} alt="Comprovante" className="w-full h-full object-contain" />
+                                        )
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-sm text-gray-400">
+                                            {a.temComprovante ? <><Loader2 size={16} className="animate-spin mr-2" /> Abrindo o comprovante…</> : 'Sem comprovante anexado'}
+                                        </div>
+                                    )}
+                                </div>
+                                {/* Decisão — sempre à direita */}
+                                <div className="h-full min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="text-lg font-bold text-gray-900 dark:text-white truncate">{a.fornecedor}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {a.valor > 0 ? moeda(a.valor) : 'valor —'} · pago {dataBR(a.dataPagamento)} · {a.lojaNome ?? 'sem loja'} · avisado por {a.avisadoPorNome ?? '—'}
+                                            </p>
+                                            {a.descricao && <p className="text-xs text-gray-500 mt-0.5">{a.descricao}</p>}
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {a.temComprovante && (
+                                                <button type="button" onClick={() => verComprovante(a.id)} title="Abrir em outra aba" className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800"><FileText size={18} /></button>
+                                            )}
+                                            <button type="button" onClick={fechar} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800"><X size={18} /></button>
+                                        </div>
+                                    </div>
                                             <div>
                                                 <label className="text-xs font-semibold text-gray-500">Valor realmente pago (com juros, se houver)</label>
                                                 <MoneyInput className={campo} placeholder="Ex: 1.250,00" value={valorPagoInput} onChange={(e) => setValorPagoInput(e.target.value)} />
@@ -351,9 +450,14 @@ export default function RegistrarPagamentosPage() {
                                                 Só marcar como conciliado (sem vincular conta)
                                             </button>
                                         </div>
-                                    )}
+                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800">
+                                        <button onClick={() => { fechar(); moverParaContas(a.id); }} className="text-xs px-3 py-2 rounded-lg border border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200">É boleto/nota (mandar para Lançar contas)</button>
+                                        <button onClick={() => { fechar(); descartar(a.id); }} className="text-xs px-3 py-2 rounded-lg text-red-500">Descartar</button>
+                                    </div>
                                 </div>
-                            ))}
+                            </div>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>

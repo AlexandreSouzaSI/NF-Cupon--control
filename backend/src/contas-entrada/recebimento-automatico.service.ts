@@ -22,7 +22,7 @@ export type TipoEntrada = 'BOLETO_NOTA' | 'COMPROVANTE';
 export type ArquivoRecebido = { buffer: Buffer; nome: string; mime: string };
 export type Origem = { externoId: string; remetente?: string | null; nomeRemetente?: string | null; texto?: string | null; assunto?: string | null; chatId?: string | null };
 export type Resultado = {
-    status: 'OK' | 'DUPLICADO' | 'ERRO' | 'JA_PROCESSADO';
+    status: 'OK' | 'DUPLICADO' | 'ERRO' | 'JA_PROCESSADO' | 'IGNORADO';
     tipo: TipoEntrada;
     mensagem: string;
     resumo?: string;
@@ -40,7 +40,8 @@ const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const dataBR = (d: Date | null | undefined) => (d ? new Date(d).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '');
 
 const DICA_COMPROVANTE = /COMPROVANTE|\bPAGO\b|PAGUEI|PAGAMENTO (FEITO|REALIZADO|EFETUADO)|PIX (FEITO|ENVIADO|REALIZADO)|TRANSFERI|\bTED\b|RECIBO DE PAGAMENTO/;
-const DICA_DOCUMENTO = /BOLETO|\bNOTA\b|\bNF\b|NF-?E|NFS-?E|DANFE|CUPOM|FATURA|\bCONTA\b|COBRANCA|DUPLICATA/;
+// "vencimento"/"vence" na legenda = conta a pagar (comprovante não tem vencimento).
+const DICA_DOCUMENTO = /BOLETO|\bNOTA\b|\bNF\b|NF-?E|NFS-?E|DANFE|CUPOM|FATURA|\bCONTA\b|COBRANCA|DUPLICATA|VENCIMENTO|\bVENCE\b|\bVENC\b|A PAGAR|PAGAR ATE/;
 // "Autenticação mecânica" fica de fora: todo boleto tem esse texto.
 const TEXTO_COMPROVANTE = /COMPROVANTE (DE )?(PAGAMENTO|PIX|TRANSFERENCIA|TRANSACAO)|PIX (ENVIADO|REALIZADO|EFETUADO)|TRANSFERENCIA (REALIZADA|EFETUADA|ENVIADA)|PAGAMENTO (REALIZADO|EFETUADO|AGENDADO) COM SUCESSO|ID DA TRANSACAO|\bE2E\b|END TO END|AUTENTICACAO BANCARIA/;
 const TEXTO_DOCUMENTO = /DANFE|NOTA FISCAL|NFS-?E|CUPOM FISCAL|DOCUMENTO AUXILIAR|RECIBO DO PAGADOR|FICHA DE COMPENSACAO|LINHA DIGITAVEL|CEDENTE|BENEFICIARIO.*VENCIMENTO/;
@@ -108,13 +109,22 @@ export class RecebimentoAutomaticoService {
             try {
                 const lidosIa = (await lerDocumentoComIa({ buffer: arquivo.buffer, mimetype: arquivo.mime, originalname: arquivo.nome })) ?? [];
                 const contas = lidosIa.filter((l) => l.tipoDocumento !== 'COMPROVANTE');
-                tipo = lidosIa.length && !contas.length ? 'COMPROVANTE' : 'BOLETO_NOTA';
+                // A IA não achou boleto, nota, fatura nem comprovante: é foto de
+                // produto, propaganda, print... não registra nada.
+                if (!lidosIa.length) return this.ignorar(empresaId, canal, arquivo, origem, 'Não é boleto, nota nem comprovante.');
+                tipo = contas.length ? 'BOLETO_NOTA' : 'COMPROVANTE';
                 if (contas.length) lidos = contas;
             } catch {
-                // segue com o padrão do canal
+                // a IA falhou: segue pelas regras abaixo
             }
         }
-        tipo ??= canal === 'WHATSAPP' ? 'COMPROVANTE' : 'BOLETO_NOTA';
+        if (!tipo) {
+            // Sem pista e sem a IA: no WhatsApp (grupos cheios de foto) não
+            // registra — precisa escrever "boleto"/"nota"/"comprovante" na
+            // legenda. No e-mail (caixa dos boletos) vai pra Lançar contas.
+            if (canal === 'WHATSAPP') return this.ignorar(empresaId, canal, arquivo, origem, 'Sem legenda e sem leitura automática — escreva "boleto" ou "comprovante" na legenda.');
+            tipo = 'BOLETO_NOTA';
+        }
         // "Raiz" / "Anchieta" escrito na legenda ou no assunto vale como loja
         // (o CNPJ do documento continua mandando, se tiver).
         const lojaTexto = await this.lojaPeloTexto(empresaId, `${origem.texto ?? ''} ${origem.assunto ?? ''}`, lojasCanal);
@@ -179,6 +189,21 @@ export class RecebimentoAutomaticoService {
             // externoId repetido (duas entregas ao mesmo tempo): ignora
         }
         return resultado;
+    }
+
+    // Registra só no histórico (Últimos recebidos) que o arquivo foi ignorado.
+    private async ignorar(empresaId: string, canal: Canal, arquivo: ArquivoRecebido, origem: Origem, motivo: string): Promise<Resultado> {
+        await this.prisma.entradaAutomatica.create({
+            data: {
+                empresaId, canal, externoId: origem.externoId,
+                remetente: origem.remetente?.slice(0, 120) ?? null,
+                nomeRemetente: origem.nomeRemetente?.slice(0, 120) ?? null,
+                assunto: (origem.assunto ?? origem.texto ?? null)?.slice(0, 300) ?? null,
+                arquivoNome: arquivo.nome?.slice(0, 200) ?? null,
+                tipo: 'IGNORADO', status: 'IGNORADO', mensagem: motivo, chatId: origem.chatId ?? null,
+            },
+        }).catch(() => null);
+        return { status: 'IGNORADO', tipo: 'BOLETO_NOTA', mensagem: motivo };
     }
 
     // Guarda o id da pergunta "de qual loja é?" (pra achar pela resposta).

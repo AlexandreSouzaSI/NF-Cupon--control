@@ -259,6 +259,23 @@ export class PagamentosAvisadosService {
         });
     }
 
+    // "Não é comprovante, é boleto/nota": devolve o arquivo pra mandar pra
+    // Lançar contas e tira o aviso da lista.
+    async paraMover(user: any, id: string) {
+        const aviso = await this.doUsuario(user, id);
+        if (aviso.status !== 'PENDENTE') throw new BadRequestException('Esse aviso já foi tratado.');
+        const arq = await this.prisma.pagamentoAvisado.findUnique({ where: { id }, select: { comprovante: true, comprovanteNome: true, comprovanteMime: true } });
+        if (!arq?.comprovante) throw new BadRequestException('Esse aviso não tem arquivo para mover.');
+        return { aviso, arquivo: { buffer: Buffer.from(arq.comprovante), originalname: arq.comprovanteNome || 'documento.pdf', mimetype: arq.comprovanteMime || 'application/pdf' } };
+    }
+
+    async marcarMovido(user: any, id: string) {
+        await this.prisma.pagamentoAvisado.update({
+            where: { id },
+            data: { status: 'DESCARTADO', conciliadoEm: new Date(), conciliadoPor: nomeDo(user), observacaoFinanceiro: 'Era boleto/nota — movido para Lançar contas.' },
+        });
+    }
+
     async descartar(user: any, id: string) {
         await this.doUsuario(user, id);
         return this.prisma.pagamentoAvisado.update({

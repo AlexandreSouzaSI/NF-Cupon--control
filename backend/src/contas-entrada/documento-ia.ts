@@ -165,8 +165,12 @@ const ESQUEMA = {
 
 const INSTRUCOES = `Você lê documentos de contas a pagar de um bar/restaurante no Brasil: boletos bancários, DANFE (NF-e), notas de serviço, faturas de água/luz/telefone, guias de imposto. O arquivo pode ser foto ou scanner e pode ter VÁRIOS documentos (várias páginas).
 
+IMPORTANTE: o arquivo pode vir de um grupo de WhatsApp com fotos de tudo. Só interessam BOLETO, NOTA FISCAL (DANFE/NFS-e/cupom fiscal), FATURA/conta de consumo, GUIA DE IMPOSTO e COMPROVANTE DE PAGAMENTO. Se o arquivo for qualquer outra coisa (foto de produto, oferta/propaganda, cardápio, foto de pessoa/lugar, print de conversa, figurinha, documento pessoal, planilha de preços, orçamento sem cobrança), devolva "contas": [] — não invente nada.
+
 Devolva uma entrada em "contas" para cada CONTA A PAGAR diferente:
-- Boleto + a DANFE da mesma compra (mesmo fornecedor e mesmo número de NF ou mesmo valor) = UMA conta só. Use o vencimento, o valor e a linha digitável do boleto, e a chave da NF-e da DANFE. tipoDocumento = "BOLETO".
+- CADA BOLETO É UMA CONTA. Boletos diferentes do MESMO fornecedor, com o MESMO vencimento, continuam sendo contas SEPARADAS (ex.: NF 1974997 de R$ 37,97 e NF 1974996 de R$ 528,17 = 2 contas). O que diferencia: linha digitável, "Nosso Número", "Número do Documento", NF e valor.
+- Uma página de boleto costuma repetir o MESMO boleto 3 vezes (Declaração do pagador / Recibo do pagador / Ficha de compensação): isso é UM boleto só. Confira cada página do arquivo, uma por uma.
+- Boleto + a DANFE da mesma compra (mesmo fornecedor e MESMO número de NF) = UMA conta só. Use o vencimento, o valor e a linha digitável do boleto, e a chave da NF-e da DANFE. tipoDocumento = "BOLETO".
 - DANFE sozinha = uma conta (tipoDocumento "NFE"). Se tiver FATURA/DUPLICATAS, liste em "parcelas" (número, vencimento, valor) e use a 1ª como vencimento. Se não tiver duplicata nem boleto, vencimento = null e valor = VALOR TOTAL DA NOTA.
 - Boleto sozinho = uma conta.
 - Canhoto ou página em branco: ignore.
@@ -177,7 +181,7 @@ Campos:
 - pagadorNome / pagadorDoc: quem PAGA = "Pagador"/"Sacado" no boleto ou DESTINATÁRIO na DANFE. É o CNPJ da nossa loja — leia com muita atenção.
 - valor: valor do documento / valor cobrado, em reais (número, ponto decimal).
 - vencimento, emissao: formato AAAA-MM-DD.
-- numeroDocumento: número da NF ou "Nº do documento" do boleto.
+- numeroDocumento: o NÚMERO DA NOTA FISCAL, só o número (sem série/parcela/zeros à esquerda) — no boleto costuma vir como "NF:1974997-1" ou no Nº do documento "001974997-001" → "1974997". Se não houver NF, o "Nº do documento" do boleto.
 - linhaDigitavel: a linha digitável do boleto (47 ou 48 dígitos, a sequência numérica no topo do boleto), só dígitos. Se não der para ler TODOS os dígitos com certeza, devolva null.
 - chaveNfe: a "CHAVE DE ACESSO" da DANFE (44 dígitos), só dígitos; null se não estiver legível.
 - descricao: resumo curto (ex.: "NF 52591 — salsinha e coentro").
@@ -272,6 +276,16 @@ export async function lerDocumentoComIa(file: { buffer: Buffer; mimetype: string
     const nome = file.originalname || 'documento';
     const ehPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(nome);
     const base64 = file.buffer.toString('base64');
+    let paginas = 1;
+    if (ehPdf) {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+            paginas = Number((await pdfParse(file.buffer, { max: 1 }))?.numpages) || 1;
+        } catch {
+            // segue com 1
+        }
+    }
     const anexo = ehPdf
         ? { type: 'file', file: { filename: nome.endsWith('.pdf') ? nome : `${nome}.pdf`, file_data: `data:application/pdf;base64,${base64}` } }
         : { type: 'image_url', image_url: { url: `data:${file.mimetype || 'image/jpeg'};base64,${base64}`, detail: 'high' } };
@@ -285,7 +299,7 @@ export async function lerDocumentoComIa(file: { buffer: Buffer; mimetype: string
             response_format: { type: 'json_schema', json_schema: ESQUEMA },
             messages: [
                 { role: 'system', content: INSTRUCOES },
-                { role: 'user', content: [{ type: 'text', text: 'Leia as contas a pagar deste arquivo.' }, anexo] },
+                { role: 'user', content: [{ type: 'text', text: `Leia as contas a pagar deste arquivo.${paginas > 1 ? ` O arquivo tem ${paginas} páginas — confira se há boletos/notas diferentes em cada uma.` : ''}` }, anexo] },
             ],
         }),
         signal: AbortSignal.timeout(180_000),
@@ -298,5 +312,14 @@ export async function lerDocumentoComIa(file: { buffer: Buffer; mimetype: string
     const conteudo = json?.choices?.[0]?.message?.content;
     const lido = JSON.parse(conteudo || '{}') as { contas?: ContaIa[] };
     const contas = (lido.contas ?? []).filter((c) => c && (c.valor || c.linhaDigitavel || c.chaveNfe || c.fornecedor));
-    return contas.map((c) => contaIaParaDocumento(c, contas.length));
+    const docs = contas.map((c) => contaIaParaDocumento(c, contas.length));
+    // A mesma linha digitável / chave lida duas vezes = uma conta só.
+    const vistos = new Set<string>();
+    return docs.filter((d) => {
+        const k = d.codigoBarras || d.chaveNfe;
+        if (!k) return true;
+        if (vistos.has(k)) return false;
+        vistos.add(k);
+        return true;
+    });
 }

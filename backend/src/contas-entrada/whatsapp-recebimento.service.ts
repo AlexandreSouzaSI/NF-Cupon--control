@@ -107,11 +107,14 @@ export class WhatsappRecebimentoService {
         return { id: c.id, ...(await this.conectar(empresaId, c.id)) };
     }
 
-    async editar(empresaId: string, id: string, body: { nome?: string; storeIds?: string[]; ativo?: boolean }) {
+    async editar(empresaId: string, id: string, body: { nome?: string; storeIds?: string[]; ativo?: boolean; gruposPermitidos?: string[]; telefonesPermitidos?: string[]; aceitarPrivado?: boolean }) {
         await this.daEmpresa(empresaId, id);
         await this.prisma.recebimentoWhatsapp.update({
             where: { id },
             data: {
+                ...(Array.isArray(body?.gruposPermitidos) ? { gruposPermitidos: body.gruposPermitidos.map(String).filter((g) => g.endsWith('@g.us')).slice(0, 100) } : {}),
+                ...(Array.isArray(body?.telefonesPermitidos) ? { telefonesPermitidos: [...new Set(body.telefonesPermitidos.map((t) => String(t).replace(/\D/g, '')).filter((t) => t.length >= 8))].slice(0, 200) } : {}),
+                ...(typeof body?.aceitarPrivado === 'boolean' ? { aceitarPrivado: body.aceitarPrivado } : {}),
                 ...(body?.nome?.trim() ? { nome: body.nome.trim() } : {}),
                 ...(body?.storeIds !== undefined ? { storeIds: await this.lojasValidas(empresaId, body.storeIds) } : {}),
                 ...(typeof body?.ativo === 'boolean' ? { ativo: body.ativo } : {}),
@@ -160,6 +163,26 @@ export class WhatsappRecebimentoService {
 
     // Responde no chat (conversa ou grupo), citando a mensagem original
     // quando der. Devolve o id da mensagem enviada.
+    // Grupos em que o número está (pra marcar de quais aceitar).
+    async grupos(empresaId: string, id: string) {
+        const c = await this.daEmpresa(empresaId, id);
+        const r = await this.chamar('GET', `/group/fetchAllGroups/${c.instancia}?getParticipants=false`).catch((e) => {
+            throw new BadRequestException(`Não consegui listar os grupos (${e?.message}). O número está conectado?`);
+        });
+        const lista: any[] = Array.isArray(r) ? r : r?.groups ?? [];
+        return lista
+            .map((g) => ({ id: String(g.id ?? g.jid ?? ''), nome: String(g.subject ?? g.name ?? g.id ?? '') }))
+            .filter((g) => g.id.endsWith('@g.us'))
+            .sort((a, b) => a.nome.localeCompare(b.nome));
+    }
+
+    // O mesmo telefone pode vir com/sem 55 e com/sem o 9: compara o final.
+    private telefoneAutorizado(numero: string, lista: string[]) {
+        const d = String(numero ?? '').replace(/\D/g, '');
+        if (d.length < 8) return false;
+        return lista.some((t) => t.slice(-8) === d.slice(-8));
+    }
+
     private async enviarTexto(instancia: string, numero: string, texto: string, citar?: any): Promise<string | null> {
         const base = { number: numero, text: texto };
         try {
@@ -200,6 +223,7 @@ export class WhatsappRecebimentoService {
         if (evento && evento !== 'messages.upsert') return { ok: true, ignorado: evento };
 
         const lista = Array.isArray(payload?.data) ? payload.data : payload?.data?.messages ?? [payload?.data];
+        this.log.log(`Webhook ${c.instancia}: ${lista.length} mensagem(ns) — ${lista.map((m: any) => `${m?.key?.remoteJid ?? '?'}${m?.key?.fromMe ? ' (enviada pelo próprio número, ignorada)' : ''}`).join(', ')}`);
         for (const msg of lista) {
             if (!msg?.key) continue;
             // Em segundo plano: o Evolution não precisa esperar a leitura do PDF.
@@ -230,7 +254,7 @@ export class WhatsappRecebimentoService {
         return Buffer.from(r.base64, 'base64');
     }
 
-    private async tratarMensagem(c: { id: string; empresaId: string; instancia: string; storeIds: string[] }, msg: any) {
+    private async tratarMensagem(c: { id: string; empresaId: string; instancia: string; storeIds: string[]; gruposPermitidos: string[]; telefonesPermitidos: string[]; aceitarPrivado: boolean }, msg: any) {
         const jid: string = msg.key.remoteJid ?? '';
         if (msg.key.fromMe || !jid || jid === 'status@broadcast' || jid.endsWith('@newsletter')) return;
         const grupo = jid.endsWith('@g.us');
@@ -241,10 +265,19 @@ export class WhatsappRecebimentoService {
         const numero = autor.endsWith('@lid') || !autor ? autor : autor.split('@')[0];
         // Para onde responder: o grupo inteiro ou a pessoa.
         const chat = grupo ? jid : numero;
+        // Filtros da conexão: só os grupos marcados / conversa privada.
+        if (grupo && c.gruposPermitidos?.length && !c.gruposPermitidos.includes(jid)) return;
+        if (!grupo && c.aceitarPrivado === false) return;
+
         const midia = this.extrairMidia(msg);
         // Texto: só interessa se for resposta à pergunta da loja.
         if (!midia) {
             await this.tratarResposta(c, chat, msg);
+            return;
+        }
+        // Só arquivos de quem está autorizado (se a lista estiver preenchida).
+        if (c.telefonesPermitidos?.length && !this.telefoneAutorizado(numero, c.telefonesPermitidos)) {
+            this.log.log(`Arquivo de ${numero || 'desconhecido'} ignorado (não está nos telefones autorizados).`);
             return;
         }
         if (!/pdf|image|xml/.test(midia.mime) && !/\.(pdf|xml|jpe?g|png)$/i.test(midia.nome)) return;
@@ -256,7 +289,8 @@ export class WhatsappRecebimentoService {
             c.storeIds);
         await this.prisma.recebimentoWhatsapp.update({ where: { id: c.id }, data: { ultimoEvento: new Date(), ultimoErro: null } });
 
-        if (r.status === 'JA_PROCESSADO') return;
+        // Não é boleto/nota/comprovante (foto de produto, propaganda...): silêncio.
+        if (r.status === 'JA_PROCESSADO' || r.status === 'IGNORADO') return;
         const oque = r.tipo === 'COMPROVANTE' ? 'Comprovante' : 'Boleto/nota';
 
         // Não deu pra saber a loja: pergunta no chat.

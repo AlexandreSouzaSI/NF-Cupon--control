@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Inbox, Loader2, Mail, MessageCircle, PauseCircle, PlayCircle, Plus, RefreshCw, Store, Trash2, Unplug, XCircle } from 'lucide-react';
+import { CheckCircle2, Inbox, Loader2, Mail, MessageCircle, PauseCircle, PlayCircle, Plus, RefreshCw, Store, Trash2, Unplug, XCircle, Filter } from 'lucide-react';
 
 import { AppLayout } from '../../src/components/app-layout';
 import { api } from '@/lib/api';
@@ -17,6 +17,7 @@ import { canManagePaymentBatch, getUser } from '@/lib/auth';
 
 type Conexao = {
     id: string; nome: string; instancia: string; ativo: boolean; storeIds: string[];
+    gruposPermitidos?: string[]; telefonesPermitidos?: string[]; aceitarPrivado?: boolean;
     ultimoEvento: string | null; ultimoErro: string | null; estado: string; numeroAtual: string | null; erro?: string;
 };
 type Email = { host: string; port: number; secure: boolean; usuario: string; ativo: boolean; storeIds: string[]; ultimoEvento: string | null; ultimoErro: string | null } | null;
@@ -26,7 +27,7 @@ type Status = {
     email: Email;
     ultimas: {
         id: string; canal: 'WHATSAPP' | 'EMAIL'; storeId: string | null; remetente: string | null; nomeRemetente: string | null; assunto: string | null;
-        arquivoNome: string | null; tipo: 'BOLETO_NOTA' | 'COMPROVANTE'; status: 'OK' | 'DUPLICADO' | 'ERRO'; mensagem: string | null; createdAt: string;
+        arquivoNome: string | null; tipo: 'BOLETO_NOTA' | 'COMPROVANTE' | 'IGNORADO'; status: 'OK' | 'DUPLICADO' | 'ERRO' | 'IGNORADO'; mensagem: string | null; createdAt: string;
     }[];
 };
 
@@ -73,6 +74,17 @@ export default function RecebimentoAutomaticoPage() {
     const [aviso, setAviso] = useState<string | null>(null);
     const [nova, setNova] = useState<{ nome: string; storeIds: string[] } | null>(null);
     const [editando, setEditando] = useState<{ id: string; nome: string; storeIds: string[] } | null>(null);
+    // Filtros: de quais grupos / telefones aceitar arquivos.
+    const [filtros, setFiltros] = useState<{ id: string; grupos: string[]; telefones: string; privado: boolean; lista: { id: string; nome: string }[] | null; erro: string | null } | null>(null);
+    async function abrirFiltros(c: Conexao) {
+        setFiltros({ id: c.id, grupos: c.gruposPermitidos ?? [], telefones: (c.telefonesPermitidos ?? []).join('\n'), privado: c.aceitarPrivado !== false, lista: null, erro: null });
+        try {
+            const r = await api.get(`/recebimento-automatico/whatsapp/${c.id}/grupos`);
+            setFiltros((f) => (f && f.id === c.id ? { ...f, lista: r.data ?? [] } : f));
+        } catch (e: any) {
+            setFiltros((f) => (f && f.id === c.id ? { ...f, lista: [], erro: e?.response?.data?.message ?? 'Não consegui listar os grupos.' } : f));
+        }
+    }
     const [emailForm, setEmailForm] = useState<{ host: string; port: string; usuario: string; senha: string; storeIds: string[] } | null>(null);
 
     const carregar = useCallback(async () => {
@@ -160,6 +172,57 @@ export default function RecebimentoAutomaticoPage() {
                                     </div>
                                     {c.numeroAtual && <p className="text-sm text-gray-700 dark:text-zinc-200">Número: <b>+{c.numeroAtual}</b></p>}
                                     <p className="text-xs text-gray-500">Última mensagem tratada: {quando(c.ultimoEvento)}{c.ultimoErro ? ` · erro: ${c.ultimoErro}` : ''}</p>
+                                    <p className="text-xs text-gray-500">
+                                        Aceita arquivos de: {c.gruposPermitidos?.length ? `${c.gruposPermitidos.length} grupo(s) marcado(s)` : 'qualquer grupo'}
+                                        {c.aceitarPrivado === false ? ' · sem conversa privada' : ' · conversa privada'}
+                                        {c.telefonesPermitidos?.length ? ` · só ${c.telefonesPermitidos.length} telefone(s) autorizado(s)` : ' · qualquer pessoa'}
+                                    </p>
+                                    {filtros?.id === c.id && (
+                                        <div className="rounded-lg bg-gray-50 dark:bg-zinc-950 p-3 space-y-3 text-sm">
+                                            <div>
+                                                <p className="font-semibold text-gray-900 dark:text-white">Grupos que contam</p>
+                                                <p className="text-xs text-gray-500">Marque só os grupos onde mandam boletos/comprovantes. Nenhum marcado = todos os grupos.</p>
+                                                {filtros.lista === null ? (
+                                                    <p className="text-xs text-gray-400 mt-1"><Loader2 size={12} className="inline animate-spin" /> Buscando os grupos…</p>
+                                                ) : filtros.erro ? (
+                                                    <p className="text-xs text-red-600 mt-1">{filtros.erro}</p>
+                                                ) : filtros.lista.length === 0 ? (
+                                                    <p className="text-xs text-gray-400 mt-1">Esse número não está em nenhum grupo.</p>
+                                                ) : (
+                                                    <div className="mt-1 max-h-56 overflow-y-auto space-y-1">
+                                                        {filtros.lista.map((g) => (
+                                                            <label key={g.id} className="flex items-center gap-2 text-gray-700 dark:text-zinc-200">
+                                                                <input type="checkbox" checked={filtros.grupos.includes(g.id)}
+                                                                    onChange={(e) => setFiltros({ ...filtros, grupos: e.target.checked ? [...filtros.grupos, g.id] : filtros.grupos.filter((x) => x !== g.id) })} />
+                                                                {g.nome}
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <label className="flex items-center gap-2 text-gray-700 dark:text-zinc-200">
+                                                <input type="checkbox" checked={filtros.privado} onChange={(e) => setFiltros({ ...filtros, privado: e.target.checked })} />
+                                                Aceitar arquivos mandados em conversa privada para o número
+                                            </label>
+                                            <div>
+                                                <p className="font-semibold text-gray-900 dark:text-white">Telefones autorizados (opcional)</p>
+                                                <p className="text-xs text-gray-500">Um por linha, com DDD. Preenchido = só arquivos dessas pessoas contam (nos grupos marcados e no privado). Vazio = qualquer pessoa.</p>
+                                                <textarea className={`${campo} mt-1 h-24 font-mono`} value={filtros.telefones} onChange={(e) => setFiltros({ ...filtros, telefones: e.target.value })} placeholder={'31 99999-0000\n31 98888-1111'} />
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => acao('filtros', async () => {
+                                                    await api.patch(`/recebimento-automatico/whatsapp/${c.id}`, {
+                                                        gruposPermitidos: filtros.grupos,
+                                                        aceitarPrivado: filtros.privado,
+                                                        telefonesPermitidos: filtros.telefones.split(/[\n,;]+/).map((t) => t.trim()).filter(Boolean),
+                                                    });
+                                                    setFiltros(null);
+                                                    await carregar();
+                                                })} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold">Salvar filtros</button>
+                                                <button onClick={() => setFiltros(null)} className="px-3 py-1.5 rounded-lg text-xs text-gray-600">Cancelar</button>
+                                            </div>
+                                        </div>
+                                    )}
                                     {qr?.id === c.id && (
                                         <div className="rounded-xl border border-gray-200 dark:border-zinc-700 p-3 flex flex-col sm:flex-row gap-4 items-center">
                                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -191,6 +254,12 @@ export default function RecebimentoAutomaticoPage() {
                                                 </button>
                                             )}
                                             {c.estado === 'open' && (
+                                                <button disabled={!!ocupado} title="Reaplica o endereço de retorno (webhook) e libera mensagens de grupo, sem desconectar"
+                                                    onClick={() => acao(`cfg-${c.id}`, async () => { await api.post(`/recebimento-automatico/whatsapp/${c.id}/conectar`); await carregar(); alert('Configuração reaplicada. Mande um arquivo de teste de OUTRO número.'); })} className={botao}>
+                                                    {ocupado === `cfg-${c.id}` ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Reaplicar configuração
+                                                </button>
+                                            )}
+                                            {c.estado === 'open' && (
                                                 <button disabled={!!ocupado} onClick={() => acao(`sair-${c.id}`, async () => { if (!confirm('Desconectar este WhatsApp? Depois é só ler o QR code com o mesmo número ou com outro.')) return; await api.post(`/recebimento-automatico/whatsapp/${c.id}/desconectar`); await carregar(); })} className={`${botao} !text-red-600`}>
                                                     <Unplug size={15} /> Desconectar / trocar número
                                                 </button>
@@ -199,6 +268,7 @@ export default function RecebimentoAutomaticoPage() {
                                                 {c.ativo ? <><PauseCircle size={15} /> Pausar</> : <><PlayCircle size={15} /> Retomar</>}
                                             </button>
                                             <button onClick={() => setEditando({ id: c.id, nome: c.nome, storeIds: c.storeIds })} className={botao}><Store size={15} /> Lojas</button>
+                                            <button onClick={() => (filtros?.id === c.id ? setFiltros(null) : abrirFiltros(c))} className={botao}><Filter size={15} /> Grupos e telefones</button>
                                             <button disabled={!!ocupado} onClick={() => acao(`del-${c.id}`, async () => { if (!confirm('Excluir esta conexão de WhatsApp?')) return; await api.delete(`/recebimento-automatico/whatsapp/${c.id}`); await carregar(); })} className={`${botao} !text-red-600`}>
                                                 <Trash2 size={15} />
                                             </button>
@@ -210,7 +280,7 @@ export default function RecebimentoAutomaticoPage() {
                         <p className="text-xs text-gray-500">
                             Funciona em conversa e em <b>grupo</b> (pode ser um grupo só para todas as lojas). Cada PDF ou foto é registrado e o número responde confirmando, com a loja.
                             A loja sai do <b>CNPJ do pagador/destinatário</b> no documento; se não tiver, do nome da loja escrito na legenda (ex.: &quot;Raiz&quot;); se ainda assim não der, o número pergunta &quot;de qual loja é?&quot; e é só responder com o número ou o nome.
-                            Foto ou PDF escaneado sem legenda: a leitura automática decide se é boleto/nota ou comprovante. Áudio e conversa normal do grupo são ignorados. Integração não oficial: se desconectar, é só ler o QR code de novo.
+                            Foto ou PDF escaneado sem legenda: a leitura automática decide se é boleto/nota ou comprovante. Fotos que não são boleto/nota/comprovante (produto, oferta, print) e conversa normal são ignoradas. Em <b>Grupos e telefones</b> dá pra escolher de quais grupos e de quem aceitar. Integração não oficial: se desconectar, é só ler o QR code de novo.
                         </p>
                     </div>
 
@@ -296,14 +366,16 @@ export default function RecebimentoAutomaticoPage() {
                                     <td className="px-3 py-2 text-gray-700 dark:text-zinc-200 break-all">{u.arquivoNome ?? '—'}{u.assunto && <div className="text-[11px] text-gray-500">{u.assunto}</div>}</td>
                                     <td className="px-3 py-2 text-xs">{u.storeId ? lojas.find((l) => l.id === u.storeId)?.name ?? '—' : <span className="text-amber-600">a escolher</span>}</td>
                                     <td className="px-3 py-2 whitespace-nowrap">
-                                        {u.tipo === 'COMPROVANTE'
-                                            ? <Link href="/bills/pagamentos" className="text-blue-600 hover:underline">Comprovante</Link>
-                                            : <Link href="/bills/lancar" className="text-blue-600 hover:underline">Boleto / nota</Link>}
+                                        {u.tipo === 'IGNORADO'
+                                            ? <span className="text-gray-400">—</span>
+                                            : u.tipo === 'COMPROVANTE'
+                                                ? <Link href="/bills/pagamentos" className="text-blue-600 hover:underline">Comprovante</Link>
+                                                : <Link href="/bills/lancar" className="text-blue-600 hover:underline">Boleto / nota</Link>}
                                     </td>
                                     <td className="px-3 py-2">
-                                        <span className={`inline-flex items-center gap-1 text-xs font-semibold ${u.status === 'OK' ? 'text-emerald-600' : u.status === 'DUPLICADO' ? 'text-amber-600' : 'text-red-600'}`}>
+                                        <span className={`inline-flex items-center gap-1 text-xs font-semibold ${u.status === 'OK' ? 'text-emerald-600' : u.status === 'DUPLICADO' ? 'text-amber-600' : u.status === 'IGNORADO' ? 'text-gray-400' : 'text-red-600'}`}>
                                             {u.status === 'OK' ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                                            {u.status === 'OK' ? 'Registrado' : u.status === 'DUPLICADO' ? 'Já tinha sido enviado' : 'Erro'}
+                                            {u.status === 'OK' ? 'Registrado' : u.status === 'DUPLICADO' ? 'Já tinha sido enviado' : u.status === 'IGNORADO' ? 'Ignorado' : 'Erro'}
                                         </span>
                                         {u.mensagem && <div className="text-[11px] text-gray-500">{u.mensagem}</div>}
                                     </td>

@@ -120,6 +120,15 @@ export class ContasEntradaController {
         return this.contas.parecidas(user, id);
     }
 
+    @Patch('contas/descartar-varios')
+    async descartarContasVarias(@CurrentUser() user: any, @Body('ids') ids?: string[]) {
+        let n = 0;
+        for (const id of (Array.isArray(ids) ? ids : []).slice(0, 500)) {
+            try { await this.contas.descartar(user, id, 'Descartado em lote'); n++; } catch { /* já tratado */ }
+        }
+        return { descartados: n };
+    }
+
     @Get('contas/:id/nfs')
     nfsDaConta(@CurrentUser() user: any, @Param('id') id: string, @Query('q') q?: string) {
         return this.contas.nfsCandidatas(user, id, q);
@@ -183,6 +192,30 @@ export class ContasEntradaController {
     @Patch('pagamentos/:id/conciliar')
     conciliar(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
         return this.pagamentos.conciliar(user, id, body ?? {});
+    }
+
+    // Chegou como comprovante mas é boleto/nota: manda pra Lançar contas.
+    @Patch('pagamentos/:id/mover-para-contas')
+    async moverParaContas(@CurrentUser() user: any, @Param('id') id: string) {
+        const { aviso, arquivo } = await this.pagamentos.paraMover(user, id);
+        const r = await this.contas.registrar(empresaDo(user), arquivo, {
+            enviadoPor: aviso.avisadoPorNome ?? null,
+            origem: 'TELA',
+            storePadrao: aviso.storeId,
+            observacao: aviso.descricao ?? null,
+        });
+        await this.pagamentos.marcarMovido(user, id);
+        await this.contas.ajustarEntradaMovida(id, r.id);
+        return { ok: true, total: r.total };
+    }
+
+    @Patch('pagamentos/descartar-varios')
+    async descartarPagamentosVarios(@CurrentUser() user: any, @Body('ids') ids?: string[]) {
+        let n = 0;
+        for (const id of (Array.isArray(ids) ? ids : []).slice(0, 500)) {
+            try { await this.pagamentos.descartar(user, id); n++; } catch { /* já tratado */ }
+        }
+        return { descartados: n };
     }
 
     @Patch('pagamentos/:id/descartar')
@@ -302,6 +335,12 @@ export class RecebimentoAutomaticoController {
     editarWhatsapp(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
         exigirGestor(user);
         return this.whatsapp.editar(empresaDo(user), id, body ?? {});
+    }
+
+    @Get('whatsapp/:id/grupos')
+    gruposWhatsapp(@CurrentUser() user: any, @Param('id') id: string) {
+        exigirGestor(user);
+        return this.whatsapp.grupos(empresaDo(user), id);
     }
 
     @Post('whatsapp/:id/conectar')
