@@ -6,7 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BillsService } from '../bills/bills.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { vencimentoUtil } from '../common/dias-uteis';
-import { lerDocumentoComIa } from './documento-ia';
+import { iaDocumentosConfigurada, lerDocumentoComIa } from './documento-ia';
 import { DocumentoLido, documentoVazio, lerTextoDocumento, lerXmlDocumento } from './documento-parser';
 import { LimiteEnvios, empresaDo, filtroLoja, lerPdf, lojaDoDocumento, lojasPermitidas, lojaValida, nomeDo, salvarArquivoConta, so } from './entrada.util';
 
@@ -112,6 +112,11 @@ export class ContasEnviadasService {
                 if (lidos?.length) return lidos;
             } catch (e: any) {
                 this.logger.warn(`Leitura por IA de "${file.originalname}" falhou: ${e?.message ?? e}`);
+                // Mostra na tela por que veio em branco.
+                return [{ ...documentoVazio(), descricao: `⚠ A leitura automática falhou (${String(e?.message ?? e).slice(0, 120)}) — preencha olhando o documento.` }];
+            }
+            if (!iaDocumentosConfigurada()) {
+                return [{ ...documentoVazio(), descricao: '⚠ Leitura automática desligada (falta OPENAI_API_KEY no servidor) — preencha olhando o documento.' }];
             }
         }
         return [documentoVazio()];

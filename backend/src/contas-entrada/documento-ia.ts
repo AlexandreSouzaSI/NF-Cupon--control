@@ -269,27 +269,8 @@ export function contaIaParaDocumento(c: ContaIa, total: number): DocumentoLido {
 }
 
 // Lê o arquivo com a IA. Volta null se a IA não está configurada.
-export async function lerDocumentoComIa(file: { buffer: Buffer; mimetype: string; originalname: string }): Promise<DocumentoLido[] | null> {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) return null;
-
-    const nome = file.originalname || 'documento';
-    const ehPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(nome);
-    const base64 = file.buffer.toString('base64');
-    let paginas = 1;
-    if (ehPdf) {
-        try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const pdfParse = require('pdf-parse/lib/pdf-parse.js');
-            paginas = Number((await pdfParse(file.buffer, { max: 1 }))?.numpages) || 1;
-        } catch {
-            // segue com 1
-        }
-    }
-    const anexo = ehPdf
-        ? { type: 'file', file: { filename: nome.endsWith('.pdf') ? nome : `${nome}.pdf`, file_data: `data:application/pdf;base64,${base64}` } }
-        : { type: 'image_url', image_url: { url: `data:${file.mimetype || 'image/jpeg'};base64,${base64}`, detail: 'high' } };
-
+// Uma chamada à IA (um PDF inteiro, uma página ou uma imagem).
+async function chamarIa(key: string, anexo: unknown, dica: string): Promise<ContaIa[]> {
     const resposta = await fetch(CHAT_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -299,7 +280,7 @@ export async function lerDocumentoComIa(file: { buffer: Buffer; mimetype: string
             response_format: { type: 'json_schema', json_schema: ESQUEMA },
             messages: [
                 { role: 'system', content: INSTRUCOES },
-                { role: 'user', content: [{ type: 'text', text: `Leia as contas a pagar deste arquivo.${paginas > 1 ? ` O arquivo tem ${paginas} páginas — confira se há boletos/notas diferentes em cada uma.` : ''}` }, anexo] },
+                { role: 'user', content: [{ type: 'text', text: dica }, anexo] },
             ],
         }),
         signal: AbortSignal.timeout(180_000),
@@ -311,7 +292,100 @@ export async function lerDocumentoComIa(file: { buffer: Buffer; mimetype: string
     const json: any = await resposta.json();
     const conteudo = json?.choices?.[0]?.message?.content;
     const lido = JSON.parse(conteudo || '{}') as { contas?: ContaIa[] };
-    const contas = (lido.contas ?? []).filter((c) => c && (c.valor || c.linhaDigitavel || c.chaveNfe || c.fornecedor));
+    return (lido.contas ?? []).filter((c) => c && (c.valor || c.linhaDigitavel || c.chaveNfe || c.fornecedor));
+}
+
+const anexoPdf = (buffer: Buffer | Uint8Array, nome: string) => ({
+    type: 'file',
+    file: { filename: nome.endsWith('.pdf') ? nome : `${nome}.pdf`, file_data: `data:application/pdf;base64,${Buffer.from(buffer).toString('base64')}` },
+});
+
+// Separa um PDF em PDFs de uma página só.
+async function separarPaginas(buffer: Buffer): Promise<Uint8Array[]> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { PDFDocument } = require('pdf-lib');
+    const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+    const total = doc.getPageCount();
+    const saida: Uint8Array[] = [];
+    for (let i = 0; i < total; i++) {
+        const novo = await PDFDocument.create();
+        const [pagina] = await novo.copyPages(doc, [i]);
+        novo.addPage(pagina);
+        saida.push(await novo.save());
+    }
+    return saida;
+}
+
+// Junta o que foi lido página a página: a mesma linha digitável/chave vira
+// uma conta só; a DANFE (sem boleto) de uma página se junta ao boleto da mesma
+// NF de outra página.
+function juntarPaginas(contas: ContaIa[]): ContaIa[] {
+    const so = (t: unknown) => String(t ?? '').replace(/\D/g, '');
+    const numero = (t: unknown) => { const m = /(\d{1,9})/.exec(String(t ?? '').replace(/^\D*/, '')); return m ? String(Number(m[1])) : ''; };
+    const lista: ContaIa[] = [];
+    for (const c of contas) {
+        const linha = so(c.linhaDigitavel);
+        const chave = so(c.chaveNfe);
+        const igual = lista.find((x) => (linha && so(x.linhaDigitavel) === linha) || (!linha && !so(x.linhaDigitavel) && chave && so(x.chaveNfe) === chave));
+        if (igual) {
+            igual.paginas = [...new Set([...(igual.paginas ?? []), ...(c.paginas ?? [])])];
+            igual.chaveNfe ||= c.chaveNfe;
+            continue;
+        }
+        lista.push({ ...c });
+    }
+    // DANFE sozinha + boleto da mesma NF (mesmo fornecedor) = uma conta.
+    for (const nfe of lista.filter((c) => c.tipoDocumento === 'NFE' && !so(c.linhaDigitavel))) {
+        const boleto = lista.find((b) => b !== nfe && so(b.linhaDigitavel) && numero(b.numeroDocumento) && numero(b.numeroDocumento) === numero(nfe.numeroDocumento)
+            && (!so(b.fornecedorDoc) || !so(nfe.fornecedorDoc) || so(b.fornecedorDoc) === so(nfe.fornecedorDoc)));
+        if (!boleto) continue;
+        boleto.chaveNfe ||= nfe.chaveNfe;
+        boleto.paginas = [...new Set([...(boleto.paginas ?? []), ...(nfe.paginas ?? [])])];
+        lista.splice(lista.indexOf(nfe), 1);
+    }
+    return lista;
+}
+
+// Lê o arquivo com a IA. Volta null se a IA não está configurada.
+// PDF com várias páginas: cada página é lida separadamente (assim um boleto
+// nunca "some" porque a IA olhou só a primeira página) e depois junta.
+export async function lerDocumentoComIa(file: { buffer: Buffer; mimetype: string; originalname: string }): Promise<DocumentoLido[] | null> {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) return null;
+
+    const nome = file.originalname || 'documento';
+    const ehPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(nome);
+    let contas: ContaIa[];
+
+    let paginas: Uint8Array[] = [];
+    if (ehPdf) {
+        try {
+            paginas = await separarPaginas(file.buffer);
+        } catch {
+            paginas = [];
+        }
+    }
+
+    if (paginas.length > 1) {
+        const lidas: ContaIa[][] = new Array(paginas.length);
+        // Até 3 páginas ao mesmo tempo.
+        let proxima = 0;
+        await Promise.all(Array.from({ length: Math.min(3, paginas.length) }, async () => {
+            while (proxima < paginas.length) {
+                const i = proxima++;
+                const daPagina = await chamarIa(key, anexoPdf(paginas[i], `${nome.replace(/\.pdf$/i, '')}-p${i + 1}.pdf`),
+                    `Esta é a página ${i + 1} de ${paginas.length} de um arquivo. Leia as contas a pagar DESTA página.`);
+                lidas[i] = daPagina.map((c) => ({ ...c, paginas: [i + 1] }));
+            }
+        }));
+        contas = juntarPaginas(lidas.flat());
+    } else {
+        const anexo = ehPdf
+            ? anexoPdf(file.buffer, nome)
+            : { type: 'image_url', image_url: { url: `data:${file.mimetype || 'image/jpeg'};base64,${file.buffer.toString('base64')}`, detail: 'high' } };
+        contas = juntarPaginas(await chamarIa(key, anexo, 'Leia as contas a pagar deste arquivo.'));
+    }
+
     const docs = contas.map((c) => contaIaParaDocumento(c, contas.length));
     // A mesma linha digitável / chave lida duas vezes = uma conta só.
     const vistos = new Set<string>();
